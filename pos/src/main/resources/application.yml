@@ -1,0 +1,58 @@
+spring:
+  application:
+    name: pos
+
+  thymeleaf:
+    cache: false
+  datasource:
+    url: jdbc:postgresql://localhost:5432/pos_db
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+
+  security:
+    oauth2:
+      resource server:
+        jwt:
+          issuer-uri: http://localhost:8081/realms/pos
+      client:
+        registration:
+            pos-client:
+                client-id: poskeycloakid
+                client-secret: password
+                scope: openid, profile, email
+                authorization-grant-type: authorization_code
+                redirect-uri: http://localhost:5173/*
+                client-name: pos-client
+
+        provider:
+            pos-keycloak:
+                issuer-uri: http://localhost:8081/realms/pos
+                authorization-uri: http://localhost:8081/realms/pos/protocol/openid-connect/auth
+                token-uri: http://localhost:8081/realms/pos/protocol/openid-connect/token
+                user-info-uri: http://localhost:8081/realms/pos/protocol/openid-connect/userinfo
+                user-name-attribute: preferred_username
+
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    properties:
+      hibernate:
+        format_sql: true
+
+server:
+  port: 8080
+  address: 0.0.0.0
+  servlet:
+    session:
+      cookie:
+        secure: true
+        http-only: true
+        same-site: None
+
+logging:
+  level:
+    root: info
