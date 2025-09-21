@@ -18,19 +18,19 @@ spring:
       client:
         registration:
             pos-client:
-                client-id: poskeycloakid
+                client-id: pos-client
                 client-secret: password
                 scope: openid, profile, email
                 authorization-grant-type: authorization_code
-                redirect-uri: http://localhost:5173/*
+                redirect-uri: https://pos.mobitechsolutions.co.ke/*
                 client-name: pos-client
 
         provider:
             pos-keycloak:
-                issuer-uri: http://localhost:8081/realms/pos
-                authorization-uri: http://localhost:8081/realms/pos/protocol/openid-connect/auth
-                token-uri: http://localhost:8081/realms/pos/protocol/openid-connect/token
-                user-info-uri: http://localhost:8081/realms/pos/protocol/openid-connect/userinfo
+                issuer-uri: https://pos.mobitechsolutions.co.ke/realms/pos
+                authorization-uri: http://pos.mobitechsolutions.co.ke/realms/pos/protocol/openid-connect/auth
+                token-uri: http://pos.mobitechsolutions.co.ke/realms/pos/protocol/openid-connect/token
+                user-info-uri: http://pos.mobitechsolutions.co.ke/realms/pos/protocol/openid-connect/userinfo
                 user-name-attribute: preferred_username
 
 

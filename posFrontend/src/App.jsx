@@ -39,7 +39,7 @@ function App() {
 
                 <Route path={ROUTES.ERROR}element={
                   <Error/>
-                }/>
+                }/> 
 
 
             </Routes>
