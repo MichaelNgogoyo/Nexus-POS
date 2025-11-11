@@ -1,5 +1,4 @@
 import {NavLink, Outlet} from "react-router-dom";
-import HomeIcon from "@mui/icons-material/Home";
 import InventoryIcon from "@mui/icons-material/Inventory";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import SettingsIcon from '@mui/icons-material/Settings';
@@ -10,59 +9,83 @@ import NavBar from "./NavBar.jsx";
 
 export default function Layout() {
     return (
-        <div>
-            <div className="fixed top-0 left-0 w-full z-50">
-                <NavBar/>
-            </div>
-            <div className="flex bg-gray-100">
-                <aside className="fixed top-[64px] w-64 h-[calc(100vh-64px)] bg-white shadow-md flex flex-col">
-                    <div className="p-6 text-2xl bg-gray-100 font-bold text-blue-900 border-b">
-                        My Dashboard
+        <div className="min-h-screen bg-bg-primary">
+            {/* Fixed Navbar */}
+            <NavBar/>
+
+            <div className="flex pt-16">
+                {/* Fixed Sidebar */}
+                <aside className="fixed left-0 w-64 h-[calc(100vh-4rem)] bg-bg-secondary border-r border-border-primary shadow-sm flex flex-col overflow-y-auto">
+                    {/* Sidebar Header */}
+                    <div className="p-6 border-b border-border-primary">
+                        <h2 className="text-xl font-bold text-brand-primary flex items-center gap-2">
+                            <DashboardRoundedIcon sx={{ fontSize: 28 }} />
+                            My Dashboard
+                        </h2>
+                        <p className="text-xs text-text-muted mt-1">Manage your business</p>
                     </div>
-                    <nav className="flex flex-col h-full p-6 bg-gray-50">
-                        <div className="flex flex-col flex-grow space-y-4">
+
+                    {/* Navigation Links */}
+                    <nav className="flex flex-col flex-grow p-4">
+                        {/* Main Navigation */}
+                        <div className="flex flex-col space-y-2 flex-grow">
                             <NavLink
                                 to={ROUTES.DASHBOARD}
-                                className="flex items-center gap-2 px-4 py-2 rounded hover:bg-gray-200 transition duration-300"
+                                className={({isActive}) =>
+                                    `nav-link ${isActive ? 'active' : ''}`
+                                }
                             >
-                                <DashboardRoundedIcon className="text-blue-700"/>
-                                <span className="font-medium text-gray-800">Dashboard</span>
+                                <DashboardRoundedIcon className="text-brand-primary" sx={{ fontSize: 22 }} />
+                                <span className="font-medium">Dashboard</span>
                             </NavLink>
+
                             <NavLink
                                 to={ROUTES.PRODUCTS}
-                                className="flex items-center gap-2 px-4 py-2 rounded hover:bg-gray-200 transition duration-300"
+                                className={({isActive}) =>
+                                    `nav-link ${isActive ? 'active' : ''}`
+                                }
                             >
-                                <InventoryIcon className="text-blue-700"/>
-                                <span className="font-medium text-gray-800">Products</span>
+                                <InventoryIcon className="text-accent-success" sx={{ fontSize: 22 }} />
+                                <span className="font-medium">Products</span>
                             </NavLink>
+
                             <NavLink
                                 to={ROUTES.CREATE}
-                                className="flex items-center gap-2 px-4 py-2 rounded hover:bg-gray-200 transition duration-300"
+                                className={({isActive}) =>
+                                    `nav-link ${isActive ? 'active' : ''}`
+                                }
                             >
-                                <PersonAddIcon className="text-blue-700"/>
-                                <span className="font-medium text-gray-800">Create User</span>
+                                <PersonAddIcon className="text-accent-warning" sx={{ fontSize: 22 }} />
+                                <span className="font-medium">Create User</span>
                             </NavLink>
                         </div>
-                        <div className="mt-auto">
+
+                        {/* Bottom Navigation */}
+                        <div className="mt-auto pt-4 border-t border-border-primary space-y-2">
                             <NavLink
                                 to="#"
-                                className="flex items-center gap-2 px-4 py-2 rounded hover:bg-gray-200 transition duration-300"
+                                className="nav-link"
                             >
-                                <AccountCircleRoundedIcon className="text-blue-700"/>
-                                <span className="font-medium text-gray-800">Profile</span>
+                                <AccountCircleRoundedIcon className="text-text-muted" sx={{ fontSize: 22 }} />
+                                <span className="font-medium">Profile</span>
                             </NavLink>
+
                             <NavLink
                                 to="#"
-                                className="flex items-center gap-2 px-4 py-2 rounded hover:bg-gray-200 transition duration-300"
+                                className="nav-link"
                             >
-                                <SettingsIcon className="text-blue-700"/>
-                                <span className="font-medium text-gray-800">Settings</span>
+                                <SettingsIcon className="text-text-muted" sx={{ fontSize: 22 }} />
+                                <span className="font-medium">Settings</span>
                             </NavLink>
                         </div>
                     </nav>
                 </aside>
-                <main className="flex-grow ml-64 p-6 mt-16 bg-gray-100 min-h-screen">
-                    <Outlet/>
+
+                {/* Main Content Area */}
+                <main className="flex-grow ml-64 p-6 bg-bg-primary min-h-[calc(100vh-4rem)]">
+                    <div className="max-w-7xl mx-auto">
+                        <Outlet/>
+                    </div>
                 </main>
             </div>
         </div>

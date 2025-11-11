@@ -2,6 +2,8 @@ import {Link, useNavigate} from "react-router-dom";
 import {ROUTES} from "../routes.js";
 import {useKeycloak} from "@react-keycloak/web";
 import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
+import ThemeToggle from "./ThemeToggle.jsx";
+import StorefrontRoundedIcon from '@mui/icons-material/StorefrontRounded';
 
 function NavBar() {
     const {keycloak, initialized} = useKeycloak();
@@ -14,23 +16,69 @@ function NavBar() {
 
 
     return (
-        <div className="navbar p-5 flex items-start max-w[600px] mx-auto border-b-2 border-b-gray-300">
-            <Link to={'/'} className="text-gray-800 font-bold">POS SYSTEM</Link>
-            <div className="links ml-auto flex items-center gap-4 text-gray-600">
-                {!keycloak.authenticated ? (
-                    <>
-                        <button onClick={() => keycloak.login()} className="hover:underline">Login</button>
-                        <Link to={ROUTES.REGISTER} className="hover:underline">Register</Link>
-                    </>) : (<>
-                    <Link className="ml-4 decoration-0 p-1.5 hover:text-blue-500" to={ROUTES.DASHBOARD}>Dashboard</Link>
-                    <Link className="ml-4 decoration-0 p-1.5 hover:text-blue-500" to={ROUTES.PRODUCTS}>Shop</Link>
-                    <Link className="ml-4 decoration-0 p-1.5 hover:text-blue-500" to={ROUTES.HOME}>Blog</Link>
-                    <button onClick={handleLogout} className="ml-4 decoration-0 p-1.5 hover:text-blue-500 flex items-center gap-1">
-                        <LogoutRoundedIcon/>
-                    </button>
-                </>)}
+        <nav className="fixed top-0 left-0 right-0 h-16 z-50 glass-effect border-b border-border-primary shadow-sm">
+            <div className="h-full max-w-7xl mx-auto px-6 flex items-center justify-between">
+                {/* Brand Logo */}
+                <Link to={'/'} className="flex items-center gap-2 group">
+                    <StorefrontRoundedIcon className="text-brand-primary group-hover:scale-110 transition-transform duration-250" sx={{ fontSize: 32 }} />
+                    <span className="text-xl font-bold bg-gradient-to-r from-brand-primary to-brand-secondary bg-clip-text text-transparent">
+                        POS SYSTEM
+                    </span>
+                </Link>
+
+                {/* Navigation Links */}
+                <div className="flex items-center gap-3">
+                    {!keycloak.authenticated ? (
+                        <>
+                            <button
+                                onClick={() => keycloak.login()}
+                                className="px-4 py-2 text-text-secondary hover:text-brand-primary transition-colors duration-250 font-medium"
+                            >
+                                Login
+                            </button>
+                            <Link
+                                to={ROUTES.REGISTER}
+                                className="px-4 py-2 bg-brand-primary text-white rounded-lg hover:bg-brand-hover transition-all duration-250 hover:scale-105 active:scale-95 font-medium"
+                            >
+                                Register
+                            </Link>
+                        </>
+                    ) : (
+                        <>
+                            <Link
+                                className="px-3 py-2 text-text-secondary hover:text-brand-primary transition-all duration-250 font-medium hover:bg-bg-secondary rounded-lg"
+                                to={ROUTES.DASHBOARD}
+                            >
+                                Dashboard
+                            </Link>
+                            <Link
+                                className="px-3 py-2 text-text-secondary hover:text-brand-primary transition-all duration-250 font-medium hover:bg-bg-secondary rounded-lg"
+                                to={ROUTES.PRODUCTS}
+                            >
+                                Shop
+                            </Link>
+                            <Link
+                                className="px-3 py-2 text-text-secondary hover:text-brand-primary transition-all duration-250 font-medium hover:bg-bg-secondary rounded-lg"
+                                to={ROUTES.HOME}
+                            >
+                                Blog
+                            </Link>
+                            <button
+                                onClick={handleLogout}
+                                className="p-2 text-text-secondary hover:text-accent-error hover:bg-bg-secondary rounded-lg transition-all duration-250 hover:scale-110 active:scale-95"
+                                aria-label="Logout"
+                                title="Logout"
+                            >
+                                <LogoutRoundedIcon sx={{ fontSize: 24 }} />
+                            </button>
+                        </>
+                    )}
+
+                    {/* Theme Toggle */}
+                    <ThemeToggle />
+                </div>
             </div>
-        </div>
+        </nav>
     )
 
 }
