@@ -120,7 +120,14 @@ html {
    ======================================== */
 @layer components {
   .glass-effect {
-    @apply bg-bg-primary/80 backdrop-blur-md;
+    background-color: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    @apply transition-colors duration-300;
+  }
+
+  .dark .glass-effect {
+    background-color: rgba(15, 23, 42, 0.8);
   }
 
   .card {
@@ -157,7 +164,12 @@ html {
   }
 
   .nav-link.active {
-    @apply bg-brand-primary/10 text-brand-primary;
+    @apply text-brand-primary;
+    background-color: rgba(37, 99, 235, 0.1); /* Light mode: blue with 10% opacity */
+  }
+
+  .dark .nav-link.active {
+    background-color: rgba(56, 189, 248, 0.1); /* Dark mode: cyan with 10% opacity */
   }
 
   .nav-link.active::before {
