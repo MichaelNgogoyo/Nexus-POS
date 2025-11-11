@@ -6,7 +6,6 @@ export const ROUTES = {
     DASHBOARD: '/dashboard',
     PRODUCTS: '/products',
     CREATE: '/create',
-    CREATEPRODUCT: '/createProduct',
     ERROR: '/*',
     LOGOUT: '/logout',
 

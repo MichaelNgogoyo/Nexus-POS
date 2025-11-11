@@ -26,9 +26,9 @@ function Register() {
         e.preventDefault();
 
         try {
-            await axios.post('http://localhost:8080/api/register', form);
+            await axios.post('/api/register', form);
 
-            await axios.post('http://localhost:8080/api/auth/login',
+            await axios.post('/api/auth/login',
                 new URLSearchParams({
                     username: form.username,
                     password: form.password,

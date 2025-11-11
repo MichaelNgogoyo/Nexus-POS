@@ -1,8 +1,8 @@
 import {useState} from "react";
 import BlogPreview from "../components/BlogPreview.jsx";
+import Layout from "../components/Layout.jsx";
 
 const Home = () => {
-
 
 
     //use state for blogs
@@ -13,12 +13,12 @@ const Home = () => {
     ]);
 
 
-
-
     return (
-        <div className="home">
+
+            <div className="home">
                 <BlogPreview blogs={blogs}/>
-        </div>
+            </div>
+
     );
 }
 

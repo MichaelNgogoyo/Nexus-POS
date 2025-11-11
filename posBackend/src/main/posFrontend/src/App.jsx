@@ -12,7 +12,8 @@ import Layout from "./components/Layout.jsx";
 function App() {
     return (
         <Routes>
-            <Route path="/" element={<Layout />}>
+            <Route path="/" element={<Layout/>}>
+                <Route index element={<Home/>}/>
                 <Route path={ROUTES.HOME} element={<Home/>}/>
                 <Route path={ROUTES.REGISTER} element={<Register/>}/>
                 <Route path={ROUTES.PRODUCTS} element={
@@ -31,6 +32,7 @@ function App() {
                     </RequireAuth>
                 }/>
                 <Route path={ROUTES.ERROR} element={<Error/>}/>
+                <Route path="*" element={<Error/>}/>
             </Route>
         </Routes>
     );
