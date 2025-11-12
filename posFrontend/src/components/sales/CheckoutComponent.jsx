@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AddShoppingCart, RemoveShoppingCart, ClearAll, CreditCard, Money, Sync, ErrorOutline } from '@mui/icons-material';
 import api from '../../services/api';
+import ProductCard from './ProductCard'; // Import the new ProductCard component
 
 const CheckoutComponent = () => {
     const [cart, setCart] = useState([]);
@@ -100,10 +101,7 @@ const CheckoutComponent = () => {
                             </div>
                         ) : (
                             filteredProducts.map(product => (
-                                <div key={product.id} onClick={() => addToCart(product)} className="card p-3 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-bg-tertiary">
-                                    <p className="font-bold">{product.name}</p>
-                                    <p className="text-text-secondary">${product.price.toFixed(2)}</p>
-                                </div>
+                                <ProductCard key={product.id} product={product} onAddToCart={addToCart} />
                             ))
                         )}
                     </div>
