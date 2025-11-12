@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
-import { ImageIcon, Sync } from '@mui/icons-material';
+import { Image, Sync } from '@mui/icons-material';
 
 const ProductCard = ({ product, onAddToCart }) => {
     const [imageUrl, setImageUrl] = useState(null);
@@ -41,7 +41,7 @@ const ProductCard = ({ product, onAddToCart }) => {
                 ) : imageUrl ? (
                     <img src={imageUrl} alt={product.name} className="w-full h-full object-cover rounded-lg" />
                 ) : (
-                    <ImageIcon className="text-text-muted" sx={{ fontSize: 40 }} />
+                    <Image className="text-text-muted" sx={{ fontSize: 40 }} />
                 )}
             </div>
             <p className="font-bold">{product.name}</p>
@@ -51,4 +51,3 @@ const ProductCard = ({ product, onAddToCart }) => {
 };
 
 export default ProductCard;
-
