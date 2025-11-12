@@ -1,18 +1,32 @@
-import React, { useState } from 'react';
-import { AddShoppingCart, RemoveShoppingCart, ClearAll, CreditCard, Money } from '@mui/icons-material';
-
-// Mock data for products
-const mockProducts = [
-    { id: 1, name: 'Espresso', price: 2.50, stock: 100 },
-    { id: 2, name: 'Latte', price: 3.50, stock: 50 },
-    { id: 3, name: 'Cappuccino', price: 3.50, stock: 75 },
-    { id: 4, name: 'Croissant', price: 2.75, stock: 30 },
-    { id: 5, name: 'Muffin', price: 2.25, stock: 40 },
-];
+import React, { useState, useEffect } from 'react';
+import { AddShoppingCart, RemoveShoppingCart, ClearAll, CreditCard, Money, Sync, ErrorOutline } from '@mui/icons-material';
+import api from '../../services/api';
 
 const CheckoutComponent = () => {
     const [cart, setCart] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
+    const [products, setProducts] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [processingSale, setProcessingSale] = useState(false);
+
+    useEffect(() => {
+        const fetchProducts = async () => {
+            try {
+                setLoading(true);
+                const response = await api.getAllProducts();
+                setProducts(response.data);
+                setError(null);
+            } catch (err) {
+                setError('Failed to fetch products. Please try again later.');
+                console.error(err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchProducts();
+    }, []);
 
     const addToCart = (product) => {
         const existingItem = cart.find(item => item.id === product.id);
@@ -32,7 +46,31 @@ const CheckoutComponent = () => {
         }
     };
 
-    const filteredProducts = mockProducts.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
+    const handleCompleteSale = async (paymentMethod) => {
+        if (cart.length === 0 || processingSale) return;
+
+        setProcessingSale(true);
+        const saleData = {
+            cashierId: 'default-user', // NOTE: Replace with actual logged-in user ID
+            totalAmount: total,
+            paymentMethod: paymentMethod,
+            // Depending on your backend, you might need to send the items
+            // items: cart.map(item => ({ productId: item.id, quantity: item.quantity }))
+        };
+
+        try {
+            await api.createSale(saleData);
+            alert('Sale Completed Successfully!');
+            setCart([]); // Clear the cart on success
+        } catch (err) {
+            setError('Failed to complete sale. Please check connection and try again.');
+            console.error(err);
+        } finally {
+            setProcessingSale(false);
+        }
+    };
+
+    const filteredProducts = products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
     const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const tax = subtotal * 0.08; // 8% tax
     const total = subtotal + tax;
@@ -50,12 +88,24 @@ const CheckoutComponent = () => {
                         className="w-full p-2 border border-border-secondary rounded-lg bg-bg-tertiary focus:outline-none focus:ring-2 focus:ring-brand-primary"
                     />
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-4 max-h-96 overflow-y-auto p-2">
-                        {filteredProducts.map(product => (
-                            <div key={product.id} onClick={() => addToCart(product)} className="card p-3 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-bg-tertiary">
-                                <p className="font-bold">{product.name}</p>
-                                <p className="text-text-secondary">${product.price.toFixed(2)}</p>
+                        {loading ? (
+                            <div className="col-span-full flex flex-col items-center justify-center p-10">
+                                <Sync className="animate-spin text-brand-primary" sx={{ fontSize: 40 }} />
+                                <p className="mt-2 text-text-secondary">Loading Products...</p>
                             </div>
-                        ))}
+                        ) : error ? (
+                            <div className="col-span-full flex flex-col items-center justify-center p-10">
+                                <ErrorOutline className="text-accent-error" sx={{ fontSize: 40 }} />
+                                <p className="mt-2 text-accent-error">{error}</p>
+                            </div>
+                        ) : (
+                            filteredProducts.map(product => (
+                                <div key={product.id} onClick={() => addToCart(product)} className="card p-3 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-bg-tertiary">
+                                    <p className="font-bold">{product.name}</p>
+                                    <p className="text-text-secondary">${product.price.toFixed(2)}</p>
+                                </div>
+                            ))
+                        )}
                     </div>
                 </div>
             </div>
@@ -98,11 +148,16 @@ const CheckoutComponent = () => {
                     <div className="mt-6">
                         <h3 className="font-bold mb-2">Payment Method</h3>
                         <div className="flex gap-2">
-                            <button className="flex-1 btn-secondary flex items-center justify-center gap-2"><CreditCard /> Card</button>
-                            <button className="flex-1 btn-secondary flex items-center justify-center gap-2"><Money /> Cash</button>
+                            <button onClick={() => handleCompleteSale('Card')} className="flex-1 btn-secondary flex items-center justify-center gap-2" disabled={processingSale || cart.length === 0}><CreditCard /> Card</button>
+                            <button onClick={() => handleCompleteSale('Cash')} className="flex-1 btn-secondary flex items-center justify-center gap-2" disabled={processingSale || cart.length === 0}><Money /> Cash</button>
                         </div>
-                        <button className="btn-primary w-full mt-4" disabled={cart.length === 0}>
-                            Complete Sale
+                        <button onClick={() => handleCompleteSale('Card')} className="btn-primary w-full mt-4" disabled={cart.length === 0 || processingSale}>
+                            {processingSale ? (
+                                <>
+                                    <Sync className="animate-spin mr-2" />
+                                    Processing...
+                                </>
+                            ) : 'Complete Sale'}
                         </button>
                     </div>
                 </div>
