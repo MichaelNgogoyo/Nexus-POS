@@ -1,23 +1,18 @@
-import React, { useState } from 'react';
-import { Search, FilterList, CalendarToday, ReceiptLong, MoreVert } from '@mui/icons-material';
+import React, { useState, useEffect } from 'react';
+import { Search, FilterList, CalendarToday, MoreVert, Sync, ErrorOutline } from '@mui/icons-material';
+import api from '../../services/api';
 
-// Mock data for transactions
-const mockTransactions = [
-    { id: 'TXN75638', date: '2025-11-12 10:30 AM', customer: 'John Doe', total: 45.50, status: 'Completed', paymentMethod: 'Card', items: [{ name: 'Latte', qty: 2 }, { name: 'Muffin', qty: 1 }] },
-    { id: 'TXN75639', date: '2025-11-12 09:15 AM', customer: 'Jane Smith', total: 12.75, status: 'Completed', paymentMethod: 'Cash', items: [{ name: 'Espresso', qty: 1 }, { name: 'Croissant', qty: 1 }] },
-    { id: 'TXN75640', date: '2025-11-11 04:45 PM', customer: 'Guest', total: 8.25, status: 'Refunded', paymentMethod: 'Card', items: [{ name: 'Cappuccino', qty: 1 }] },
-    { id: 'TXN75641', date: '2025-11-11 02:00 PM', customer: 'Peter Jones', total: 25.00, status: 'Completed', paymentMethod: 'Card', items: [{ name: 'Latte', qty: 2 }, { name: 'Muffin', qty: 2 }] },
-    { id: 'TXN75642', date: '2025-11-10 11:00 AM', customer: 'Mary Johnson', total: 5.00, status: 'Completed', paymentMethod: 'Cash', items: [{ name: 'Espresso', qty: 2 }] },
-];
 
 const TransactionRow = ({ txn }) => {
     const [detailsVisible, setDetailsVisible] = useState(false);
 
     const getStatusClass = (status) => {
-        switch (status) {
-            case 'Completed': return 'bg-accent-success/20 text-accent-success';
-            case 'Refunded': return 'bg-accent-warning/20 text-accent-warning';
-            default: return 'bg-gray-500/20 text-gray-500';
+        // This is a placeholder. You'll need to determine status based on your data.
+        if (!status) return 'bg-gray-500/20 text-gray-500';
+        switch (status.toLowerCase()) {
+            case 'completed': return 'bg-accent-success/20 text-accent-success';
+            case 'refunded': return 'bg-accent-warning/20 text-accent-warning';
+            default: return 'bg-blue-500/20 text-blue-500';
         }
     };
 
@@ -25,12 +20,12 @@ const TransactionRow = ({ txn }) => {
         <>
             <tr className="border-b border-border-secondary hover:bg-bg-tertiary cursor-pointer" onClick={() => setDetailsVisible(!detailsVisible)}>
                 <td className="p-3 font-medium text-brand-primary">#{txn.id}</td>
-                <td className="p-3">{txn.customer}</td>
-                <td className="p-3">{txn.date}</td>
-                <td className="p-3 font-semibold">${txn.total.toFixed(2)}</td>
+                <td className="p-3">{txn.cashierId || 'N/A'}</td>
+                <td className="p-3">{new Date(txn.saleDate).toLocaleString()}</td>
+                <td className="p-3 font-semibold">${txn.totalAmount.toFixed(2)}</td>
                 <td className="p-3">
-                    <span className={`px-2 py-1 rounded-full text-xs font-semibold ${getStatusClass(txn.status)}`}>
-                        {txn.status}
+                    <span className={`px-2 py-1 rounded-full text-xs font-semibold ${getStatusClass(txn.status || 'Completed')}`}>
+                        {txn.status || 'Completed'}
                     </span>
                 </td>
                 <td className="p-3 text-center">
@@ -43,14 +38,13 @@ const TransactionRow = ({ txn }) => {
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <h4 className="font-bold">Items</h4>
-                                <ul className="list-disc list-inside">
-                                    {txn.items.map((item, i) => <li key={i}>{item.name} (x{item.qty})</li>)}
-                                </ul>
+                                <p className="text-text-muted">Item details not available yet.</p>
+                                {/* When your API provides item details, you can map them here */}
                             </div>
                             <div>
                                 <h4 className="font-bold">Payment Details</h4>
                                 <p>Method: {txn.paymentMethod}</p>
-                                <p>Total: ${txn.total.toFixed(2)}</p>
+                                <p>Total: ${txn.totalAmount.toFixed(2)}</p>
                             </div>
                         </div>
                     </td>
@@ -61,12 +55,35 @@ const TransactionRow = ({ txn }) => {
 };
 
 const TransactionsComponent = () => {
-    const [transactions, setTransactions] = useState(mockTransactions);
+    const [transactions, setTransactions] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
 
+    useEffect(() => {
+        const fetchTransactions = async () => {
+            try {
+                setLoading(true);
+                // NOTE: You need to implement an endpoint in your backend that returns all sales.
+                // I have assumed it will be GET /sales
+                const response = await api.getAllSales();
+                setTransactions(response.data);
+                setError(null);
+            } catch (err) {
+                setError('Failed to fetch transactions. Please ensure the backend is running and the endpoint is available.');
+                console.error(err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchTransactions();
+    }, []);
+
+
     const filteredTransactions = transactions.filter(t =>
-        t.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        t.customer.toLowerCase().includes(searchTerm.toLowerCase())
+        (t.id?.toString().toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (t.cashierId?.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
     return (
@@ -78,7 +95,7 @@ const TransactionsComponent = () => {
                         <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-text-muted" sx={{ fontSize: 20 }} />
                         <input
                             type="text"
-                            placeholder="Search by ID or Customer..."
+                            placeholder="Search by ID or Cashier..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="pl-8 pr-2 py-2 w-64 border border-border-secondary rounded-lg bg-bg-tertiary focus:outline-none focus:ring-2 focus:ring-brand-primary"
@@ -94,7 +111,7 @@ const TransactionsComponent = () => {
                     <thead>
                         <tr className="border-b-2 border-border-secondary">
                             <th className="p-3">ID</th>
-                            <th className="p-3">Customer</th>
+                            <th className="p-3">Cashier</th>
                             <th className="p-3">Date</th>
                             <th className="p-3">Total</th>
                             <th className="p-3">Status</th>
@@ -102,13 +119,29 @@ const TransactionsComponent = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {filteredTransactions.map(txn => <TransactionRow key={txn.id} txn={txn} />)}
+                        {loading ? (
+                            <tr>
+                                <td colSpan="6" className="text-center p-10">
+                                    <Sync className="animate-spin text-brand-primary mx-auto" sx={{ fontSize: 40 }} />
+                                    <p className="mt-2 text-text-secondary">Loading Transactions...</p>
+                                </td>
+                            </tr>
+                        ) : error ? (
+                            <tr>
+                                <td colSpan="6" className="text-center p-10">
+                                    <ErrorOutline className="text-accent-error mx-auto" sx={{ fontSize: 40 }} />
+                                    <p className="mt-2 text-accent-error">{error}</p>
+                                </td>
+                            </tr>
+                        ) : (
+                            filteredTransactions.map(txn => <TransactionRow key={txn.id} txn={txn} />)
+                        )}
                     </tbody>
                 </table>
             </div>
             {/* Placeholder for Pagination */}
             <div className="flex justify-end items-center mt-4 text-sm">
-                <p>Showing 1-5 of {filteredTransactions.length} results</p>
+                <p>Showing {filteredTransactions.length} of {filteredTransactions.length} results</p>
                 {/* Pagination controls would go here */}
             </div>
         </div>
