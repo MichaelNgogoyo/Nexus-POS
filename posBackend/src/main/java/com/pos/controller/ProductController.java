@@ -65,9 +65,13 @@ public class ProductController {
     }
 
     @GetMapping("/{id}/image")
-    public ResponseEntity<byte[]> getProductImageById(@PathVariable int id) {
+    public ResponseEntity<byte[]> getProductImageById(@PathVariable int id) throws Exception {
 
-        return productService.getImageByProductId(id);
+        Product product = productService.getProductById(id);
+        byte[] imageFile = productService.getImageByProductId(id);
+        return ResponseEntity.ok()
+                .contentType(MediaType.valueOf(product.getImageType()))
+                .body(imageFile);
 
     }
 }

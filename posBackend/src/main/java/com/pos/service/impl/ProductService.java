@@ -3,6 +3,7 @@ package com.pos.service.impl;
 import com.pos.dto.ProductRequest;
 import com.pos.model.Product;
 import com.pos.repository.ProductRepository;
+import com.pos.service.MinioService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,6 +27,7 @@ public class ProductService {
     @Autowired
     private ProductRepository repository;
 
+    private final MinioService minioService;
     //create product
 
     public void createProduct(ProductRequest request, MultipartFile imageFile) throws IOException {
@@ -90,15 +92,10 @@ public class ProductService {
         return repository.findAll();
     }
 
-    public ResponseEntity<byte[]> getImageByProductId(int productId) {
+    public byte[] getImageByProductId(int productId) throws Exception {
         Product product = getProductById(productId);
 
-        byte[] imageFile = product.getImageData();
-
-//        log.info(imageFile.toString());
-        return ResponseEntity.ok()
-                .contentType(MediaType.valueOf(product.getImageType()))
-                .body(imageFile);
+        return minioService.getFile("product-images", product.getImageName());
 
     }
 
