@@ -95,7 +95,7 @@ public class ProductService {
 
         byte[] imageFile = product.getImageData();
 
-        log.info(imageFile.toString());
+//        log.info(imageFile.toString());
         return ResponseEntity.ok()
                 .contentType(MediaType.valueOf(product.getImageType()))
                 .body(imageFile);
