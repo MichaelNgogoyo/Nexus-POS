@@ -26,9 +26,8 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
-                                "/", "/index.html", "/api/public/**", "/assets/**", "/static/**","/shop.svg","/favicon.ico","/swagger-ui/**","/v3/api-docs/**"
+                                "/", "/index.html", "/api/public/**", "/assets/**", "/static/**","/shop.svg","/favicon.ico","/swagger-ui/**","/v3/api-docs/**", "/api/product/*/image"
                         ).permitAll()
-                        .requestMatchers("/api/product/*/image").permitAll()
                         .requestMatchers("/admin/**").hasRole("ADMIN")
                         .requestMatchers("/user/**").hasAnyRole("USER", "ADMIN")
                         .anyRequest().authenticated()
