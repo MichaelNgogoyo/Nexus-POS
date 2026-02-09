@@ -1,9 +1,12 @@
 import {useEffect, useState} from "react";
+import {useNavigate} from "react-router-dom";
 import axios from "axios";
 import {useKeycloak} from "@react-keycloak/web";
+import {ROUTES} from "../../routes";
 
 function Products() {
     const {keycloak} = useKeycloak();
+    const navigate = useNavigate();
 
 
     const [products, setProducts] = useState([]);
@@ -41,6 +44,8 @@ function Products() {
                         <div className="bg-gray-100 py-10 px-4">
                             <h1 className="text-3xl font-bold text-center mb-8 text-gray-800">Our Products</h1>
                             <div>
+                                <br />
+                                <button onClick={() => navigate(ROUTES.CREATEPRODUCT)} className="btn btn-primary" >Add Product</button>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
                                 {products.map((product) => (
