@@ -19,7 +19,7 @@ function NavBar() {
         <nav className="fixed top-0 left-0 right-0 h-16 z-50 glass-effect border-b border-border-primary shadow-sm">
             <div className="h-full max-w-7xl mx-auto px-6 flex items-center justify-between">
                 {/* Brand Logo */}
-                <Link to={'/'} className="flex items-center gap-2 group">
+                <Link to={'/Dashboard'} className="flex items-center gap-2 group">
                     <StorefrontRoundedIcon className="text-brand-primary group-hover:scale-110 transition-transform duration-250" sx={{ fontSize: 32 }} />
                     <span className="text-xl font-bold bg-gradient-to-r from-brand-primary to-brand-secondary bg-clip-text text-transparent">
                         POS SYSTEM
