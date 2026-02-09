@@ -66,7 +66,7 @@ function Products() {
                                         <button className="float-end bg-teal-800 rounded-full px-2 py-2 text-white">Add to
                                             Cart
                                         </button>
-
+ 
                                         <p className="text-blue-600 font-bold text-2xl ">Ksh {product.price}</p>
                                         <p className="text-xs text-gray-400 mt-1">By Michael</p>
                                     </div>
