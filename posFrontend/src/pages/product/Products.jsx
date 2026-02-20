@@ -1,8 +1,8 @@
 import {useEffect, useState} from "react";
 import {useNavigate} from "react-router-dom";
-import axios from "axios";
 import {useKeycloak} from "@react-keycloak/web";
 import {ROUTES} from "../../routes";
+import api from "../../services/api";
 
 function Products() {
     const {keycloak} = useKeycloak();
@@ -16,12 +16,7 @@ function Products() {
             const fetchProducts = async () => {
                 if (keycloak?.authenticated) {
                     try {
-                        const response = await axios.get('http://localhost:8080/api/product',
-                            {
-                                headers: {
-                                    Authorization: `Bearer ${keycloak.token}`
-                                }
-                            });
+                        const response = await api.getAllProducts();
 
                         setProducts(response.data);
 
@@ -82,7 +77,7 @@ function Products() {
                                     >
                                         <div className="h-48 w-full overflow-hidden bg-slate-100">
                                             <img
-                                                src={`http://localhost:8080/api/product/${product.id}/image`}
+                                                src={api.getProductImageUrl(product.id)}
                                                 alt={product.name}
                                                 className="h-full w-full object-cover transition duration-200 group-hover:scale-105"
                                             />
