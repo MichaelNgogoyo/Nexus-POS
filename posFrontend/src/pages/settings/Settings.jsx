@@ -36,6 +36,7 @@ function Settings() {
     }, []);
 
     const presets = useMemo(() => Object.entries(THEME_PRESETS), []);
+    const activePresetLabel = THEME_PRESETS[themeState.preset]?.label || 'Theme';
 
     const handlePresetChange = (presetKey) => {
         const next = setThemePreset(presetKey);
@@ -115,6 +116,40 @@ function Settings() {
                         <DarkModeRounded sx={{fontSize: 20}}/>
                         Dark
                     </button>
+                </div>
+            </div>
+
+            <div className="card p-5">
+                <h2 className="text-xl font-semibold mb-4">Live Preview</h2>
+                <div className="rounded-2xl border border-border-primary bg-bg-secondary p-4 space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            <p className="text-sm text-text-secondary">Current preset</p>
+                            <p className="text-lg font-semibold text-text-primary">{activePresetLabel}</p>
+                        </div>
+                        <div className="text-right">
+                            <p className="text-sm text-text-secondary">Today Revenue</p>
+                            <p className="text-kpi text-brand-primary">KES 84,520</p>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <button className="btn-primary w-full">Primary Action</button>
+                        <button className="btn-secondary w-full">Secondary Action</button>
+                    </div>
+
+                    <div className="rounded-xl border border-border-primary overflow-hidden">
+                        <div className="grid grid-cols-3 bg-bg-tertiary text-xs font-semibold text-text-secondary">
+                            <span className="px-3 py-2">Item</span>
+                            <span className="px-3 py-2">Qty</span>
+                            <span className="px-3 py-2 text-right">Amount</span>
+                        </div>
+                        <div className="grid grid-cols-3 text-sm text-text-primary">
+                            <span className="px-3 py-2">Latte</span>
+                            <span className="px-3 py-2 text-data">2</span>
+                            <span className="px-3 py-2 text-right text-data">KES 980.00</span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
