@@ -144,6 +144,14 @@ export const getProductImageUrl = (productId) => {
     return `${API_BASE_URL}/api/product/${productId}/image`;
 };
 
+export const adjustProductStock = (productId, adjustmentData) => {
+    return apiClient.post(`/api/product/${productId}/stock-adjustment`, adjustmentData);
+};
+
+export const getProductStockMovements = (productId) => {
+    return apiClient.get(`/api/product/${productId}/stock-movements`);
+};
+
 export const getApiBaseUrl = () => API_BASE_URL;
 
 
@@ -159,6 +167,8 @@ const api = {
     deleteProduct,
     getProductImageById,
     getProductImageUrl,
+    adjustProductStock,
+    getProductStockMovements,
     getApiBaseUrl,
 };
 
