@@ -37,6 +37,10 @@ public class ProductController {
                                            @RequestParam(value = "category", required = false) String category,
                                            @RequestParam("file") MultipartFile imageFile) throws Exception {
 
+        if (imageFile == null || imageFile.isEmpty()) {
+            return ResponseEntity.badRequest().body("Image file is required");
+        }
+
         ProductRequest request = new ProductRequest(name, price, active, discount, quantity, category);
 
         return ResponseEntity.ok(productService.createProduct(request, imageFile));
