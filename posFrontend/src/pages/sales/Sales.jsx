@@ -31,7 +31,7 @@ const Sales = () => {
                 <h1 className="text-3xl font-bold mb-6">Sales Module</h1>
 
                 <div className="flex border-b border-border-secondary mb-6">
-                    {Object.entries(tabs).map(([key, { label, icon: Icon }]) => (
+                    {Object.entries(tabs).map(([key, tab]) => (
                         <button
                             key={key}
                             onClick={() => setActiveTab(key)}
@@ -41,8 +41,8 @@ const Sales = () => {
                                     : 'text-text-secondary hover:text-text-primary'
                             }`}
                         >
-                            <Icon sx={{ fontSize: 20 }} />
-                            <span>{label}</span>
+                            <tab.icon sx={{ fontSize: 20 }} />
+                            <span>{tab.label}</span>
                         </button>
                     ))}
                 </div>

@@ -7,14 +7,16 @@ const ProductCard = ({ product, onAddToCart }) => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        let objectUrl = null;
+
         const fetchImage = async () => {
             if (product.id) {
                 try {
                     setLoading(true);
                     const response = await api.getProductImageById(product.id);
                     if (response.data && response.data.size > 0) {
-                        const url = URL.createObjectURL(response.data);
-                        setImageUrl(url);
+                        objectUrl = URL.createObjectURL(response.data);
+                        setImageUrl(objectUrl);
                     }
                 } catch (error) {
                     console.error(`Failed to fetch image for product ${product.id}`, error);
@@ -27,8 +29,8 @@ const ProductCard = ({ product, onAddToCart }) => {
         fetchImage();
 
         return () => {
-            if (imageUrl) {
-                URL.revokeObjectURL(imageUrl);
+            if (objectUrl) {
+                URL.revokeObjectURL(objectUrl);
             }
         };
     }, [product.id]);

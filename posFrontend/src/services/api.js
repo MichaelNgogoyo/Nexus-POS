@@ -76,6 +76,10 @@ export const getAllSales = () => {
     return apiClient.get('/sale');
 };
 
+export const processSaleReturn = (saleId, returnData) => {
+    return apiClient.post(`/sale/${saleId}/return`, returnData);
+};
+
 // ========================================
 // Products API
 // ========================================
@@ -160,6 +164,7 @@ const api = {
     viewSale,
     deleteSale,
     getAllSales,
+    processSaleReturn,
     getAllProducts,
     getProductById,
     createProduct,

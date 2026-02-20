@@ -2,8 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { Search, FilterList, CalendarToday, MoreVert, Sync, ErrorOutline } from '@mui/icons-material';
 import api from '../../services/api';
 
+const formatCurrency = (value) => {
+    return new Intl.NumberFormat('en-KE', {
+        style: 'currency',
+        currency: 'KES'
+    }).format(value || 0);
+};
 
-const TransactionRow = ({ txn }) => {
+const TransactionRow = ({ txn, onReturn, returnProcessingId }) => {
     const [detailsVisible, setDetailsVisible] = useState(false);
 
     const getStatusClass = (status) => {
@@ -22,14 +28,26 @@ const TransactionRow = ({ txn }) => {
                 <td className="p-3 font-medium text-brand-primary">#{txn.id}</td>
                 <td className="p-3">{txn.cashierId || 'N/A'}</td>
                 <td className="p-3">{new Date(txn.saleDate).toLocaleString()}</td>
-                <td className="p-3 font-semibold">${txn.totalAmount.toFixed(2)}</td>
+                <td className="p-3 font-semibold">{formatCurrency(txn.totalAmount)}</td>
                 <td className="p-3">
                     <span className={`px-2 py-1 rounded-full text-xs font-semibold ${getStatusClass(txn.status || 'Completed')}`}>
                         {txn.status || 'Completed'}
                     </span>
                 </td>
                 <td className="p-3 text-center">
-                    <button className="text-text-muted hover:text-text-primary"><MoreVert /></button>
+                    <div className="flex items-center justify-center gap-2">
+                        <button className="text-text-muted hover:text-text-primary"><MoreVert /></button>
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onReturn(txn.id);
+                            }}
+                            disabled={returnProcessingId === txn.id}
+                            className="rounded-md border border-border-secondary px-2 py-1 text-xs hover:bg-bg-tertiary disabled:opacity-60"
+                        >
+                            {returnProcessingId === txn.id ? 'Returning...' : 'Return'}
+                        </button>
+                    </div>
                 </td>
             </tr>
             {detailsVisible && (
@@ -44,7 +62,7 @@ const TransactionRow = ({ txn }) => {
                             <div>
                                 <h4 className="font-bold">Payment Details</h4>
                                 <p>Method: {txn.paymentMethod}</p>
-                                <p>Total: ${txn.totalAmount.toFixed(2)}</p>
+                                <p>Total: {formatCurrency(txn.totalAmount)}</p>
                             </div>
                         </div>
                     </td>
@@ -59,26 +77,38 @@ const TransactionsComponent = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [returnProcessingId, setReturnProcessingId] = useState(null);
+
+    const fetchTransactions = async () => {
+        try {
+            setLoading(true);
+            const response = await api.getAllSales();
+            setTransactions(response.data);
+            setError(null);
+        } catch (err) {
+            setError('Failed to fetch transactions. Please ensure the backend is running and the endpoint is available.');
+            console.error(err);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     useEffect(() => {
-        const fetchTransactions = async () => {
-            try {
-                setLoading(true);
-                // NOTE: You need to implement an endpoint in your backend that returns all sales.
-                // I have assumed it will be GET /sales
-                const response = await api.getAllSales();
-                setTransactions(response.data);
-                setError(null);
-            } catch (err) {
-                setError('Failed to fetch transactions. Please ensure the backend is running and the endpoint is available.');
-                console.error(err);
-            } finally {
-                setLoading(false);
-            }
-        };
-
         fetchTransactions();
     }, []);
+
+    const handleProcessReturn = async (saleId) => {
+        try {
+            setReturnProcessingId(saleId);
+            await api.processSaleReturn(saleId, { reason: 'Customer return' });
+            await fetchTransactions();
+        } catch (err) {
+            setError('Return processing failed. Confirm backend return endpoint and try again.');
+            console.error(err);
+        } finally {
+            setReturnProcessingId(null);
+        }
+    };
 
 
     const filteredTransactions = transactions.filter(t =>
@@ -134,7 +164,14 @@ const TransactionsComponent = () => {
                                 </td>
                             </tr>
                         ) : (
-                            filteredTransactions.map(txn => <TransactionRow key={txn.id} txn={txn} />)
+                            filteredTransactions.map(txn => (
+                                <TransactionRow
+                                    key={txn.id}
+                                    txn={txn}
+                                    onReturn={handleProcessReturn}
+                                    returnProcessingId={returnProcessingId}
+                                />
+                            ))
                         )}
                     </tbody>
                 </table>

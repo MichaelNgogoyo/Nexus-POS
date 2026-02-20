@@ -1,15 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { AddShoppingCart, RemoveShoppingCart, ClearAll, CreditCard, Money, Sync, ErrorOutline } from '@mui/icons-material';
+import { AddShoppingCart, RemoveShoppingCart, ClearAll, CreditCard, Money, Sync, ErrorOutline, Print } from '@mui/icons-material';
 import api from '../../services/api';
 import ProductCard from './ProductCard'; // Import the new ProductCard component
+import {useKeycloak} from "@react-keycloak/web";
 
 const CheckoutComponent = () => {
+    const {keycloak} = useKeycloak();
     const [cart, setCart] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [processingSale, setProcessingSale] = useState(false);
+    const [discountPercent, setDiscountPercent] = useState(0);
+    const [taxRate] = useState(0.08);
+    const [paymentMethod, setPaymentMethod] = useState('Cash');
+    const [receipt, setReceipt] = useState(null);
+
+    const formatCurrency = (value) => {
+        return new Intl.NumberFormat('en-KE', {
+            style: 'currency',
+            currency: 'KES'
+        }).format(value || 0);
+    };
 
     useEffect(() => {
         const fetchProducts = async () => {
@@ -31,6 +44,12 @@ const CheckoutComponent = () => {
 
     const addToCart = (product) => {
         const existingItem = cart.find(item => item.id === product.id);
+        const currentQuantity = existingItem ? existingItem.quantity : 0;
+
+        if (currentQuantity >= Number(product.quantity || 0)) {
+            return;
+        }
+
         if (existingItem) {
             setCart(cart.map(item => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item));
         } else {
@@ -47,22 +66,50 @@ const CheckoutComponent = () => {
         }
     };
 
-    const handleCompleteSale = async (paymentMethod) => {
+    const handleCompleteSale = async () => {
         if (cart.length === 0 || processingSale) return;
 
         setProcessingSale(true);
+
+        const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+        const discountAmount = subtotal * (Number(discountPercent || 0) / 100);
+        const taxableAmount = Math.max(subtotal - discountAmount, 0);
+        const tax = taxableAmount * taxRate;
+        const total = taxableAmount + tax;
+
         const saleData = {
-            cashierId: 'default-user', // NOTE: Replace with actual logged-in user ID
+            cashierId: keycloak?.tokenParsed?.preferred_username || keycloak?.subject || 'system-user',
+            subtotal,
+            discountAmount,
+            taxAmount: tax,
             totalAmount: total,
             paymentMethod: paymentMethod,
-            // Depending on your backend, you might need to send the items
-            // items: cart.map(item => ({ productId: item.id, quantity: item.quantity }))
+            items: cart.map(item => ({
+                productId: item.id,
+                productName: item.name,
+                quantity: item.quantity,
+                unitPrice: item.price,
+                lineTotal: item.price * item.quantity,
+            }))
         };
 
         try {
-            await api.createSale(saleData);
-            alert('Sale Completed Successfully!');
+            const response = await api.createSale(saleData);
+
+            setReceipt({
+                saleId: response?.data?.id || response?.data?.saleId || `TMP-${Date.now()}`,
+                createdAt: response?.data?.saleDate || new Date().toISOString(),
+                cashierId: saleData.cashierId,
+                paymentMethod,
+                items: saleData.items,
+                subtotal,
+                discountAmount,
+                tax,
+                total,
+            });
             setCart([]); // Clear the cart on success
+            setDiscountPercent(0);
+            setError(null);
         } catch (err) {
             setError('Failed to complete sale. Please check connection and try again.');
             console.error(err);
@@ -73,8 +120,10 @@ const CheckoutComponent = () => {
 
     const filteredProducts = products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
     const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    const tax = subtotal * 0.08; // 8% tax
-    const total = subtotal + tax;
+    const discountAmount = subtotal * (Number(discountPercent || 0) / 100);
+    const taxableAmount = Math.max(subtotal - discountAmount, 0);
+    const tax = taxableAmount * taxRate;
+    const total = taxableAmount + tax;
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -125,10 +174,10 @@ const CheckoutComponent = () => {
                                 <div key={item.id} className="flex justify-between items-center">
                                     <div>
                                         <p className="font-semibold">{item.name}</p>
-                                        <p className="text-sm text-text-secondary">${item.price.toFixed(2)} x {item.quantity}</p>
+                                        <p className="text-sm text-text-secondary">{formatCurrency(item.price)} x {item.quantity}</p>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <p className="font-bold">${(item.price * item.quantity).toFixed(2)}</p>
+                                        <p className="font-bold">{formatCurrency(item.price * item.quantity)}</p>
                                         <button onClick={() => removeFromCart(item.id)} className="text-text-muted hover:text-accent-error">
                                             <RemoveShoppingCart sx={{ fontSize: 20 }} />
                                         </button>
@@ -139,17 +188,42 @@ const CheckoutComponent = () => {
                     </div>
                     <div className="border-t border-border-secondary my-4"></div>
                     <div className="space-y-2">
-                        <div className="flex justify-between"><span>Subtotal</span><span>${subtotal.toFixed(2)}</span></div>
-                        <div className="flex justify-between"><span>Tax (8%)</span><span>${tax.toFixed(2)}</span></div>
-                        <div className="flex justify-between font-bold text-lg"><span>Total</span><span>${total.toFixed(2)}</span></div>
+                        <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
+                        <div className="flex justify-between items-center">
+                            <label htmlFor="discount" className="text-sm">Discount (%)</label>
+                            <input
+                                id="discount"
+                                min="0"
+                                max="100"
+                                type="number"
+                                value={discountPercent}
+                                onChange={(e) => setDiscountPercent(Number(e.target.value) || 0)}
+                                className="w-20 rounded-lg border border-border-secondary bg-bg-tertiary px-2 py-1 text-right"
+                            />
+                        </div>
+                        <div className="flex justify-between"><span>Discount</span><span>-{formatCurrency(discountAmount)}</span></div>
+                        <div className="flex justify-between"><span>Tax ({(taxRate * 100).toFixed(0)}%)</span><span>{formatCurrency(tax)}</span></div>
+                        <div className="flex justify-between font-bold text-lg"><span>Total</span><span>{formatCurrency(total)}</span></div>
                     </div>
                     <div className="mt-6">
                         <h3 className="font-bold mb-2">Payment Method</h3>
                         <div className="flex gap-2">
-                            <button onClick={() => handleCompleteSale('Card')} className="flex-1 btn-secondary flex items-center justify-center gap-2" disabled={processingSale || cart.length === 0}><CreditCard /> Card</button>
-                            <button onClick={() => handleCompleteSale('Cash')} className="flex-1 btn-secondary flex items-center justify-center gap-2" disabled={processingSale || cart.length === 0}><Money /> Cash</button>
+                            <button
+                                onClick={() => setPaymentMethod('Card')}
+                                className={`flex-1 btn-secondary flex items-center justify-center gap-2 ${paymentMethod === 'Card' ? 'ring-2 ring-brand-primary' : ''}`}
+                                disabled={processingSale || cart.length === 0}
+                            >
+                                <CreditCard /> Card
+                            </button>
+                            <button
+                                onClick={() => setPaymentMethod('Cash')}
+                                className={`flex-1 btn-secondary flex items-center justify-center gap-2 ${paymentMethod === 'Cash' ? 'ring-2 ring-brand-primary' : ''}`}
+                                disabled={processingSale || cart.length === 0}
+                            >
+                                <Money /> Cash
+                            </button>
                         </div>
-                        <button onClick={() => handleCompleteSale('Card')} className="btn-primary w-full mt-4" disabled={cart.length === 0 || processingSale}>
+                        <button onClick={handleCompleteSale} className="btn-primary w-full mt-4" disabled={cart.length === 0 || processingSale}>
                             {processingSale ? (
                                 <>
                                     <Sync className="animate-spin mr-2" />
@@ -159,6 +233,35 @@ const CheckoutComponent = () => {
                         </button>
                     </div>
                 </div>
+
+                {receipt && (
+                    <div className="card p-4 mt-4">
+                        <div className="flex items-center justify-between mb-2">
+                            <h3 className="text-lg font-bold">Receipt</h3>
+                            <button onClick={() => window.print()} className="btn-secondary flex items-center gap-2">
+                                <Print sx={{fontSize: 18}}/> Print
+                            </button>
+                        </div>
+                        <p className="text-sm text-text-secondary">Sale ID: {receipt.saleId}</p>
+                        <p className="text-sm text-text-secondary">Cashier: {receipt.cashierId}</p>
+                        <p className="text-sm text-text-secondary mb-3">Date: {new Date(receipt.createdAt).toLocaleString()}</p>
+                        <div className="space-y-1 text-sm mb-3">
+                            {receipt.items.map((item, index) => (
+                                <div key={`${item.productId}-${index}`} className="flex justify-between">
+                                    <span>{item.productName} x {item.quantity}</span>
+                                    <span>{formatCurrency(item.lineTotal)}</span>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="border-t border-border-secondary pt-2 space-y-1 text-sm">
+                            <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(receipt.subtotal)}</span></div>
+                            <div className="flex justify-between"><span>Discount</span><span>-{formatCurrency(receipt.discountAmount)}</span></div>
+                            <div className="flex justify-between"><span>Tax</span><span>{formatCurrency(receipt.tax)}</span></div>
+                            <div className="flex justify-between font-bold"><span>Total</span><span>{formatCurrency(receipt.total)}</span></div>
+                            <div className="flex justify-between"><span>Payment</span><span>{receipt.paymentMethod}</span></div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
