@@ -13,6 +13,17 @@ const THEME_DESCRIPTIONS = {
     executive: "Professional blue-forward visual language for enterprise operations.",
     charcoal: "High-contrast dark-first command center style.",
     emerald: "Finance-friendly green-accent theme for operational reporting.",
+    sapphire: "Balanced enterprise blues for operations-heavy teams.",
+    platinum: "Minimal neutral slate style for distraction-free workflows.",
+};
+
+const THEME_SWATCHES = {
+    apple: ["#0071e3", "#f5f5f7", "#1d1d1f"],
+    executive: ["#2563eb", "#f4f7fb", "#10243e"],
+    charcoal: ["#8aa4ff", "#191a1d", "#f3f4f6"],
+    emerald: ["#0f766e", "#f5fbf8", "#0f2d23"],
+    sapphire: ["#3558d8", "#f3f6fc", "#12233f"],
+    platinum: ["#475569", "#f7f7f8", "#1f2328"],
 };
 
 function Settings() {
@@ -69,6 +80,15 @@ function Settings() {
                                     <div>
                                         <p className="text-base font-semibold text-text-primary">{preset.label}</p>
                                         <p className="mt-1 text-sm text-text-secondary">{THEME_DESCRIPTIONS[key]}</p>
+                                        <div className="mt-3 flex items-center gap-2">
+                                            {THEME_SWATCHES[key]?.map((color) => (
+                                                <span
+                                                    key={`${key}-${color}`}
+                                                    className="h-4 w-4 rounded-full border border-border-primary"
+                                                    style={{backgroundColor: color}}
+                                                />
+                                            ))}
+                                        </div>
                                     </div>
                                     {isActive && <CheckCircleRounded className="text-brand-primary"/>}
                                 </div>
