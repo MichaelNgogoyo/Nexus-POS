@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { ShoppingCart, BarChart, People, Settings } from '@mui/icons-material';
+import { ShoppingCart, BarChart, People, Warehouse, Assessment } from '@mui/icons-material';
 import {ROUTES} from "../../routes.js";
 
 const ModuleCard = ({ title, description, icon, link }) => {
@@ -33,16 +33,22 @@ const Modules = () => {
             link: ROUTES.PRODUCTS,
         },
         {
-            title: 'Customers',
-            description: 'View and manage your customer base.',
-            icon: People,
-            link: '/customers', // Example link
+            title: 'Inventory',
+            description: 'Track stock, low inventory, and stock movements.',
+            icon: Warehouse,
+            link: ROUTES.INVENTORY,
         },
         {
-            title: 'Settings',
-            description: 'Configure application settings.',
-            icon: Settings,
-            link: '/settings', // Example link
+            title: 'Reports',
+            description: 'Analyze sales, product trends, and KPIs.',
+            icon: Assessment,
+            link: ROUTES.REPORTS,
+        },
+        {
+            title: 'Users',
+            description: 'Manage roles and access controls.',
+            icon: People,
+            link: ROUTES.USERS,
         },
     ];
 

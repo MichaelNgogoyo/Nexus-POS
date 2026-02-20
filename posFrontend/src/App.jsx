@@ -11,6 +11,9 @@ import Error from "./components/Error.jsx";
 import AddProduct from "./pages/product/AddProduct.jsx";
 import Layout from "./components/Layout.jsx";
 import Sales from "./pages/sales/Sales.jsx";
+import Inventory from "./pages/inventory/Inventory.jsx";
+import Reports from "./pages/reports/Reports.jsx";
+import UserManagement from "./pages/users/UserManagement.jsx";
 
 function App() {
     return (
@@ -26,9 +29,24 @@ function App() {
                         <Products/>
                     </RequireAuth>
                 }/>
+                <Route path={ROUTES.INVENTORY} element={
+                    <RequireAuth>
+                        <Inventory/>
+                    </RequireAuth>
+                }/>
                 <Route path={ROUTES.SALES} element={
                     <RequireAuth>
                         <Sales/>
+                    </RequireAuth>
+                }/>
+                <Route path={ROUTES.REPORTS} element={
+                    <RequireAuth>
+                        <Reports/>
+                    </RequireAuth>
+                }/>
+                <Route path={ROUTES.USERS} element={
+                    <RequireAuth>
+                        <UserManagement/>
                     </RequireAuth>
                 }/>
                 <Route path={ROUTES.CREATE} element={
