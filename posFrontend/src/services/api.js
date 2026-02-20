@@ -1,6 +1,7 @@
 import axios from 'axios';
+import keycloak from '../auth/keycloak';
 
-const API_BASE_URL = 'http://localhost:8080'; // Your Spring Boot backend URL
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
 const apiClient = axios.create({
     baseURL: API_BASE_URL,
@@ -8,6 +9,28 @@ const apiClient = axios.create({
         'Content-Type': 'application/json',
     },
 });
+
+apiClient.interceptors.request.use(
+    async (config) => {
+        if (keycloak?.authenticated) {
+            await keycloak.updateToken(30);
+            config.headers.Authorization = `Bearer ${keycloak.token}`;
+        }
+
+        return config;
+    },
+    (error) => Promise.reject(error)
+);
+
+apiClient.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        if (error?.response?.status === 401 && keycloak?.authenticated) {
+            keycloak.login({redirectUri: window.location.href});
+        }
+        return Promise.reject(error);
+    }
+);
 
 // ========================================
 // Sales API
@@ -117,6 +140,12 @@ export const getProductImageById = (productId) => {
     });
 };
 
+export const getProductImageUrl = (productId) => {
+    return `${API_BASE_URL}/api/product/${productId}/image`;
+};
+
+export const getApiBaseUrl = () => API_BASE_URL;
+
 
 const api = {
     createSale,
@@ -129,6 +158,8 @@ const api = {
     updateProduct,
     deleteProduct,
     getProductImageById,
+    getProductImageUrl,
+    getApiBaseUrl,
 };
 
 export default api;

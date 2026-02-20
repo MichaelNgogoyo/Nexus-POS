@@ -1,8 +1,8 @@
 import {useState} from "react";
-import axios from "axios";
 import {useKeycloak} from "@react-keycloak/web";
 import {useNavigate} from "react-router-dom";
 import {ROUTES} from "../../routes";
+import api from "../../services/api";
 
 function AddProduct() {
     const {keycloak} = useKeycloak();
@@ -61,8 +61,6 @@ function AddProduct() {
         }
 
         try {
-            await keycloak.updateToken(30);
-
             const formData = new FormData();
             formData.append("name", products.name);
             formData.append("price", price.toString());
@@ -74,16 +72,7 @@ function AddProduct() {
                 formData.append("file", image);
             }
 
-            const response = await axios.post(
-                "http://localhost:8080/api/product/create",
-                formData,
-                {
-                    headers: {
-                        "Content-Type": "multipart/form-data",
-                        Authorization: `Bearer ${keycloak.token}`
-                    }
-                }
-            );
+            const response = await api.createProduct(formData);
 
             if (response.status === 200 || response.status === 201) {
                 alert("Product Saved!");
