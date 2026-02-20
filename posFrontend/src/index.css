@@ -3,32 +3,34 @@
 @tailwind utilities;
 
 /* ========================================
-   Light Theme (Default)
+   Apple Style Theme (Default)
    ======================================== */
 :root {
+  --font-sans: Inter, "SF Pro Text", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
   /* Backgrounds */
-  --color-bg-primary: #ffffff;
-  --color-bg-secondary: #f8fafc;
-  --color-bg-tertiary: #f1f5f9;
+  --color-bg-primary: #f5f5f7;
+  --color-bg-secondary: #ffffff;
+  --color-bg-tertiary: #f2f2f4;
 
   /* Text */
-  --color-text-primary: #0f172a;
-  --color-text-secondary: #334155;
-  --color-text-muted: #64748b;
+  --color-text-primary: #1d1d1f;
+  --color-text-secondary: #424245;
+  --color-text-muted: #6e6e73;
 
   /* Brand Colors */
-  --color-brand-primary: #2563eb;
-  --color-brand-secondary: #3b82f6;
-  --color-brand-hover: #1d4ed8;
+  --color-brand-primary: #0071e3;
+  --color-brand-secondary: #2b8fff;
+  --color-brand-hover: #0066cc;
 
   /* Accent Colors */
-  --color-accent-success: #10b981;
-  --color-accent-warning: #f59e0b;
-  --color-accent-error: #ef4444;
+  --color-accent-success: #10a37f;
+  --color-accent-warning: #d97706;
+  --color-accent-error: #dc2626;
 
   /* Borders */
-  --color-border-primary: #e2e8f0;
-  --color-border-secondary: #cbd5e1;
+  --color-border-primary: #e5e5ea;
+  --color-border-secondary: #d2d2d7;
 }
 
 /* ========================================
@@ -36,28 +38,137 @@
    ======================================== */
 .dark {
   /* Backgrounds */
-  --color-bg-primary: #0f172a;
-  --color-bg-secondary: #1e293b;
-  --color-bg-tertiary: #334155;
+  --color-bg-primary: #161617;
+  --color-bg-secondary: #1d1d1f;
+  --color-bg-tertiary: #2a2a2e;
 
   /* Text */
-  --color-text-primary: #f1f5f9;
-  --color-text-secondary: #cbd5e1;
-  --color-text-muted: #94a3b8;
+  --color-text-primary: #f5f5f7;
+  --color-text-secondary: #d2d2d7;
+  --color-text-muted: #a1a1a6;
 
   /* Brand Colors */
-  --color-brand-primary: #38bdf8;
-  --color-brand-secondary: #0ea5e9;
-  --color-brand-hover: #7dd3fc;
+  --color-brand-primary: #0a84ff;
+  --color-brand-secondary: #4da2ff;
+  --color-brand-hover: #5ba9ff;
 
   /* Accent Colors */
+  --color-accent-success: #30d158;
+  --color-accent-warning: #ff9f0a;
+  --color-accent-error: #ff453a;
+
+  /* Borders */
+  --color-border-primary: #3a3a3c;
+  --color-border-secondary: #48484a;
+}
+
+/* ========================================
+   Theme Presets
+   ======================================== */
+.theme-apple {
+  /* Apple is the default token set */
+}
+
+.theme-executive {
+  --color-bg-primary: #f4f7fb;
+  --color-bg-secondary: #ffffff;
+  --color-bg-tertiary: #eef3fa;
+  --color-text-primary: #10243e;
+  --color-text-secondary: #324a67;
+  --color-text-muted: #5f7691;
+  --color-brand-primary: #2563eb;
+  --color-brand-secondary: #3b82f6;
+  --color-brand-hover: #1d4ed8;
+  --color-accent-success: #059669;
+  --color-accent-warning: #d97706;
+  --color-accent-error: #dc2626;
+  --color-border-primary: #d7e1ef;
+  --color-border-secondary: #becde0;
+}
+
+.dark.theme-executive {
+  --color-bg-primary: #0f172a;
+  --color-bg-secondary: #162036;
+  --color-bg-tertiary: #1f2b45;
+  --color-text-primary: #e5ecf6;
+  --color-text-secondary: #becde0;
+  --color-text-muted: #8ca3bd;
+  --color-brand-primary: #3b82f6;
+  --color-brand-secondary: #60a5fa;
+  --color-brand-hover: #93c5fd;
+  --color-accent-success: #22c55e;
+  --color-accent-warning: #f59e0b;
+  --color-accent-error: #ef4444;
+  --color-border-primary: #31415f;
+  --color-border-secondary: #3b4f72;
+}
+
+.theme-charcoal {
+  --color-bg-primary: #191a1d;
+  --color-bg-secondary: #23252a;
+  --color-bg-tertiary: #2e3138;
+  --color-text-primary: #f3f4f6;
+  --color-text-secondary: #d1d5db;
+  --color-text-muted: #9ca3af;
+  --color-brand-primary: #8aa4ff;
+  --color-brand-secondary: #a7bbff;
+  --color-brand-hover: #bfd0ff;
   --color-accent-success: #34d399;
   --color-accent-warning: #fbbf24;
   --color-accent-error: #f87171;
+  --color-border-primary: #3f4550;
+  --color-border-secondary: #4a5260;
+}
 
-  /* Borders */
-  --color-border-primary: #334155;
-  --color-border-secondary: #475569;
+.dark.theme-charcoal {
+  --color-bg-primary: #131417;
+  --color-bg-secondary: #1b1d22;
+  --color-bg-tertiary: #262930;
+  --color-text-primary: #f3f4f6;
+  --color-text-secondary: #d1d5db;
+  --color-text-muted: #9ca3af;
+  --color-brand-primary: #8aa4ff;
+  --color-brand-secondary: #a7bbff;
+  --color-brand-hover: #bfd0ff;
+  --color-accent-success: #34d399;
+  --color-accent-warning: #fbbf24;
+  --color-accent-error: #f87171;
+  --color-border-primary: #333844;
+  --color-border-secondary: #3f4552;
+}
+
+.theme-emerald {
+  --color-bg-primary: #f5fbf8;
+  --color-bg-secondary: #ffffff;
+  --color-bg-tertiary: #ecf8f1;
+  --color-text-primary: #0f2d23;
+  --color-text-secondary: #2b5245;
+  --color-text-muted: #4e7568;
+  --color-brand-primary: #0f766e;
+  --color-brand-secondary: #10b981;
+  --color-brand-hover: #0b5b55;
+  --color-accent-success: #059669;
+  --color-accent-warning: #d97706;
+  --color-accent-error: #dc2626;
+  --color-border-primary: #cde7dc;
+  --color-border-secondary: #b5d8ca;
+}
+
+.dark.theme-emerald {
+  --color-bg-primary: #0b1d17;
+  --color-bg-secondary: #102a22;
+  --color-bg-tertiary: #15352b;
+  --color-text-primary: #e8f5ef;
+  --color-text-secondary: #b2d6c8;
+  --color-text-muted: #8ab2a1;
+  --color-brand-primary: #14b8a6;
+  --color-brand-secondary: #34d399;
+  --color-brand-hover: #5eead4;
+  --color-accent-success: #22c55e;
+  --color-accent-warning: #f59e0b;
+  --color-accent-error: #ef4444;
+  --color-border-primary: #295246;
+  --color-border-secondary: #346558;
 }
 
 /* ========================================
@@ -76,9 +187,7 @@ html, body, #root {
 
 body {
   @apply bg-bg-primary text-text-primary transition-colors duration-300;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

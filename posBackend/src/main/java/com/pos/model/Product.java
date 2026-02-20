@@ -12,6 +12,7 @@ import java.util.List;
 @Setter
 @Builder
 @Getter
+@Data
 public class Product {
 
     @Id

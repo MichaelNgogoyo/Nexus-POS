@@ -30,7 +30,7 @@ public class ProductService {
     private final MinioService minioService;
     //create product
 
-    public void createProduct(ProductRequest request, MultipartFile imageFile) throws IOException {
+    public ResponseEntity<?> createProduct(ProductRequest request, MultipartFile imageFile) throws IOException {
 
         Product product = Product.builder().
                 name(request.name()).
@@ -45,7 +45,7 @@ public class ProductService {
         product.setImageData(imageFile.getBytes());
 
 
-        repository.save(product);
+       return ResponseEntity.ok( repository.save(product));
 
     }
     //get product
@@ -95,7 +95,7 @@ public class ProductService {
     public byte[] getImageByProductId(int productId) throws Exception {
         Product product = getProductById(productId);
 
-        return minioService.getFile("product-images", product.getImageName());
+        return product.getImageData();
 
     }
 

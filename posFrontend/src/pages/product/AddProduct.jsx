@@ -89,32 +89,32 @@ function AddProduct() {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 py-12 px-4">
+        <div className="min-h-screen bg-bg-primary py-8 px-4">
             <div className="max-w-5xl mx-auto space-y-8">
                 <div className="flex items-center justify-between">
                     <div>
-                        <p className="text-sm font-semibold tracking-wide text-teal-600 uppercase">Inventory</p>
-                        <h1 className="text-3xl font-bold text-slate-900">Add Products</h1>
-                        <p className="text-slate-500 mt-1">Create a new product with pricing, stock, and imagery.</p>
+                        <p className="text-sm font-semibold tracking-wide text-brand-primary uppercase">Inventory</p>
+                        <h1 className="text-3xl font-bold text-text-primary">Add Products</h1>
+                        <p className="text-text-secondary mt-1">Create a new product with pricing, stock, and imagery.</p>
                     </div>
                 </div>
 
-                <div className="bg-white/90 backdrop-blur shadow-xl border border-slate-200 rounded-2xl p-8">
+                <div className="card rounded-2xl p-8">
                     <form className="grid grid-cols-1 md:grid-cols-2 gap-6" onSubmit={handleSubmit}>
                         <div className="space-y-2">
-                            <label className="text-sm font-semibold text-slate-700">Name</label>
+                            <label className="text-sm font-semibold text-text-secondary">Name</label>
                             <input
                                 type="text"
                                 name="name"
                                 value={products.name}
                                 onChange={handleChange}
                                 placeholder="Organic Arabica Beans"
-                                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800 placeholder:text-slate-400 shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+                                className="w-full rounded-xl border border-border-secondary bg-bg-tertiary px-4 py-3 text-text-primary placeholder:text-text-muted shadow-sm focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
                             />
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-sm font-semibold text-slate-700">Price</label>
+                            <label className="text-sm font-semibold text-text-secondary">Price</label>
                             <input
                                 type="number"
                                 step="0.01"
@@ -123,17 +123,17 @@ function AddProduct() {
                                 value={products.price}
                                 onChange={handleChange}
                                 placeholder="e.g. 1299"
-                                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800 placeholder:text-slate-400 shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+                                className="w-full rounded-xl border border-border-secondary bg-bg-tertiary px-4 py-3 text-text-primary placeholder:text-text-muted shadow-sm focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
                             />
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-sm font-semibold text-slate-700">Status</label>
+                            <label className="text-sm font-semibold text-text-secondary">Status</label>
                             <select
                                 name="status"
                                 value={products.status}
                                 onChange={handleChange}
-                                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800 shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+                                className="w-full rounded-xl border border-border-secondary bg-bg-tertiary px-4 py-3 text-text-primary shadow-sm focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
                             >
                                 <option value="">Select status</option>
                                 <option value="true">Active</option>
@@ -142,7 +142,7 @@ function AddProduct() {
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-sm font-semibold text-slate-700">Discount</label>
+                            <label className="text-sm font-semibold text-text-secondary">Discount</label>
                             <input
                                 type="number"
                                 step="0.01"
@@ -151,13 +151,13 @@ function AddProduct() {
                                 value={products.discount}
                                 onChange={handleChange}
                                 placeholder="e.g. 10"
-                                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800 placeholder:text-slate-400 shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+                                className="w-full rounded-xl border border-border-secondary bg-bg-tertiary px-4 py-3 text-text-primary placeholder:text-text-muted shadow-sm focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
                             />
-                            <p className="text-xs text-slate-500">Enter numeric discount (e.g., 10 for 10%). Leave blank for 0.</p>
+                            <p className="text-xs text-text-muted">Enter numeric discount (e.g., 10 for 10%). Leave blank for 0.</p>
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-sm font-semibold text-slate-700">Quantity</label>
+                            <label className="text-sm font-semibold text-text-secondary">Quantity</label>
                             <input
                                 type="number"
                                 step="1"
@@ -166,27 +166,27 @@ function AddProduct() {
                                 value={products.quantity}
                                 onChange={handleChange}
                                 placeholder="e.g. 45"
-                                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800 placeholder:text-slate-400 shadow-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+                                className="w-full rounded-xl border border-border-secondary bg-bg-tertiary px-4 py-3 text-text-primary placeholder:text-text-muted shadow-sm focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
                             />
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-sm font-semibold text-slate-700">Image</label>
-                            <div className="flex items-center gap-3 rounded-xl border border-dashed border-teal-300 bg-teal-50 px-4 py-3">
+                            <label className="text-sm font-semibold text-text-secondary">Image</label>
+                            <div className="flex items-center gap-3 rounded-xl border border-dashed border-border-secondary bg-bg-tertiary px-4 py-3">
                                 <input
                                     type="file"
                                     name="image"
                                     onChange={handleImageChange}
                                     accept="image/*"
-                                    className="text-sm text-slate-700"
+                                    className="text-sm text-text-secondary"
                                 />
                             </div>
                         </div>
 
                         {image && (
                             <div className="space-y-2 md:col-span-2">
-                                <p className="text-sm font-semibold text-slate-700">Preview</p>
-                                <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-sm w-full max-w-md">
+                                <p className="text-sm font-semibold text-text-secondary">Preview</p>
+                                <div className="overflow-hidden rounded-xl border border-border-primary bg-bg-tertiary shadow-sm w-full max-w-md">
                                     <img
                                         src={URL.createObjectURL(image)}
                                         alt="preview"
@@ -199,7 +199,7 @@ function AddProduct() {
                         <div className="md:col-span-2 flex justify-end gap-3 pt-2">
                             <button
                                 type="submit"
-                                className="inline-flex items-center justify-center rounded-xl bg-teal-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-teal-200 transition hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-200"
+                                className="btn-primary inline-flex items-center justify-center rounded-xl px-5 py-3 text-sm font-semibold"
                             >
                                 Save Product
                             </button>

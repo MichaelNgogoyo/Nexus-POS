@@ -74,6 +74,12 @@ function NavBar() {
                             >
                                 Users
                             </Link>
+                            <Link
+                                className="px-3 py-2 text-text-secondary hover:text-brand-primary transition-all duration-250 font-medium hover:bg-bg-secondary rounded-lg"
+                                to={ROUTES.SETTINGS}
+                            >
+                                Settings
+                            </Link>
                             <button
                                 onClick={handleLogout}
                                 className="p-2 text-text-secondary hover:text-accent-error hover:bg-bg-secondary rounded-lg transition-all duration-250 hover:scale-110 active:scale-95"

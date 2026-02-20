@@ -106,7 +106,7 @@ export default function Layout() {
                             </NavLink>
 
                             <NavLink
-                                to="#"
+                                to={ROUTES.SETTINGS}
                                 className="nav-link"
                             >
                                 <SettingsIcon className="text-text-muted" sx={{ fontSize: 22 }} />
