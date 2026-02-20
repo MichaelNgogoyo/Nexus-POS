@@ -1,16 +1,22 @@
 import {useKeycloak} from "@react-keycloak/web";
+import {useEffect} from "react";
 
 
 function RequireAuth({ children }) {
-    const {keycloak} = useKeycloak();
+    const {keycloak, initialized} = useKeycloak();
+
+    useEffect(() => {
+        if (initialized && keycloak && !keycloak.authenticated) {
+            keycloak.login({redirectUri: window.location.href});
+        }
+    }, [initialized, keycloak]);
 
 
-    if (keycloak.authenticated === undefined) {
-        return <p>Loading...</p>; // Optional: splash screen
+    if (!initialized || keycloak?.authenticated === undefined) {
+        return <p>Loading...</p>;
     }
 
     if (!keycloak.authenticated){
-         keycloak.login;
         return null;
     }
 
