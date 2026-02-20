@@ -52,9 +52,9 @@ function NavBar() {
                             </Link>
                             <Link
                                 className="px-3 py-2 text-text-secondary hover:text-brand-primary transition-all duration-250 font-medium hover:bg-bg-secondary rounded-lg"
-                                to={ROUTES.PRODUCTS}
+                                to={ROUTES.INVENTORY}
                             >
-                                Shop
+                                Inventory
                             </Link>
                             <Link
                                 className="px-3 py-2 text-text-secondary hover:text-brand-primary transition-all duration-250 font-medium hover:bg-bg-secondary rounded-lg"
@@ -64,9 +64,15 @@ function NavBar() {
                             </Link>
                             <Link
                                 className="px-3 py-2 text-text-secondary hover:text-brand-primary transition-all duration-250 font-medium hover:bg-bg-secondary rounded-lg"
-                                to={ROUTES.HOME}
+                                to={ROUTES.REPORTS}
                             >
-                                Blog
+                                Reports
+                            </Link>
+                            <Link
+                                className="px-3 py-2 text-text-secondary hover:text-brand-primary transition-all duration-250 font-medium hover:bg-bg-secondary rounded-lg"
+                                to={ROUTES.USERS}
+                            >
+                                Users
                             </Link>
                             <button
                                 onClick={handleLogout}

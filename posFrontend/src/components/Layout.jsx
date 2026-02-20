@@ -5,6 +5,8 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import AccountCircleRoundedIcon from '@mui/icons-material/AccountCircleRounded';
 import DashboardRoundedIcon from '@mui/icons-material/DashboardRounded';
+import AssessmentRoundedIcon from '@mui/icons-material/AssessmentRounded';
+import WarehouseRoundedIcon from '@mui/icons-material/WarehouseRounded';
 import {ROUTES} from "../routes.js";
 import NavBar from "./NavBar.jsx";
 
@@ -53,6 +55,16 @@ export default function Layout() {
 
 
                             <NavLink
+                                to={ROUTES.INVENTORY}
+                                className={({isActive}) =>
+                                    `nav-link ${isActive ? 'active' : ''}`
+                                }
+                            >
+                                <WarehouseRoundedIcon className="text-accent-success" sx={{ fontSize: 22 }} />
+                                <span className="font-medium">Inventory</span>
+                            </NavLink>
+
+                            <NavLink
                                 to={ROUTES.PRODUCTS}
                                 className={({isActive}) =>
                                     `nav-link ${isActive ? 'active' : ''}`
@@ -63,13 +75,23 @@ export default function Layout() {
                             </NavLink>
 
                             <NavLink
-                                to={ROUTES.CREATE}
+                                to={ROUTES.REPORTS}
+                                className={({isActive}) =>
+                                    `nav-link ${isActive ? 'active' : ''}`
+                                }
+                            >
+                                <AssessmentRoundedIcon className="text-accent-warning" sx={{ fontSize: 22 }} />
+                                <span className="font-medium">Reports</span>
+                            </NavLink>
+
+                            <NavLink
+                                to={ROUTES.USERS}
                                 className={({isActive}) =>
                                     `nav-link ${isActive ? 'active' : ''}`
                                 }
                             >
                                 <PersonAddIcon className="text-accent-warning" sx={{ fontSize: 22 }} />
-                                <span className="font-medium">Create User</span>
+                                <span className="font-medium">Users</span>
                             </NavLink>
                         </div>
 

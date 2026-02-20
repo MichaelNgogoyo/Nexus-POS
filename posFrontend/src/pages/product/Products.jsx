@@ -35,7 +35,7 @@ function Products() {
 
     useEffect(() => {
             fetchProducts();
-        }, [keycloak]
+        }, [fetchProducts]
     );
 
     const handleStockAdjustment = async (productId, direction) => {
