@@ -15,7 +15,7 @@ const ReportCard = ({title, value, change}) => {
     return (
         <div className="card p-4">
             <h3 className="text-text-secondary font-medium">{title}</h3>
-            <p className="text-3xl font-bold my-2 text-text-primary">{value}</p>
+            <p className="text-kpi my-2 text-text-primary">{value}</p>
             <div className={`flex items-center text-sm ${isPositive ? 'text-accent-success' : 'text-accent-error'}`}>
                 {isPositive ? <ArrowUpward sx={{fontSize: 16}}/> : <ArrowDownward sx={{fontSize: 16}}/>}
                 <span className="ml-1 font-semibold">{Math.abs(change).toFixed(1)}%</span>

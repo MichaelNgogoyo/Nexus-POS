@@ -188,7 +188,7 @@ const CheckoutComponent = () => {
                     </div>
                     <div className="border-t border-border-secondary my-4"></div>
                     <div className="space-y-2">
-                        <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
+                        <div className="flex justify-between"><span>Subtotal</span><span className="text-data">{formatCurrency(subtotal)}</span></div>
                         <div className="flex justify-between items-center">
                             <label htmlFor="discount" className="text-sm">Discount (%)</label>
                             <input
@@ -198,12 +198,12 @@ const CheckoutComponent = () => {
                                 type="number"
                                 value={discountPercent}
                                 onChange={(e) => setDiscountPercent(Number(e.target.value) || 0)}
-                                className="w-20 rounded-lg border border-border-secondary bg-bg-tertiary px-2 py-1 text-right"
+                                className="w-20 rounded-lg border border-border-secondary bg-bg-tertiary px-2 py-1 text-right text-data"
                             />
                         </div>
-                        <div className="flex justify-between"><span>Discount</span><span>-{formatCurrency(discountAmount)}</span></div>
-                        <div className="flex justify-between"><span>Tax ({(taxRate * 100).toFixed(0)}%)</span><span>{formatCurrency(tax)}</span></div>
-                        <div className="flex justify-between font-bold text-lg"><span>Total</span><span>{formatCurrency(total)}</span></div>
+                        <div className="flex justify-between"><span>Discount</span><span className="text-data">-{formatCurrency(discountAmount)}</span></div>
+                        <div className="flex justify-between"><span>Tax ({(taxRate * 100).toFixed(0)}%)</span><span className="text-data">{formatCurrency(tax)}</span></div>
+                        <div className="flex justify-between font-bold text-lg"><span>Total</span><span className="text-kpi">{formatCurrency(total)}</span></div>
                     </div>
                     <div className="mt-6">
                         <h3 className="font-bold mb-2">Payment Method</h3>
@@ -254,10 +254,10 @@ const CheckoutComponent = () => {
                             ))}
                         </div>
                         <div className="border-t border-border-secondary pt-2 space-y-1 text-sm">
-                            <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(receipt.subtotal)}</span></div>
-                            <div className="flex justify-between"><span>Discount</span><span>-{formatCurrency(receipt.discountAmount)}</span></div>
-                            <div className="flex justify-between"><span>Tax</span><span>{formatCurrency(receipt.tax)}</span></div>
-                            <div className="flex justify-between font-bold"><span>Total</span><span>{formatCurrency(receipt.total)}</span></div>
+                            <div className="flex justify-between"><span>Subtotal</span><span className="text-data">{formatCurrency(receipt.subtotal)}</span></div>
+                            <div className="flex justify-between"><span>Discount</span><span className="text-data">-{formatCurrency(receipt.discountAmount)}</span></div>
+                            <div className="flex justify-between"><span>Tax</span><span className="text-data">{formatCurrency(receipt.tax)}</span></div>
+                            <div className="flex justify-between font-bold"><span>Total</span><span className="text-data">{formatCurrency(receipt.total)}</span></div>
                             <div className="flex justify-between"><span>Payment</span><span>{receipt.paymentMethod}</span></div>
                         </div>
                     </div>
