@@ -15,6 +15,14 @@ export const THEME_PRESETS = {
         label: 'Emerald Finance',
         className: 'theme-emerald',
     },
+    sapphire: {
+        label: 'Sapphire Ops',
+        className: 'theme-sapphire',
+    },
+    platinum: {
+        label: 'Platinum Neutral',
+        className: 'theme-platinum',
+    },
 };
 
 const PRESET_STORAGE_KEY = 'ui-theme-preset';
