@@ -1,4 +1,4 @@
-import {Link, useNavigate} from "react-router-dom";
+import {Link} from "react-router-dom";
 import {ROUTES} from "../routes.js";
 import {useKeycloak} from "@react-keycloak/web";
 import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
@@ -7,7 +7,6 @@ import StorefrontRoundedIcon from '@mui/icons-material/StorefrontRounded';
 
 function NavBar() {
     const {keycloak, initialized} = useKeycloak();
-    useNavigate();
     const handleLogout =()=>{
         if (initialized && keycloak?.authenticated) {
             keycloak.logout({redirectUri: window.location.origin})
@@ -19,7 +18,7 @@ function NavBar() {
         <nav className="fixed top-0 left-0 right-0 h-16 z-50 glass-effect border-b border-border-primary shadow-sm">
             <div className="h-full max-w-7xl mx-auto px-6 flex items-center justify-between">
                 {/* Brand Logo */}
-                <Link to={'/Dashboard'} className="flex items-center gap-2 group">
+                <Link to={ROUTES.DASHBOARD} className="flex items-center gap-2 group">
                     <StorefrontRoundedIcon className="text-brand-primary group-hover:scale-110 transition-transform duration-250" sx={{ fontSize: 32 }} />
                     <span className="text-xl font-bold bg-gradient-to-r from-brand-primary to-brand-secondary bg-clip-text text-transparent">
                         POS SYSTEM

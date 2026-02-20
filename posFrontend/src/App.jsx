@@ -5,6 +5,7 @@ import CreateBlog from "./pages/Create-Blog.jsx";
 import Products from "./pages/product/Products.jsx";
 import RequireAuth from "./auth/RequireAuth.jsx";
 import Register from "./auth/Register.jsx";
+import Login from "./auth/Login.jsx";
 import {ROUTES} from "./routes.js";
 import Error from "./components/Error.jsx";
 import AddProduct from "./pages/product/AddProduct.jsx";
@@ -18,6 +19,7 @@ function App() {
                 <Route index element={<Home/>}/>
                 <Route path={ROUTES.HOME} element={<Home/>}/>
                 <Route path={ROUTES.DASHBOARD} element={<Dashboard />}/>
+                <Route path={ROUTES.LOGIN} element={<Login/>}/>
                 <Route path={ROUTES.REGISTER} element={<Register/>}/>
                 <Route path={ROUTES.PRODUCTS} element={
                     <RequireAuth>
