@@ -62,15 +62,15 @@ function Inventory() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="card p-4">
                     <p className="text-sm text-text-secondary">Total Units in Stock</p>
-                    <p className="text-3xl font-bold text-text-primary mt-1">{totalUnits}</p>
+                    <p className="text-kpi text-text-primary mt-1 text-data">{totalUnits}</p>
                 </div>
                 <div className="card p-4">
                     <p className="text-sm text-text-secondary">Low Stock Items</p>
-                    <p className="text-3xl font-bold text-accent-warning mt-1">{lowStockCount}</p>
+                    <p className="text-kpi text-accent-warning mt-1 text-data">{lowStockCount}</p>
                 </div>
                 <div className="card p-4">
                     <p className="text-sm text-text-secondary">Out of Stock Items</p>
-                    <p className="text-3xl font-bold text-accent-error mt-1">{outOfStockCount}</p>
+                    <p className="text-kpi text-accent-error mt-1 text-data">{outOfStockCount}</p>
                 </div>
             </div>
 
@@ -127,8 +127,8 @@ function Inventory() {
                                     <tr key={product.id} className="border-b border-border-primary">
                                         <td className="p-3 font-medium">{product.name}</td>
                                         <td className="p-3 text-text-secondary">#{product.id}</td>
-                                        <td className="p-3 text-text-secondary">KES {Number(product.price || 0).toFixed(2)}</td>
-                                        <td className="p-3 font-semibold">{quantity}</td>
+                                        <td className="p-3 text-text-secondary text-data">KES {Number(product.price || 0).toFixed(2)}</td>
+                                        <td className="p-3 font-semibold text-data">{quantity}</td>
                                         <td className="p-3">
                                             <span className={`px-2 py-1 rounded-full text-xs font-semibold ${statusClass}`}>
                                                 {status}

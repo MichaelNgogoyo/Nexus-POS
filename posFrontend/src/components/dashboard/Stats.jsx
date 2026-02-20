@@ -11,7 +11,7 @@ const StatCard = ({ title, value, change, changeType, icon }) => {
                 <h3 className="text-text-secondary font-medium">{title}</h3>
                 <IconComponent className={`text-brand-primary`} />
             </div>
-            <p className="text-3xl font-bold my-2">{value}</p>
+            <p className="text-kpi my-2 text-data">{value}</p>
             <div className="flex items-center text-sm">
                 {isPositive ? (
                     <ArrowUpward className="text-accent-success" sx={{ fontSize: 16 }} />
