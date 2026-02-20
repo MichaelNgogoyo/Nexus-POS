@@ -27,7 +27,7 @@ public class ProductController {
 
 
     @PostMapping(value = "/create", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public void createProduct(@RequestParam("name") String name,
+    public ResponseEntity<?> createProduct(@RequestParam("name") String name,
                               @RequestParam("price") Double price,
                               @RequestParam("active") Boolean active,
                               @RequestParam("discount") double discount,
@@ -35,7 +35,8 @@ public class ProductController {
                               @RequestParam("file") MultipartFile imageFile) throws IOException {
 
         ProductRequest request = new ProductRequest(name, price, active, discount, quantity);
-        productService.createProduct(request, imageFile);
+
+        return ResponseEntity.ok(productService.createProduct(request, imageFile));
     }
 
     //get one product

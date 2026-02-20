@@ -5,6 +5,9 @@ import App from './App.jsx';
 import './index.css';
 import {ReactKeycloakProvider} from "@react-keycloak/web";
 import keycloak from "./auth/keycloak.js";
+import {initTheme} from "./theme/theme";
+
+initTheme();
 
 ReactDOM.createRoot(document.getElementById('root')).render(
     <ReactKeycloakProvider authClient={keycloak}>

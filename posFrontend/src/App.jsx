@@ -14,6 +14,7 @@ import Sales from "./pages/sales/Sales.jsx";
 import Inventory from "./pages/inventory/Inventory.jsx";
 import Reports from "./pages/reports/Reports.jsx";
 import UserManagement from "./pages/users/UserManagement.jsx";
+import Settings from "./pages/settings/Settings.jsx";
 
 function App() {
     return (
@@ -47,6 +48,11 @@ function App() {
                 <Route path={ROUTES.USERS} element={
                     <RequireAuth>
                         <UserManagement/>
+                    </RequireAuth>
+                }/>
+                <Route path={ROUTES.SETTINGS} element={
+                    <RequireAuth>
+                        <Settings/>
                     </RequireAuth>
                 }/>
                 <Route path={ROUTES.CREATE} element={
