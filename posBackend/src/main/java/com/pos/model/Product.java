@@ -27,7 +27,7 @@ public class Product {
     private double discount;
     private int quantity; //stock
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(name = "category_id")
     private Category category;
 
