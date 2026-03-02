@@ -7,6 +7,7 @@ import com.pos.service.impl.ProductService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -17,6 +18,7 @@ import java.io.IOException;
 import java.net.URLConnection;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @RestController
@@ -88,12 +90,12 @@ public class ProductController {
 
     @GetMapping("/{id}/image")
     public ResponseEntity<byte[]> getProductImageById(@PathVariable int id) throws Exception {
-
-        Product product = productService.getProductById(id);
         byte[] imageFile = productService.getImageByProductId(id);
+        Product product = productService.getProductById(id);
         String guessedType = URLConnection.guessContentTypeFromName(product.getImageURL());
 
         return ResponseEntity.ok()
+                .cacheControl(CacheControl.maxAge(7, TimeUnit.DAYS).cachePublic())
                 .contentType(guessedType != null ? MediaType.valueOf(guessedType) : MediaType.APPLICATION_OCTET_STREAM)
                 .body(imageFile);
 

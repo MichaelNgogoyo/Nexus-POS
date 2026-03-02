@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -64,6 +65,7 @@ public class ProductService {
     //get product
 
 
+    @Cacheable(value = "product", key = "#id")
     public Product getProductById(long id) {
         return repository.getProductById(id);
     }
@@ -71,7 +73,10 @@ public class ProductService {
 
     //update product
 
-    @CacheEvict(value = "products", allEntries = true)
+    @Caching(evict = {
+        @CacheEvict(value = "products", allEntries = true),
+        @CacheEvict(value = "product", key = "#id")
+    })
     public void updateProduct(long id, ProductRequest request) {
 
         Product product = repository.getProductById(id);
@@ -96,7 +101,10 @@ public class ProductService {
         log.info("Product updated successfully");
     }
 
-    @CacheEvict(value = "products", allEntries = true)
+    @Caching(evict = {
+        @CacheEvict(value = "products", allEntries = true),
+        @CacheEvict(value = "product", key = "#id")
+    })
     public ResponseEntity<?> updateProductWithImage(long id, ProductRequest request, MultipartFile imageFile) throws Exception {
         Product product = repository.getProductById(id);
         if (product == null) {
@@ -128,7 +136,10 @@ public class ProductService {
     }
     //delete product
 
-    @CacheEvict(value = "products", allEntries = true)
+    @Caching(evict = {
+        @CacheEvict(value = "products", allEntries = true),
+        @CacheEvict(value = "product", key = "#id")
+    })
     public void deleteProduct(long id) {
         Product product = repository.getProductById(id);
         if (product == null) {
@@ -154,7 +165,8 @@ public class ProductService {
     }
 
     public byte[] getImageByProductId(int productId) throws Exception {
-        Product product = getProductById(productId);
+        // use repository directly to avoid self-call AOP proxy bypass
+        Product product = repository.getProductById(productId);
         return minIOService.getFile(product.getImageURL());
     }
 
