@@ -13,7 +13,9 @@ initTheme();
 const queryClient = new QueryClient({
     defaultOptions: {
         queries: {
-            staleTime: 5 * 60 * 1000, // data stays fresh for 5 minutes
+            staleTime: 5 * 60 * 1000,      // data stays fresh for 5 minutes
+            refetchOnWindowFocus: false,    // don't refetch when switching tabs/windows
+            refetchOnMount: false,          // don't refetch when component remounts if data is fresh
         },
     },
 });
