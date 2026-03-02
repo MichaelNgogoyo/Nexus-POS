@@ -1,6 +1,7 @@
 package com.pos.model;
 
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -22,10 +23,7 @@ public class Product {
     private Double price;
     private boolean active;
     private String imageURL; //store object url in db
-//    private String imageName;//production image handling : research
-//    private String imageType;
-//    @Lob
-//    private byte[] imageData;
+
     private double discount;
     private int quantity; //stock
 
@@ -33,10 +31,8 @@ public class Product {
     @JoinColumn(name = "category_id")
     private Category category;
 
+    @JsonIgnore
     @OneToMany
     List<Cart> cartList;
 
-    //product image
-    //product discount
-    //boolean active
 }

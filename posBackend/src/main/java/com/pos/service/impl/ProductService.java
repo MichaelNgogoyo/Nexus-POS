@@ -10,6 +10,8 @@ import com.pos.service.MinIOService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -38,6 +40,7 @@ public class ProductService {
     @Autowired
     MinIOService minIOService;
 
+    @CacheEvict(value = "products", allEntries = true)
     public ResponseEntity<?> createProduct(ProductRequest request, MultipartFile imageFile) throws Exception {
 
         String objectKey = minIOService.uploadFile(imageFile);
@@ -68,6 +71,7 @@ public class ProductService {
 
     //update product
 
+    @CacheEvict(value = "products", allEntries = true)
     public void updateProduct(long id, ProductRequest request) {
 
         Product product = repository.getProductById(id);
@@ -92,6 +96,7 @@ public class ProductService {
         log.info("Product updated successfully");
     }
 
+    @CacheEvict(value = "products", allEntries = true)
     public ResponseEntity<?> updateProductWithImage(long id, ProductRequest request, MultipartFile imageFile) throws Exception {
         Product product = repository.getProductById(id);
         if (product == null) {
@@ -123,6 +128,7 @@ public class ProductService {
     }
     //delete product
 
+    @CacheEvict(value = "products", allEntries = true)
     public void deleteProduct(long id) {
         Product product = repository.getProductById(id);
         if (product == null) {
@@ -142,8 +148,9 @@ public class ProductService {
 
     //return all products
 
+    @Cacheable("products")
     public List<Product> findAllProducts() {
-        return repository.findAll();
+        return repository.findAllWithCategory();
     }
 
     public byte[] getImageByProductId(int productId) throws Exception {
