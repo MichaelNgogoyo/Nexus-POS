@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { AddShoppingCart, RemoveShoppingCart, ClearAll, CreditCard, Money, Sync, ErrorOutline, Print } from '@mui/icons-material';
+import React, { useState, useEffect, useRef } from 'react';
+import { useReactToPrint } from 'react-to-print';
+import { RemoveShoppingCart, ClearAll, CreditCard, Money, Sync, ErrorOutline, Print } from '@mui/icons-material';
 import api from '../../services/api';
 import ProductCard from './ProductCard';
+import ReceiptDocument from './ReceiptDocument';
 import {useKeycloak} from "@react-keycloak/web";
 
 const CART_STORAGE_KEY = 'pos_checkout_cart';
@@ -26,6 +28,13 @@ const CheckoutComponent = () => {
     const [paymentMethod, setPaymentMethod] = useState('Cash');
     const [amountTendered, setAmountTendered] = useState('');
     const [receipt, setReceipt] = useState(null);
+
+    const receiptRef = useRef(null);
+    const handlePrint = useReactToPrint({
+        contentRef: receiptRef,
+        documentTitle: receipt ? `Receipt-${receipt.saleId}` : 'Receipt',
+        pageStyle: `@page { size: 80mm auto; margin: 4mm 2mm; }`,
+    });
 
     const formatCurrency = (value) => {
         return new Intl.NumberFormat('en-KE', {
@@ -296,36 +305,33 @@ const CheckoutComponent = () => {
                 </div>
 
                 {receipt && (
-                    <div className="card p-4 mt-4">
-                        <div className="flex items-center justify-between mb-2">
-                            <h3 className="text-lg font-bold">Receipt</h3>
-                            <button onClick={() => window.print()} className="btn-secondary flex items-center gap-2">
-                                <Print sx={{fontSize: 18}}/> Print
-                            </button>
+                    <div className="mt-4">
+                        {/* Action bar — screen only */}
+                        <div className="card p-3 flex items-center justify-between mb-2 print:hidden">
+                            <span className="font-semibold text-sm">Receipt #{String(receipt.saleId).padStart(6, '0')}</span>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={handlePrint}
+                                    className="btn-primary flex items-center gap-2 text-sm"
+                                >
+                                    <Print sx={{ fontSize: 18 }} /> Print Receipt
+                                </button>
+                                <button
+                                    onClick={() => setReceipt(null)}
+                                    className="btn-secondary text-sm"
+                                >
+                                    Close
+                                </button>
+                            </div>
                         </div>
-                        <p className="text-sm text-text-secondary">Sale ID: {receipt.saleId}</p>
-                        <p className="text-sm text-text-secondary">Cashier: {receipt.cashierId}</p>
-                        <p className="text-sm text-text-secondary mb-3">Date: {new Date(receipt.createdAt).toLocaleString()}</p>
-                        <div className="space-y-1 text-sm mb-3">
-                            {receipt.items.map((item, index) => (
-                                <div key={`${item.productId}-${index}`} className="flex justify-between">
-                                    <span>{item.productName} x {item.quantity}</span>
-                                    <span>{formatCurrency(item.lineTotal)}</span>
-                                </div>
-                            ))}
-                        </div>
-                        <div className="border-t border-border-secondary pt-2 space-y-1 text-sm">
-                            <div className="flex justify-between"><span>Subtotal</span><span className="text-data">{formatCurrency(receipt.subtotal)}</span></div>
-                            <div className="flex justify-between"><span>Discount</span><span className="text-data">-{formatCurrency(receipt.discountAmount)}</span></div>
-                            <div className="flex justify-between"><span>Tax ({(taxRate * 100).toFixed(0)}%)</span><span className="text-data">{formatCurrency(receipt.tax)}</span></div>
-                            <div className="flex justify-between font-bold"><span>Total</span><span className="text-data">{formatCurrency(receipt.total)}</span></div>
-                            {receipt.paymentMethod === 'Cash' && (
-                                <>
-                                    <div className="flex justify-between"><span>Tendered</span><span>{formatCurrency(receipt.amountTendered)}</span></div>
-                                    <div className="flex justify-between font-semibold text-green-600"><span>Change</span><span>{formatCurrency(receipt.changeGiven)}</span></div>
-                                </>
-                            )}
-                            <div className="flex justify-between"><span>Payment</span><span>{receipt.paymentMethod}</span></div>
+
+                        {/* Receipt preview — visible on screen + printed */}
+                        <div className="overflow-auto border border-border-secondary rounded-lg bg-white shadow-sm p-2 flex justify-center">
+                            <ReceiptDocument
+                                ref={receiptRef}
+                                receipt={receipt}
+                                taxRate={taxRate}
+                            />
                         </div>
                     </div>
                 )}
