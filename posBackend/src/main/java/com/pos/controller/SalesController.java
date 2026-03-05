@@ -75,6 +75,7 @@ public class SalesController {
                 .body(sb.toString());
     }
 
+    @PostMapping("/{id}/return")
     public ResponseEntity<Sales> processReturn(@PathVariable Long id, @RequestBody(required = false) SaleReturnRequest request) {
         return ResponseEntity.ok(service.processReturn(id, request));
     }

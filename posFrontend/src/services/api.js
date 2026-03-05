@@ -207,6 +207,9 @@ export const getDashboardSummary = () => apiClient.get('/api/report/summary');
 /** GET /api/report/low-stock — products at or below their low-stock threshold */
 export const getLowStockProducts = () => apiClient.get('/api/report/low-stock');
 
+/** GET /api/config/tax-rate — returns { taxRate: number } from backend config. Public endpoint. */
+export const getTaxRate = () => apiClient.get('/api/config/tax-rate');
+
 
 const api = {
     createSale,
@@ -232,6 +235,7 @@ const api = {
     getApiBaseUrl,
     getDashboardSummary,
     getLowStockProducts,
+    getTaxRate,
 };
 
 export default api;

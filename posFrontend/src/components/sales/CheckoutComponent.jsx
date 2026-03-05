@@ -1,20 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { AddShoppingCart, RemoveShoppingCart, ClearAll, CreditCard, Money, Sync, ErrorOutline, Print } from '@mui/icons-material';
 import api from '../../services/api';
-import ProductCard from './ProductCard'; // Import the new ProductCard component
+import ProductCard from './ProductCard';
 import {useKeycloak} from "@react-keycloak/web";
+
+const CART_STORAGE_KEY = 'pos_checkout_cart';
 
 const CheckoutComponent = () => {
     const {keycloak} = useKeycloak();
-    const [cart, setCart] = useState([]);
+    const [cart, setCart] = useState(() => {
+        try {
+            const saved = localStorage.getItem(CART_STORAGE_KEY);
+            return saved ? JSON.parse(saved) : [];
+        } catch {
+            return [];
+        }
+    });
     const [searchTerm, setSearchTerm] = useState('');
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [processingSale, setProcessingSale] = useState(false);
     const [discountPercent, setDiscountPercent] = useState(0);
-    const [taxRate] = useState(0.08);
+    const [taxRate, setTaxRate] = useState(0);
     const [paymentMethod, setPaymentMethod] = useState('Cash');
+    const [amountTendered, setAmountTendered] = useState('');
     const [receipt, setReceipt] = useState(null);
 
     const formatCurrency = (value) => {
@@ -24,12 +34,26 @@ const CheckoutComponent = () => {
         }).format(value || 0);
     };
 
+    // Persist cart to localStorage on every change
     useEffect(() => {
-        const fetchProducts = async () => {
+        try {
+            localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+        } catch {
+            // ignore storage errors
+        }
+    }, [cart]);
+
+    // Fetch products and tax rate from backend on mount
+    useEffect(() => {
+        const fetchData = async () => {
             try {
                 setLoading(true);
-                const response = await api.getAllProducts();
-                setProducts(response.data);
+                const [productsRes, taxRes] = await Promise.all([
+                    api.getAllProducts(),
+                    api.getTaxRate(),
+                ]);
+                setProducts(productsRes.data);
+                setTaxRate((taxRes.data?.taxRate ?? 0) / 100);
                 setError(null);
             } catch (err) {
                 setError('Failed to fetch products. Please try again later.');
@@ -39,7 +63,7 @@ const CheckoutComponent = () => {
             }
         };
 
-        fetchProducts();
+        fetchData();
     }, []);
 
     const addToCart = (product) => {
@@ -69,21 +93,23 @@ const CheckoutComponent = () => {
     const handleCompleteSale = async () => {
         if (cart.length === 0 || processingSale) return;
 
-        setProcessingSale(true);
+        const tendered = parseFloat(amountTendered);
+        if (paymentMethod === 'Cash' && (!amountTendered || tendered < total)) {
+            setError('Amount tendered must be equal to or greater than the total.');
+            return;
+        }
 
-        const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-        const discountAmount = subtotal * (Number(discountPercent || 0) / 100);
-        const taxableAmount = Math.max(subtotal - discountAmount, 0);
-        const tax = taxableAmount * taxRate;
-        const total = taxableAmount + tax;
+        setProcessingSale(true);
+        setError(null);
 
         const saleData = {
             cashierId: keycloak?.tokenParsed?.preferred_username || keycloak?.subject || 'system-user',
-            paymentMethod: paymentMethod,
+            paymentMethod,
             items: cart.map(item => ({
                 productId: item.id,
                 quantity: item.quantity,
-            }))
+            })),
+            amountTendered: paymentMethod === 'Cash' ? tendered : total,
         };
 
         try {
@@ -104,12 +130,17 @@ const CheckoutComponent = () => {
                 })),
                 subtotal,
                 discountAmount,
-                tax,
-                total: savedSale.totalAmount || total,
+                tax: savedSale.taxAmount ?? tax,
+                total: savedSale.totalAmount ?? total,
+                amountTendered: savedSale.amountTendered ?? tendered,
+                changeGiven: savedSale.changeGiven ?? Math.max(0, tendered - total),
             });
+
+            // Clear cart from state and localStorage
             setCart([]);
+            localStorage.removeItem(CART_STORAGE_KEY);
             setDiscountPercent(0);
-            setError(null);
+            setAmountTendered('');
         } catch (err) {
             setError('Failed to complete sale. Please check connection and try again.');
             console.error(err);
@@ -124,6 +155,8 @@ const CheckoutComponent = () => {
     const taxableAmount = Math.max(subtotal - discountAmount, 0);
     const tax = taxableAmount * taxRate;
     const total = taxableAmount + tax;
+    const tendered = parseFloat(amountTendered) || 0;
+    const change = Math.max(0, tendered - total);
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -162,7 +195,7 @@ const CheckoutComponent = () => {
                 <div className="card p-4">
                     <h2 className="text-xl font-bold mb-4 flex justify-between items-center">
                         <span>Cart</span>
-                        <button onClick={() => setCart([])} className="text-text-muted hover:text-accent-error" title="Clear Cart">
+                        <button onClick={() => { setCart([]); localStorage.removeItem(CART_STORAGE_KEY); }} className="text-text-muted hover:text-accent-error" title="Clear Cart">
                             <ClearAll />
                         </button>
                     </h2>
@@ -209,7 +242,7 @@ const CheckoutComponent = () => {
                         <h3 className="font-bold mb-2">Payment Method</h3>
                         <div className="flex gap-2">
                             <button
-                                onClick={() => setPaymentMethod('Card')}
+                                onClick={() => { setPaymentMethod('Card'); setAmountTendered(''); }}
                                 className={`flex-1 btn-secondary flex items-center justify-center gap-2 ${paymentMethod === 'Card' ? 'ring-2 ring-brand-primary' : ''}`}
                                 disabled={processingSale || cart.length === 0}
                             >
@@ -223,6 +256,34 @@ const CheckoutComponent = () => {
                                 <Money /> Cash
                             </button>
                         </div>
+
+                        {/* Amount tendered — only shown for cash payments */}
+                        {paymentMethod === 'Cash' && (
+                            <div className="mt-3 space-y-1">
+                                <div className="flex justify-between items-center">
+                                    <label htmlFor="amountTendered" className="text-sm font-medium">Amount Tendered</label>
+                                    <input
+                                        id="amountTendered"
+                                        type="number"
+                                        min={total}
+                                        step="0.01"
+                                        value={amountTendered}
+                                        onChange={(e) => setAmountTendered(e.target.value)}
+                                        placeholder={formatCurrency(total)}
+                                        className="w-32 rounded-lg border border-border-secondary bg-bg-tertiary px-2 py-1 text-right text-data"
+                                    />
+                                </div>
+                                {tendered > 0 && (
+                                    <div className="flex justify-between font-semibold text-green-600">
+                                        <span>Change</span>
+                                        <span>{formatCurrency(change)}</span>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {error && <p className="mt-2 text-sm text-accent-error">{error}</p>}
+
                         <button onClick={handleCompleteSale} className="btn-primary w-full mt-4" disabled={cart.length === 0 || processingSale}>
                             {processingSale ? (
                                 <>
@@ -256,8 +317,14 @@ const CheckoutComponent = () => {
                         <div className="border-t border-border-secondary pt-2 space-y-1 text-sm">
                             <div className="flex justify-between"><span>Subtotal</span><span className="text-data">{formatCurrency(receipt.subtotal)}</span></div>
                             <div className="flex justify-between"><span>Discount</span><span className="text-data">-{formatCurrency(receipt.discountAmount)}</span></div>
-                            <div className="flex justify-between"><span>Tax</span><span className="text-data">{formatCurrency(receipt.tax)}</span></div>
+                            <div className="flex justify-between"><span>Tax ({(taxRate * 100).toFixed(0)}%)</span><span className="text-data">{formatCurrency(receipt.tax)}</span></div>
                             <div className="flex justify-between font-bold"><span>Total</span><span className="text-data">{formatCurrency(receipt.total)}</span></div>
+                            {receipt.paymentMethod === 'Cash' && (
+                                <>
+                                    <div className="flex justify-between"><span>Tendered</span><span>{formatCurrency(receipt.amountTendered)}</span></div>
+                                    <div className="flex justify-between font-semibold text-green-600"><span>Change</span><span>{formatCurrency(receipt.changeGiven)}</span></div>
+                                </>
+                            )}
                             <div className="flex justify-between"><span>Payment</span><span>{receipt.paymentMethod}</span></div>
                         </div>
                     </div>

@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Silent Check SSO</title>
+</head>
+<body>
+<script>
+    // Keycloak expects a string callback URL; send the current URL directly.
+    parent.postMessage(window.location.href, window.location.origin);
+</script>
+</body>
+</html>

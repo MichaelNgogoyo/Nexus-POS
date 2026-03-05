@@ -3,6 +3,7 @@ package com.pos.config.auth;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -18,6 +19,7 @@ import java.util.List;
 
 @Configuration
 @EnableWebSecurity
+@Profile("!seed")
 public class SecurityConfig {
 
     @Value("${cors.allowed-origins:http://localhost:5173}")
@@ -34,7 +36,8 @@ public class SecurityConfig {
                                 "/static/**", "/shop.svg", "/favicon.ico",
                                 "/swagger-ui/**", "/v3/api-docs/**",
                                 "/api/product/*/image", "/api/register",
-                                "/api/report/summary", "/api/report/low-stock"
+                                "/api/report/summary", "/api/report/low-stock",
+                                "/api/config/**"
                         ).permitAll()
                         .requestMatchers("/admin/**").hasRole("ADMIN")
                         .requestMatchers("/user/**").hasAnyRole("USER", "ADMIN")
