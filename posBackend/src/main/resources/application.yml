@@ -36,10 +36,10 @@ spring:
             user-name-attribute: preferred_username
 
   jpa:
+    open-in-view: false
     hibernate:
       ddl-auto: update
     show-sql: false
-    database-platform: org.hibernate.dialect.PostgreSQLDialect
     properties:
       hibernate:
         format_sql: false
