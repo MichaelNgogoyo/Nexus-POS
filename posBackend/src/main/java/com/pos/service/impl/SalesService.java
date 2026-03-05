@@ -119,7 +119,7 @@ public class SalesService {
 
     @Transactional(readOnly = true)
     public Page<Sales> listSales(Pageable pageable) {
-        return repository.findAll(pageable);
+        return repository.findAllPaged(pageable);
     }
 
     @Transactional

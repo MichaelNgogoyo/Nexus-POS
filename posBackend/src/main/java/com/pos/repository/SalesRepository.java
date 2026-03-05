@@ -14,8 +14,9 @@ import java.util.Optional;
 
 public interface SalesRepository extends JpaRepository<Sales, Long> {
 
-    @EntityGraph("Sales.withItems")
-    Page<Sales> findAll(Pageable pageable);
+    /** Lightweight paginated list — no collection fetch, safe pagination */
+    @Query("SELECT s FROM Sales s ORDER BY s.createdAt DESC")
+    Page<Sales> findAllPaged(Pageable pageable);
 
     @EntityGraph("Sales.withItems")
     Optional<Sales> findById(Long id);
