@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useReactToPrint } from 'react-to-print';
-import { RemoveShoppingCart, ClearAll, CreditCard, Money, Sync, ErrorOutline, Print } from '@mui/icons-material';
+import { RemoveShoppingCart, ClearAll, CreditCard, Money, Sync, ErrorOutline, Print, ChevronLeft, ChevronRight } from '@mui/icons-material';
 import api from '../../services/api';
 import ProductCard from './ProductCard';
 import ReceiptDocument from './ReceiptDocument';
 import {useKeycloak} from "@react-keycloak/web";
 
 const CART_STORAGE_KEY = 'pos_checkout_cart';
+const PAGE_SIZE = 12;
 
 const CheckoutComponent = () => {
     const {keycloak} = useKeycloak();
@@ -19,7 +20,11 @@ const CheckoutComponent = () => {
         }
     });
     const [searchTerm, setSearchTerm] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
     const [products, setProducts] = useState([]);
+    const [currentPage, setCurrentPage] = useState(0);
+    const [totalPages, setTotalPages] = useState(0);
+    const [totalElements, setTotalElements] = useState(0);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [processingSale, setProcessingSale] = useState(false);
@@ -52,28 +57,41 @@ const CheckoutComponent = () => {
         }
     }, [cart]);
 
-    // Fetch products and tax rate from backend on mount
+    // Debounce search input — reset to page 0 on new query
     useEffect(() => {
-        const fetchData = async () => {
-            try {
-                setLoading(true);
-                const [productsRes, taxRes] = await Promise.all([
-                    api.getAllProducts(),
-                    api.getTaxRate(),
-                ]);
-                setProducts(productsRes.data);
-                setTaxRate((taxRes.data?.taxRate ?? 0) / 100);
-                setError(null);
-            } catch (err) {
-                setError('Failed to fetch products. Please try again later.');
-                console.error(err);
-            } finally {
-                setLoading(false);
-            }
-        };
+        const timer = setTimeout(() => {
+            setDebouncedSearch(searchTerm);
+            setCurrentPage(0);
+        }, 350);
+        return () => clearTimeout(timer);
+    }, [searchTerm]);
 
-        fetchData();
+    // Fetch tax rate once on mount
+    useEffect(() => {
+        api.getTaxRate()
+            .then(res => setTaxRate((res.data?.taxRate ?? 0) / 100))
+            .catch(console.error);
     }, []);
+
+    // Fetch paginated products whenever page or search changes
+    const fetchProducts = useCallback(async () => {
+        try {
+            setLoading(true);
+            const res = await api.searchProducts(debouncedSearch, currentPage, PAGE_SIZE);
+            const page = res.data;
+            setProducts(page.content ?? []);
+            setTotalPages(page.totalPages ?? 0);
+            setTotalElements(page.totalElements ?? 0);
+            setError(null);
+        } catch (err) {
+            setError('Failed to fetch products. Please try again later.');
+            console.error(err);
+        } finally {
+            setLoading(false);
+        }
+    }, [debouncedSearch, currentPage]);
+
+    useEffect(() => { fetchProducts(); }, [fetchProducts]);
 
     const addToCart = (product) => {
         const existingItem = cart.find(item => item.id === product.id);
@@ -158,7 +176,7 @@ const CheckoutComponent = () => {
         }
     };
 
-    const filteredProducts = products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
+    const filteredProducts = products; // filtering is now server-side
     const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const discountAmount = subtotal * (Number(discountPercent || 0) / 100);
     const taxableAmount = Math.max(subtotal - discountAmount, 0);
@@ -172,6 +190,7 @@ const CheckoutComponent = () => {
             {/* Product Selection */}
             <div className="lg:col-span-2">
                 <div className="card p-4">
+                    {/* Search bar */}
                     <input
                         type="text"
                         placeholder="Search or scan products..."
@@ -179,7 +198,9 @@ const CheckoutComponent = () => {
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="w-full p-2 border border-border-secondary rounded-lg bg-bg-tertiary focus:outline-none focus:ring-2 focus:ring-brand-primary"
                     />
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-4 max-h-96 overflow-y-auto p-2">
+
+                    {/* Product grid */}
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-4 min-h-64 p-1">
                         {loading ? (
                             <div className="col-span-full flex flex-col items-center justify-center p-10">
                                 <Sync className="animate-spin text-brand-primary" sx={{ fontSize: 40 }} />
@@ -190,12 +211,62 @@ const CheckoutComponent = () => {
                                 <ErrorOutline className="text-accent-error" sx={{ fontSize: 40 }} />
                                 <p className="mt-2 text-accent-error">{error}</p>
                             </div>
+                        ) : products.length === 0 ? (
+                            <div className="col-span-full flex flex-col items-center justify-center p-10 text-text-muted">
+                                No products found{debouncedSearch ? ` for "${debouncedSearch}"` : ''}.
+                            </div>
                         ) : (
                             filteredProducts.map(product => (
                                 <ProductCard key={product.id} product={product} onAddToCart={addToCart} />
                             ))
                         )}
                     </div>
+
+                    {/* Pagination controls */}
+                    {totalPages > 1 && (
+                        <div className="flex items-center justify-between mt-4 pt-3 border-t border-border-secondary">
+                            <span className="text-sm text-text-secondary">
+                                Page {currentPage + 1} of {totalPages}
+                                <span className="ml-2 text-text-muted">({totalElements} products)</span>
+                            </span>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
+                                    disabled={currentPage === 0 || loading}
+                                    className="btn-secondary p-1 disabled:opacity-40"
+                                    title="Previous page"
+                                >
+                                    <ChevronLeft sx={{ fontSize: 20 }} />
+                                </button>
+
+                                {/* Page number pills */}
+                                {Array.from({ length: totalPages }, (_, i) => i)
+                                    .filter(i => Math.abs(i - currentPage) <= 2)
+                                    .map(i => (
+                                        <button
+                                            key={i}
+                                            onClick={() => setCurrentPage(i)}
+                                            className={`w-8 h-8 rounded-lg text-sm font-medium ${
+                                                i === currentPage
+                                                    ? 'bg-brand-primary text-white'
+                                                    : 'btn-secondary'
+                                            }`}
+                                        >
+                                            {i + 1}
+                                        </button>
+                                    ))}
+
+                                <button
+                                    onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
+                                    disabled={currentPage >= totalPages - 1 || loading}
+                                    className="btn-secondary p-1 disabled:opacity-40"
+                                    title="Next page"
+                                >
+                                    <ChevronRight sx={{ fontSize: 20 }} />
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 

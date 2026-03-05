@@ -17,10 +17,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
 import java.net.URLConnection;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import org.springframework.data.domain.Page;
 
 @Slf4j
 @RestController
@@ -67,6 +67,15 @@ public class ProductController {
     @GetMapping({"", "/", "/."})
     public List<Product> productsList() {
         return productService.findAllProducts();
+    }
+
+    /** Paginated + searchable product list for checkout. GET /api/product/search?q=milk&page=0&size=12 */
+    @GetMapping("/search")
+    public ResponseEntity<Page<Product>> searchProducts(
+            @RequestParam(defaultValue = "") String q,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "12") int size) {
+        return ResponseEntity.ok(productService.searchProducts(q, page, size));
     }
 
     //update product

@@ -2,8 +2,11 @@ package com.pos.repository;
 
 import com.pos.model.Product;
 import com.pos.model.Category;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -17,6 +20,22 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     @Query("SELECT p FROM Product p LEFT JOIN FETCH p.category")
     List<Product> findAllWithCategory();
+
+    /** Paginated product search — matches name, SKU or barcode (case-insensitive). Active only. */
+    @Query("SELECT p FROM Product p LEFT JOIN FETCH p.category " +
+           "WHERE p.active = true AND (" +
+           "  LOWER(p.name) LIKE LOWER(CONCAT('%', :q, '%')) OR " +
+           "  LOWER(COALESCE(p.sku, '')) LIKE LOWER(CONCAT('%', :q, '%')) OR " +
+           "  LOWER(COALESCE(p.barcode, '')) LIKE LOWER(CONCAT('%', :q, '%')))")
+    Page<Product> searchActive(@Param("q") String query, Pageable pageable);
+
+    /** Count query companion required by Spring Data for the JOIN FETCH page above */
+    @Query("SELECT COUNT(p) FROM Product p " +
+           "WHERE p.active = true AND (" +
+           "  LOWER(p.name) LIKE LOWER(CONCAT('%', :q, '%')) OR " +
+           "  LOWER(COALESCE(p.sku, '')) LIKE LOWER(CONCAT('%', :q, '%')) OR " +
+           "  LOWER(COALESCE(p.barcode, '')) LIKE LOWER(CONCAT('%', :q, '%')))")
+    long countSearchActive(@Param("q") String query);
 
     /** Products where quantity <= lowStockThreshold (low-stock alert) */
     @Query("SELECT p FROM Product p WHERE p.active = true AND p.quantity <= p.lowStockThreshold ORDER BY p.quantity ASC")

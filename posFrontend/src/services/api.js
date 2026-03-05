@@ -103,6 +103,10 @@ export const getAllProducts = () => {
     return apiClient.get('/api/product');
 };
 
+/** Paginated + searchable product list for checkout. */
+export const searchProducts = (q = '', page = 0, size = 12) =>
+    apiClient.get('/api/product/search', { params: { q, page, size } });
+
 /**
  * Fetches a single product by its ID.
  * @param {number} productId - The ID of the product to fetch.
@@ -218,6 +222,7 @@ const api = {
     getAllSales,
     processSaleReturn,
     getAllProducts,
+    searchProducts,
     getProductById,
     createProduct,
     updateProduct,

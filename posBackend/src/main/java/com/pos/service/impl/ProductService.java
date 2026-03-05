@@ -22,8 +22,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.io.IOException;
 import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 @Slf4j
 @Service
@@ -176,6 +179,13 @@ public class ProductService {
     @Cacheable("products")
     public List<Product> findAllProducts() {
         return repository.findAllWithCategory();
+    }
+
+    @Transactional(readOnly = true)
+    public Page<Product> searchProducts(String query, int page, int size) {
+        String q = (query == null) ? "" : query.trim();
+        Pageable pageable = PageRequest.of(page, size, Sort.by("name").ascending());
+        return repository.searchActive(q, pageable);
     }
 
     public byte[] getImageByProductId(int productId) throws Exception {
