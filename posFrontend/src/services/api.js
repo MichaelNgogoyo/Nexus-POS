@@ -1,5 +1,6 @@
 import axios from 'axios';
 import keycloak from '../auth/keycloak';
+import {emitToast} from "../components/toastBus";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
@@ -28,6 +29,16 @@ apiClient.interceptors.response.use(
         if (error?.response?.status === 401 && keycloak?.authenticated) {
             keycloak.login({redirectUri: window.location.href});
         }
+
+        const status = error?.response?.status;
+        const message = error?.response?.data?.message || error?.message || "Request failed";
+        if (status === 403) {
+            emitToast("You are not allowed to perform this action.", "error");
+        } else if (status >= 500) {
+            emitToast("Server error. Please try again.", "error");
+        } else {
+            emitToast(message, "error");
+        }
         return Promise.reject(error);
     }
 );
@@ -45,7 +56,7 @@ apiClient.interceptors.response.use(
  * @returns {Promise<any>}
  */
 export const createSale = (saleData) => {
-    return apiClient.post('/sale', saleData);
+    return apiClient.post('/api/sale', saleData);
 };
 
 /**
@@ -54,7 +65,7 @@ export const createSale = (saleData) => {
  * @returns {Promise<any>}
  */
 export const viewSale = (saleId) => {
-    return apiClient.get('/sale', { params: { id: saleId } });
+    return apiClient.get(`/api/sale/${saleId}`);
 };
 
 /**
@@ -63,21 +74,21 @@ export const viewSale = (saleId) => {
  * @returns {Promise<any>}
  */
 export const deleteSale = (saleId) => {
-    return apiClient.put('/sale', { params: { id: saleId } });
+    return apiClient.delete(`/api/sale/${saleId}`);
 };
 
 /**
- * Fetches all sales transactions.
+ * Fetches all sales transactions (paginated).
+ * @param {number} page - Zero-based page number.
+ * @param {number} size - Page size.
  * @returns {Promise<any>}
  */
-export const getAllSales = () => {
-    // NOTE: This assumes the backend returns all sales on a GET request to /sale without an ID.
-    // You may need to adjust this if your backend has a different endpoint (e.g., /sales).
-    return apiClient.get('/sale');
+export const getAllSales = (page = 0, size = 20) => {
+    return apiClient.get('/api/sale', { params: { page, size, sort: 'createdAt,desc' } });
 };
 
 export const processSaleReturn = (saleId, returnData) => {
-    return apiClient.post(`/sale/${saleId}/return`, returnData);
+    return apiClient.post(`/api/sale/${saleId}/return`, returnData);
 };
 
 // ========================================
@@ -124,6 +135,23 @@ export const updateProduct = (productId, productData) => {
     return apiClient.put(`/api/product/${productId}`, productData);
 };
 
+export const updateProductWithImage = (productId, {name, price, active, discount, quantity, category, file}) => {
+    const formData = new FormData();
+    formData.append("name", name);
+    formData.append("price", price);
+    formData.append("active", active);
+    formData.append("discount", discount);
+    formData.append("quantity", quantity);
+    formData.append("category", category ?? "");
+    if (file) {
+        formData.append("file", file);
+    }
+
+    return apiClient.put(`/api/product/${productId}/with-image`, formData, {
+        headers: {"Content-Type": "multipart/form-data"},
+    });
+};
+
 /**
  * Deletes a product by its ID.
  * @param {number} productId - The ID of the product to delete.
@@ -156,6 +184,17 @@ export const getProductStockMovements = (productId) => {
     return apiClient.get(`/api/product/${productId}/stock-movements`);
 };
 
+// ========================================
+// Categories API
+// ========================================
+
+export const listCategories = () => apiClient.get('/api/category');
+export const createCategory = (name) => apiClient.post('/api/category', null, { params: { name } });
+export const updateCategory = (id, name) => apiClient.put(`/api/category/${id}`, null, { params: { name } });
+export const deleteCategory = (id) => apiClient.delete(`/api/category/${id}`);
+// Backward compatibility alias
+export const getCategories = listCategories;
+
 export const getApiBaseUrl = () => API_BASE_URL;
 
 
@@ -169,11 +208,17 @@ const api = {
     getProductById,
     createProduct,
     updateProduct,
+    updateProductWithImage,
     deleteProduct,
     getProductImageById,
     getProductImageUrl,
     adjustProductStock,
     getProductStockMovements,
+    listCategories,
+    getCategories,
+    createCategory,
+    updateCategory,
+    deleteCategory,
     getApiBaseUrl,
 };
 

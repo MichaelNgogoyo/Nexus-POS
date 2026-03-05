@@ -1,14 +1,17 @@
 import {useEffect, useMemo, useState} from "react";
+import {useKeycloak} from "@react-keycloak/web";
 import api from "../../services/api";
 import {Sync, ErrorOutline, Inventory2} from "@mui/icons-material";
 
 function Inventory() {
+    const {keycloak} = useKeycloak();
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [searchTerm, setSearchTerm] = useState("");
 
     useEffect(() => {
+        if (!keycloak?.authenticated) return;
         const loadProducts = async () => {
             try {
                 setLoading(true);
@@ -24,7 +27,7 @@ function Inventory() {
         };
 
         loadProducts();
-    }, []);
+    }, [keycloak?.authenticated]);
 
     const filteredProducts = useMemo(() => {
         return products.filter((product) =>

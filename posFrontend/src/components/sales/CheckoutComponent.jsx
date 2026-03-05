@@ -79,35 +79,35 @@ const CheckoutComponent = () => {
 
         const saleData = {
             cashierId: keycloak?.tokenParsed?.preferred_username || keycloak?.subject || 'system-user',
-            subtotal,
-            discountAmount,
-            taxAmount: tax,
-            totalAmount: total,
             paymentMethod: paymentMethod,
             items: cart.map(item => ({
                 productId: item.id,
-                productName: item.name,
                 quantity: item.quantity,
-                unitPrice: item.price,
-                lineTotal: item.price * item.quantity,
             }))
         };
 
         try {
             const response = await api.createSale(saleData);
+            const savedSale = response?.data || {};
 
             setReceipt({
-                saleId: response?.data?.id || response?.data?.saleId || `TMP-${Date.now()}`,
-                createdAt: response?.data?.saleDate || new Date().toISOString(),
+                saleId: savedSale.id || `TMP-${Date.now()}`,
+                createdAt: savedSale.createdAt || new Date().toISOString(),
                 cashierId: saleData.cashierId,
                 paymentMethod,
-                items: saleData.items,
+                items: cart.map(item => ({
+                    productId: item.id,
+                    productName: item.name,
+                    quantity: item.quantity,
+                    unitPrice: item.price,
+                    lineTotal: item.price * item.quantity,
+                })),
                 subtotal,
                 discountAmount,
                 tax,
-                total,
+                total: savedSale.totalAmount || total,
             });
-            setCart([]); // Clear the cart on success
+            setCart([]);
             setDiscountPercent(0);
             setError(null);
         } catch (err) {

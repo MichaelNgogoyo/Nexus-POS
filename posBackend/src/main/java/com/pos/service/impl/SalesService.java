@@ -77,7 +77,7 @@ public class SalesService {
     }
 
     @Transactional(readOnly = true)
-    public Sales viewSale(int id) {
+    public Sales viewSale(Long id) {
         return repository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Sale not found"));
     }
@@ -88,7 +88,7 @@ public class SalesService {
     }
 
     @Transactional
-    public void deleteSale(int id) {
+    public void deleteSale(Long id) {
         if (!repository.existsById(id)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Sale not found");
         }
@@ -96,7 +96,7 @@ public class SalesService {
     }
 
     @Transactional
-    public Sales processReturn(int saleId, SaleReturnRequest request) {
+    public Sales processReturn(Long saleId, SaleReturnRequest request) {
         Sales sale = repository.findById(saleId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Sale not found"));
 

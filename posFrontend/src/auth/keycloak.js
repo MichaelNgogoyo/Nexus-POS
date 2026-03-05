@@ -4,7 +4,13 @@ const keycloakConfig = {
     url: import.meta.env.VITE_KEYCLOAK_URL,
     realm: import.meta.env.VITE_KEYCLOAK_REALM,
     clientId: import.meta.env.VITE_KEYCLOAK_CLIENT_ID,
-    redirectUri: import.meta.env.VITE_REDIRECT_URI
+};
+
+export const keycloakInitOptions = {
+    onLoad: "check-sso",
+    silentCheckSsoRedirectUri: `${window.location.origin}/silent-check-sso.html`,
+    checkLoginIframe: false,
+    pkceMethod: "S256",
 };
 
 const keycloak = new Keycloak(keycloakConfig);
