@@ -1,7 +1,6 @@
 package com.pos.service.impl;
 
 import com.pos.dto.SaleRequest;
-import com.pos.dto.SaleItemRequest;
 import com.pos.dto.SaleReturnRequest;
 import com.pos.model.Product;
 import com.pos.model.SaleItem;
@@ -23,6 +22,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -43,6 +44,13 @@ public class SalesService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Sale must contain at least one item");
         }
 
+        // Batch-load all products in a single query
+        List<Long> productIds = request.items().stream()
+                .map(i -> i.productId())
+                .toList();
+        Map<Long, Product> productMap = productRepository.findAllById(productIds).stream()
+                .collect(Collectors.toMap(Product::getId, p -> p));
+
         Sales sales = Sales.builder()
                 .cashierId(request.cashierId())
                 .paymentMethod(request.paymentMethod())
@@ -50,12 +58,15 @@ public class SalesService {
                 .build();
 
         List<SaleItem> saleItems = new ArrayList<>();
+        List<StockMovement> movements = new ArrayList<>();
         double subtotal = 0.0;
 
         for (var itemReq : request.items()) {
-            Product product = productRepository.findById(itemReq.productId())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                            "Product not found: " + itemReq.productId()));
+            Product product = productMap.get(itemReq.productId());
+            if (product == null) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Product not found: " + itemReq.productId());
+            }
 
             if (product.getQuantity() < itemReq.quantity()) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -63,8 +74,7 @@ public class SalesService {
             }
 
             product.setQuantity(product.getQuantity() - itemReq.quantity());
-            productRepository.save(product);
-            logStockMovement(product, -itemReq.quantity(), "Direct sale");
+            movements.add(buildStockMovement(product, -itemReq.quantity(), "Direct sale"));
 
             SaleItem saleItem = new SaleItem();
             saleItem.setProduct(product);
@@ -75,6 +85,10 @@ public class SalesService {
 
             subtotal += product.getPrice() * itemReq.quantity();
         }
+
+        // Batch-save all stock changes in two queries instead of 2N
+        productRepository.saveAll(productMap.values());
+        stockMovementRepository.saveAll(movements);
 
         double taxAmount = subtotal * (taxRatePercent / 100.0);
         double total = subtotal + taxAmount;
@@ -118,6 +132,7 @@ public class SalesService {
 
     @Transactional
     public Sales processReturn(Long saleId, SaleReturnRequest request) {
+        // findById uses @EntityGraph("Sales.withItems") which eagerly fetches saleItems + product
         Sales sale = repository.findById(saleId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Sale not found"));
 
@@ -130,30 +145,35 @@ public class SalesService {
             items = new ArrayList<>();
         }
 
+        String reason = (request != null && request.reason() != null && !request.reason().isBlank())
+                ? request.reason()
+                : "Return for sale #" + saleId;
+
+        List<Product> productsToUpdate = new ArrayList<>();
+        List<StockMovement> movements = new ArrayList<>();
+
         for (SaleItem item : items) {
-            Product product = productRepository.findById(item.getProduct().getId())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found for sale item"));
-
+            // product is already loaded via the Sales.withItems entity graph — no extra query
+            Product product = item.getProduct();
             product.setQuantity(product.getQuantity() + item.getQuantity());
-            productRepository.save(product);
-
-            logStockMovement(product, item.getQuantity(),
-                    (request != null && request.reason() != null && !request.reason().isBlank())
-                            ? request.reason()
-                            : "Return for sale #" + saleId);
+            productsToUpdate.add(product);
+            movements.add(buildStockMovement(product, item.getQuantity(), reason));
         }
+
+        // Batch-save: 1 query each instead of 2N
+        productRepository.saveAll(productsToUpdate);
+        stockMovementRepository.saveAll(movements);
 
         sale.setStatus(SaleStatus.RETURNED);
         return repository.save(sale);
     }
 
-    private void logStockMovement(Product product, int delta, String reason) {
-        StockMovement movement = StockMovement.builder()
+    private StockMovement buildStockMovement(Product product, int delta, String reason) {
+        return StockMovement.builder()
                 .product(product)
                 .delta(delta)
                 .balanceAfter(product.getQuantity())
                 .reason(reason)
                 .build();
-        stockMovementRepository.save(movement);
     }
 }

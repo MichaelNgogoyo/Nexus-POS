@@ -47,6 +47,8 @@ public class CheckoutService {
 
         BigDecimal total = BigDecimal.ZERO;
         List<SaleItem> saleItems = new ArrayList<>();
+        List<Product> productsToUpdate = new ArrayList<>();
+        List<StockMovement> movements = new ArrayList<>();
 
         for (CartItem item : cart.getCartItemList()) {
             Product product = item.getProduct();
@@ -57,9 +59,8 @@ public class CheckoutService {
 
             // Deduct stock
             product.setQuantity(product.getQuantity() - item.getQuantity());
-            productRepository.save(product);
-
-            logStockMovement(product, -item.getQuantity(), "Checkout cart " + cartId);
+            productsToUpdate.add(product);
+            movements.add(buildStockMovement(product, -item.getQuantity(), "Checkout cart " + cartId));
 
             SaleItem saleItem = new SaleItem();
             saleItem.setProduct(product);
@@ -74,6 +75,10 @@ public class CheckoutService {
             );
         }
 
+        // Batch-save all stock changes in two queries instead of 2N
+        productRepository.saveAll(productsToUpdate);
+        stockMovementRepository.saveAll(movements);
+
         sales.setTotalAmount(total.doubleValue());
         sales.setSaleItems(saleItems);
         Sales savedSales = salesRepository.save(sales);
@@ -85,13 +90,12 @@ public class CheckoutService {
         return savedSales;
     }
 
-    private void logStockMovement(Product product, int delta, String reason) {
-        StockMovement movement = StockMovement.builder()
+    private StockMovement buildStockMovement(Product product, int delta, String reason) {
+        return StockMovement.builder()
                 .product(product)
                 .delta(delta)
                 .balanceAfter(product.getQuantity())
                 .reason(reason)
                 .build();
-        stockMovementRepository.save(movement);
     }
 }
