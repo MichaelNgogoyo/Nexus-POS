@@ -1,22 +1,43 @@
-import {useState} from "react";
+import {useEffect, useState} from "react";
 import {useKeycloak} from "@react-keycloak/web";
 import {useNavigate} from "react-router-dom";
 import {ROUTES} from "../../routes";
 import api from "../../services/api";
+import imageCompression from "browser-image-compression";
 
 function AddProduct() {
     const {keycloak} = useKeycloak();
     const navigate = useNavigate();
+
+    const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB client-side limit
+
+    const [categories, setCategories] = useState([]);
+    const [newCategory, setNewCategory] = useState("");
 
     const [products, setProducts] = useState({
         name: "",
         price: "",
         status: "",
         discount: "",
-        quantity: ""
+        quantity: "",
+        category: ""
     });
 
     const [image, setImage] = useState(null);
+
+    useEffect(() => {
+        const loadCategories = async () => {
+            try {
+                const res = await api.listCategories();
+                setCategories(res.data || []);
+            } catch (err) {
+                console.error("Unable to load categories", err);
+            }
+        };
+        if (keycloak?.authenticated) {
+            loadCategories();
+        }
+    }, [keycloak]);
 
     const handleChange = (e) => {
         setProducts({
@@ -25,9 +46,29 @@ function AddProduct() {
         });
     };
 
-    const handleImageChange = (e) => {
-        if (e.target.files && e.target.files[0]) {
-            setImage(e.target.files[0]);
+    const handleImageChange = async (e) => {
+        if (!e.target.files || !e.target.files[0]) {
+            return;
+        }
+
+        const file = e.target.files[0];
+
+        if (file.size > MAX_IMAGE_SIZE_BYTES) {
+            alert("File must be less than 5MB");
+            e.target.value = "";
+            setImage(null);
+            return;
+        }
+
+        try {
+            const compressed = await imageCompression(file, {
+                maxSizeMB: 0.5,
+                maxWidthOrHeight: 1200,
+                useWebWorker: true,
+            });
+            setImage(compressed);
+        } catch {
+            setImage(file);
         }
     };
 
@@ -61,12 +102,15 @@ function AddProduct() {
         }
 
         try {
+            const chosenCategory = newCategory.trim() || products.category;
+
             const formData = new FormData();
             formData.append("name", products.name);
             formData.append("price", price.toString());
             formData.append("active", active);
             formData.append("discount", discount.toString());
             formData.append("quantity", quantity.toString());
+            formData.append("category", chosenCategory || "");
 
             if (image) {
                 formData.append("file", image);
@@ -76,7 +120,8 @@ function AddProduct() {
 
             if (response.status === 200 || response.status === 201) {
                 alert("Product Saved!");
-                setProducts({name: "", price: "", status: "", discount: "", quantity: ""});
+                setProducts({name: "", price: "", status: "", discount: "", quantity: "", category: ""});
+                setNewCategory("");
                 setImage(null);
                 navigate(ROUTES.PRODUCTS);
             } else {
@@ -154,6 +199,32 @@ function AddProduct() {
                                 className="w-full rounded-xl border border-border-secondary bg-bg-tertiary px-4 py-3 text-text-primary placeholder:text-text-muted shadow-sm focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
                             />
                             <p className="text-xs text-text-muted">Enter numeric discount (e.g., 10 for 10%). Leave blank for 0.</p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-sm font-semibold text-text-secondary">Category</label>
+                            <select
+                                name="category"
+                                value={products.category}
+                                onChange={handleChange}
+                                className="w-full rounded-xl border border-border-secondary bg-bg-tertiary px-4 py-3 text-text-primary shadow-sm focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
+                            >
+                                <option value="">Uncategorized</option>
+                                {categories.map((cat) => (
+                                    <option key={cat.id} value={cat.name}>{cat.name}</option>
+                                ))}
+                            </select>
+                            <div className="space-y-1">
+                                <label className="text-xs font-semibold text-text-secondary">Or add a new category</label>
+                                <input
+                                    type="text"
+                                    name="newCategory"
+                                    value={newCategory}
+                                    onChange={(e) => setNewCategory(e.target.value)}
+                                    placeholder="e.g. Beverages"
+                                    className="w-full rounded-xl border border-border-secondary bg-bg-tertiary px-4 py-3 text-text-primary placeholder:text-text-muted shadow-sm focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
+                                />
+                            </div>
                         </div>
 
                         <div className="space-y-2">
