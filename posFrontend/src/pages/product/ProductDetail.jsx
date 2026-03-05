@@ -207,63 +207,23 @@ function ProductDetail() {
                 <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-text-muted">
                     <span>{product?.category?.name || "Uncategorized"}</span>
                     <span>›</span>
-                    <span className="text-text-primary">{product?.name}</span>
+                    <span className="text-text-primary truncate max-w-[160px]">{product?.name}</span>
                 </div>
             </div>
 
-            {/* ── Main split ── */}
-            <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-2">
+            {/* ── Body ── */}
+            <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
 
-                {/* Left: Image — desktop only, fills full height */}
-                <div className="relative hidden lg:block h-full overflow-hidden bg-bg-tertiary border-r border-border-primary">
-                    {product?.id && (
-                        <img
-                            src={api.getProductImageUrl(product.id)}
-                            alt={product.name}
-                            className="absolute inset-0 w-full h-full object-cover"
-                        />
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent pointer-events-none" />
-
-                    {(parseFloat(product?.discount) || 0) > 0 && (
-                        <div className="absolute top-4 left-4 rounded-full bg-accent-warning px-3 py-1 text-xs font-bold text-white shadow">
-                            -{product.discount}% OFF
+                {/* Info panel — scrollable */}
+                <div className="flex-1 overflow-y-auto px-5 sm:px-8 py-6 space-y-6">
+                    {error && (
+                        <div className="rounded-xl bg-accent-error/10 border border-accent-error/30 px-4 py-3 text-sm font-medium text-accent-error">
+                            {error}
                         </div>
                     )}
-                    <div className={`absolute top-4 right-4 rounded-full px-3 py-1 text-xs font-bold shadow ${product?.active ? "bg-accent-success text-white" : "bg-black/50 text-white border border-white/20"}`}>
-                        {product?.active ? "● Active" : "● Inactive"}
-                    </div>
 
-                    {/* Icon action buttons — admin / manager only */}
-                    {canEdit && (
-                        <div className="absolute bottom-5 right-5 flex gap-2">
-                            <button
-                                onClick={() => setEditOpen(true)}
-                                title="Edit product"
-                                className="w-10 h-10 flex items-center justify-center rounded-full bg-brand-primary hover:bg-brand-hover text-white shadow-lg transition"
-                            >
-                                <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
-                            </button>
-                            <button
-                                onClick={handleDelete}
-                                disabled={deleting}
-                                title="Delete product"
-                                className="w-10 h-10 flex items-center justify-center rounded-full bg-accent-error hover:bg-accent-error/90 text-white shadow-lg transition disabled:opacity-50"
-                            >
-                                {deleting
-                                    ? <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                                    : <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                                }
-                            </button>
-                        </div>
-                    )}
-                </div>
-
-                {/* Right: Info panel */}
-                <div className="overflow-y-auto">
-
-                    {/* Mobile image */}
-                    <div className="relative lg:hidden aspect-[4/3] w-full overflow-hidden bg-bg-tertiary">
+                    {/* Mobile image (compact banner) */}
+                    <div className="relative lg:hidden rounded-2xl overflow-hidden bg-bg-tertiary" style={{aspectRatio: "16/7"}}>
                         {product?.id && (
                             <img
                                 src={api.getProductImageUrl(product.id)}
@@ -271,101 +231,143 @@ function ProductDetail() {
                                 className="absolute inset-0 w-full h-full object-cover"
                             />
                         )}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent pointer-events-none" />
-                        {(parseFloat(product?.discount) || 0) > 0 && (
-                            <div className="absolute top-3 left-3 rounded-full bg-accent-warning px-2.5 py-0.5 text-xs font-bold text-white shadow">
-                                -{product.discount}% OFF
-                            </div>
-                        )}
-                        <div className={`absolute top-3 right-3 rounded-full px-2.5 py-0.5 text-xs font-bold shadow ${product?.active ? "bg-accent-success text-white" : "bg-black/50 text-white"}`}>
-                            {product?.active ? "● Active" : "● Inactive"}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent pointer-events-none" />
+                        <div className="absolute top-3 left-3 flex gap-2">
+                            {(parseFloat(product?.discount) || 0) > 0 && (
+                                <span className="rounded-full bg-accent-warning px-2.5 py-0.5 text-xs font-bold text-white shadow">-{product.discount}%</span>
+                            )}
+                            <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold shadow ${product?.active ? "bg-accent-success text-white" : "bg-black/60 text-white"}`}>
+                                {product?.active ? "Active" : "Inactive"}
+                            </span>
                         </div>
                         {canEdit && (
                             <div className="absolute bottom-3 right-3 flex gap-2">
-                                <button onClick={() => setEditOpen(true)} title="Edit" className="w-9 h-9 flex items-center justify-center rounded-full bg-brand-primary hover:bg-brand-hover text-white shadow transition">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                                <button onClick={() => setEditOpen(true)} title="Edit" className="w-8 h-8 flex items-center justify-center rounded-full bg-brand-primary hover:bg-brand-hover text-white shadow transition">
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
                                 </button>
-                                <button onClick={handleDelete} disabled={deleting} title="Delete" className="w-9 h-9 flex items-center justify-center rounded-full bg-accent-error text-white shadow disabled:opacity-50">
-                                    {deleting
-                                        ? <div className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                                        : <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                <button onClick={handleDelete} disabled={deleting} title="Delete" className="w-8 h-8 flex items-center justify-center rounded-full bg-accent-error text-white shadow disabled:opacity-50">
+                                    {deleting ? <div className="w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                                        : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                                     }
                                 </button>
                             </div>
                         )}
                     </div>
 
-                    {/* Details */}
-                    <div className="px-6 sm:px-8 py-8 space-y-7">
-                        {error && (
-                            <div className="rounded-xl bg-accent-error/10 border border-accent-error/30 px-4 py-3 text-sm font-medium text-accent-error">
-                                {error}
-                            </div>
+                    {/* Product name + ID */}
+                    <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-widest text-text-muted mb-1.5">
+                            #{product?.id} · {product?.sku || ""}
+                        </p>
+                        <h1 className="text-3xl sm:text-4xl font-bold leading-tight tracking-tight text-text-primary">
+                            {product?.name}
+                        </h1>
+                    </div>
+
+                    {/* Price block */}
+                    <div className="flex items-end gap-3 flex-wrap">
+                        <p className="text-3xl font-bold text-brand-primary">{formatCurrency(effectivePrice)}</p>
+                        {(parseFloat(product?.discount) || 0) > 0 && (
+                            <>
+                                <p className="text-base text-text-muted line-through mb-0.5">{formatCurrency(product?.price)}</p>
+                                <span className="mb-0.5 rounded-full bg-accent-warning/15 px-2.5 py-0.5 text-xs font-bold text-accent-warning">Save {formatCurrency(discountAmount)}</span>
+                            </>
                         )}
+                    </div>
 
-                        {/* Name */}
-                        <div>
-                            <p className="text-xs font-semibold uppercase tracking-widest text-text-muted mb-2">#{product?.id}</p>
-                            <h1 className="text-4xl sm:text-5xl font-bold leading-tight tracking-tight text-text-primary">
-                                {product?.name}
-                            </h1>
-                        </div>
+                    {/* Stat pills */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                        {[
+                            { label: "Stock", value: product?.quantity ?? "--", highlight: isLowStock, sub: isLowStock ? "Low stock" : null },
+                            { label: "Category", value: product?.category?.name || "—" },
+                            { label: "Discount", value: `${product?.discount ?? 0}%` },
+                            { label: "Status", value: product?.active ? "Active" : "Inactive", active: product?.active },
+                        ].map(({ label, value, highlight, sub, active }) => (
+                            <div key={label} className="rounded-xl border border-border-primary bg-bg-secondary px-4 py-3">
+                                <p className="text-[10px] font-semibold uppercase tracking-wide text-text-muted mb-1">{label}</p>
+                                <p className={`text-lg font-bold leading-tight truncate ${highlight ? "text-accent-error" : active === false ? "text-text-muted" : "text-text-primary"}`}>{value}</p>
+                                {sub && <p className="text-[10px] font-semibold text-accent-error mt-0.5">{sub}</p>}
+                            </div>
+                        ))}
+                    </div>
 
-                        {/* Price */}
-                        <div className="space-y-1">
-                            {(parseFloat(product?.discount) || 0) > 0 ? (
-                                <>
-                                    <p className="text-3xl sm:text-4xl font-bold text-brand-primary">{formatCurrency(effectivePrice)}</p>
-                                    <div className="flex items-center gap-3">
-                                        <p className="text-base text-text-muted line-through">{formatCurrency(product?.price)}</p>
-                                        <span className="rounded-full bg-accent-warning/15 px-2.5 py-0.5 text-xs font-bold text-accent-warning">Save {formatCurrency(discountAmount)}</span>
-                                    </div>
-                                </>
-                            ) : (
-                                <p className="text-3xl sm:text-4xl font-bold text-brand-primary">{formatCurrency(product?.price)}</p>
-                            )}
-                        </div>
-
-                        {/* Stat cards */}
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="rounded-2xl border border-border-primary bg-bg-secondary p-4">
-                                <p className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-1">Stock</p>
-                                <p className={`text-2xl font-bold ${isLowStock ? "text-accent-error" : "text-text-primary"}`}>{product?.quantity ?? "--"}</p>
-                                {isLowStock && <p className="text-xs font-semibold text-accent-error mt-0.5">Low stock</p>}
+                    {/* Details rows */}
+                    <div className="rounded-xl border border-border-primary bg-bg-secondary overflow-hidden">
+                        {[
+                            { label: "Full price", value: formatCurrency(product?.price) },
+                            { label: "Selling price", value: formatCurrency(effectivePrice) },
+                            { label: "Discount", value: `${product?.discount ?? 0}%` },
+                            { label: "Units in stock", value: `${product?.quantity ?? "--"} units` },
+                            { label: "Low stock threshold", value: `${product?.lowStockThreshold ?? "--"} units` },
+                            { label: "SKU", value: product?.sku || "—" },
+                            { label: "Barcode", value: product?.barcode || "—" },
+                            { label: "Category", value: product?.category?.name || "Uncategorized" },
+                        ].map(({ label, value }, i, arr) => (
+                            <div key={label} className={`flex items-center justify-between px-5 py-3 ${i < arr.length - 1 ? "border-b border-border-primary/50" : ""}`}>
+                                <span className="text-sm text-text-muted">{label}</span>
+                                <span className="text-sm font-semibold text-text-primary font-mono">{value}</span>
                             </div>
-                            <div className="rounded-2xl border border-border-primary bg-bg-secondary p-4">
-                                <p className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-1">Category</p>
-                                <p className="text-2xl font-bold text-text-primary truncate">{product?.category?.name || "—"}</p>
-                            </div>
-                            <div className="rounded-2xl border border-border-primary bg-bg-secondary p-4">
-                                <p className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-1">Discount</p>
-                                <p className="text-2xl font-bold text-text-primary">{product?.discount ?? 0}%</p>
-                            </div>
-                            <div className="rounded-2xl border border-border-primary bg-bg-secondary p-4">
-                                <p className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-1">Status</p>
-                                <span className={`inline-block mt-1 rounded-full px-3 py-1 text-xs font-bold ${product?.active ? "bg-accent-success/15 text-accent-success" : "bg-bg-tertiary text-text-muted"}`}>
-                                    {product?.active ? "● Active" : "● Inactive"}
-                                </span>
-                            </div>
-                        </div>
-
-                        {/* Details list */}
-                        <div className="rounded-2xl border border-border-primary bg-bg-secondary overflow-hidden">
-                            {[
-                                { label: "Full price", value: formatCurrency(product?.price) },
-                                { label: "Selling price", value: formatCurrency(effectivePrice) },
-                                { label: "Discount", value: `${product?.discount ?? 0}%` },
-                                { label: "Units in stock", value: `${product?.quantity ?? "--"} units` },
-                                { label: "Category", value: product?.category?.name || "Uncategorized" },
-                            ].map(({ label, value }, i, arr) => (
-                                <div key={label} className={`flex items-center justify-between px-5 py-3.5 ${i < arr.length - 1 ? "border-b border-border-primary/50" : ""}`}>
-                                    <span className="text-sm font-medium text-text-muted">{label}</span>
-                                    <span className="text-sm font-semibold text-text-primary">{value}</span>
-                                </div>
-                            ))}
-                        </div>
+                        ))}
                     </div>
                 </div>
+
+                {/* Image panel — right sidebar on desktop */}
+                <div className="hidden lg:flex flex-col gap-4 p-6 w-80 xl:w-96 shrink-0 border-l border-border-primary bg-bg-secondary/30">
+                    {/* Contained image card */}
+                    <div className="relative rounded-2xl overflow-hidden bg-bg-tertiary shadow-md" style={{aspectRatio: "1/1"}}>
+                        {product?.id && (
+                            <img
+                                src={api.getProductImageUrl(product.id)}
+                                alt={product.name}
+                                className="absolute inset-0 w-full h-full object-cover"
+                            />
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent pointer-events-none" />
+                        <div className="absolute top-3 left-3 flex flex-col gap-1.5">
+                            {(parseFloat(product?.discount) || 0) > 0 && (
+                                <span className="self-start rounded-full bg-accent-warning px-3 py-1 text-xs font-bold text-white shadow">
+                                    -{product.discount}% OFF
+                                </span>
+                            )}
+                            <span className={`self-start rounded-full px-3 py-1 text-xs font-bold shadow ${product?.active ? "bg-accent-success text-white" : "bg-black/60 text-white border border-white/20"}`}>
+                                {product?.active ? "● Active" : "● Inactive"}
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* Product name snippet */}
+                    <div className="px-1">
+                        <p className="text-[11px] font-semibold uppercase tracking-widest text-text-muted">#{product?.id}</p>
+                        <p className="text-base font-bold text-text-primary mt-0.5 leading-snug">{product?.name}</p>
+                        <p className="text-2xl font-bold text-brand-primary mt-1">{formatCurrency(effectivePrice)}</p>
+                    </div>
+
+                    {/* Action buttons */}
+                    {canEdit && (
+                        <div className="flex gap-2 mt-auto">
+                            <button
+                                onClick={() => setEditOpen(true)}
+                                title="Edit product"
+                                className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-brand-primary hover:bg-brand-hover text-white text-sm font-semibold py-2.5 transition shadow-sm"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                                Edit
+                            </button>
+                            <button
+                                onClick={handleDelete}
+                                disabled={deleting}
+                                title="Delete product"
+                                className="w-10 h-10 flex items-center justify-center rounded-xl bg-accent-error/10 hover:bg-accent-error/20 text-accent-error border border-accent-error/30 transition disabled:opacity-50 shrink-0"
+                            >
+                                {deleting
+                                    ? <div className="w-4 h-4 rounded-full border-2 border-accent-error border-t-transparent animate-spin" />
+                                    : <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                }
+                            </button>
+                        </div>
+                    )}
+                </div>
+
             </div>
         </div>
 
