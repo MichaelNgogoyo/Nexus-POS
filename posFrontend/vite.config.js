@@ -6,11 +6,6 @@ export default defineConfig({
     plugins: [
         react()
     ],
-    resolve: {
-        alias: {
-            '@mui/styled-engine': '@mui/styled-engine-sc',
-        },
-    },
     build: {
         outDir: '../posBackend/src/main/resources/static',
         emptyOutDir: true,
