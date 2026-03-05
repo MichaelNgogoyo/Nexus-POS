@@ -1,8 +1,10 @@
 package com.pos.dto;
 
+import java.util.List;
+
 public record SaleRequest(
         String cashierId,
-        double totalAmount,
-        String paymentMethod
+        String paymentMethod,
+        List<SaleItemRequest> items
 ) {
 }

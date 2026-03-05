@@ -63,17 +63,17 @@ public class CategoryService {
         Category category = get(id);
         Category uncategorized = getOrCreateUncategorized();
 
-        if (!category.getId().equals(uncategorized.getId())) {
-            // reassign products to uncategorized
-            List<Product> products = productRepository.findByCategory(category);
-            for (Product product : products) {
-                product.setCategory(uncategorized);
-            }
-            uncategorized.setProductCount(uncategorized.getProductCount() + products.size());
-            category.setProductCount(0);
-            productRepository.saveAll(products);
-            categoryRepository.save(uncategorized);
+        if (category.getId().equals(uncategorized.getId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot delete the Uncategorized category");
         }
+
+        List<Product> products = productRepository.findByCategory(category);
+        for (Product product : products) {
+            product.setCategory(uncategorized);
+        }
+        uncategorized.setProductCount(uncategorized.getProductCount() + products.size());
+        productRepository.saveAll(products);
+        categoryRepository.save(uncategorized);
 
         categoryRepository.delete(category);
     }

@@ -3,6 +3,7 @@ package com.pos.model;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Entity
@@ -15,9 +16,12 @@ public class Cart {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    long id;
-    int user_id;
+    private Long id;
 
-    @OneToMany
-    List<CartItem> cartItemList;
+    @Column(nullable = false, unique = true)
+    private Long userId;
+
+    @OneToMany(mappedBy = "cart", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<CartItem> cartItemList = new ArrayList<>();
 }
