@@ -2,39 +2,37 @@ spring:
   application:
     name: pos
 
-
-
   thymeleaf:
     cache: false
+
   datasource:
-    url: jdbc:postgresql://localhost:5432/pos_db
-    username: postgres
-    password: postgres
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/pos_db}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
 
   security:
     oauth2:
-      resource server:
+      resourceserver:
         jwt:
-          issuer-uri: http://localhost:8081/realms/pos
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8081/realms/pos}
       client:
         registration:
           pos-client:
-            client-id: poskeycloakid
-            client-secret: password
+            client-id: ${KEYCLOAK_CLIENT_ID:poskeycloakid}
+            client-secret: ${KEYCLOAK_CLIENT_SECRET:changeme}
             scope: openid, profile, email
             authorization-grant-type: authorization_code
-            redirect-uri: http://localhost:8081/*
+            redirect-uri: ${KEYCLOAK_REDIRECT_URI:http://localhost:5173/*}
             client-name: pos
 
         provider:
           pos-keycloak:
-            issuer-uri: http://localhost:8081/realms/pos
-            authorization-uri: http://localhost:8081/realms/pos/protocol/openid-connect/auth
-            token-uri: http://localhost:8081/realms/pos/protocol/openid-connect/token
-            user-info-uri: http://localhost:8081/realms/pos/protocol/openid-connect/userinfo
+            issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8081/realms/pos}
+            authorization-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8081/realms/pos}/protocol/openid-connect/auth
+            token-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8081/realms/pos}/protocol/openid-connect/token
+            user-info-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8081/realms/pos}/protocol/openid-connect/userinfo
             user-name-attribute: preferred_username
-
 
   jpa:
     hibernate:
@@ -44,17 +42,33 @@ spring:
     properties:
       hibernate:
         format_sql: true
+        generate_statistics: false
+
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+minio:
+  endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+  access-key: ${MINIO_ACCESS_KEY:minioadmin}
+  secret-key: ${MINIO_SECRET_KEY:minioadmin}
+  bucket: ${MINIO_BUCKET:product-images}
+
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
 
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}
   address: 0.0.0.0
   servlet:
     session:
       cookie:
-        secure: true
+        secure: false
         http-only: true
-        same-site: None
+        same-site: Lax
 
 logging:
   level:
-    root: info
+    root: debug
+    com.pos: debug

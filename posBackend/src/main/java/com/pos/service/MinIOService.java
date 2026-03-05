@@ -4,10 +4,10 @@ import io.minio.GetObjectArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -15,7 +15,9 @@ import java.util.UUID;
 public class MinIOService {
 
     private final MinioClient minioClient;
-    private final String bucketName = "product-images";
+
+    @Value("${minio.bucket}")
+    private String bucketName;
 
     public String uploadFile(MultipartFile file) throws Exception {
         if (file == null || file.isEmpty()) {
