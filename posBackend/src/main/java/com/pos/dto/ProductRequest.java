@@ -26,6 +26,10 @@ public record ProductRequest(
         String sku,
 
         @Size(max = 50, message = "Barcode must not exceed 50 characters")
-        String barcode
+        String barcode,
+
+        /** Alert threshold — defaults to 5 if not provided */
+        @Min(value = 0, message = "Low stock threshold cannot be negative")
+        Integer lowStockThreshold
 ) {
 }

@@ -61,6 +61,7 @@ public class ProductService {
             .quantity(request.quantity())
             .sku(request.sku())
             .barcode(request.barcode())
+            .lowStockThreshold(request.lowStockThreshold() != null ? request.lowStockThreshold() : 5)
             .category(category)
             .build();
 
@@ -103,6 +104,7 @@ public class ProductService {
         product.setCategory(newCategory);
         if (request.sku() != null) product.setSku(request.sku());
         if (request.barcode() != null) product.setBarcode(request.barcode());
+        if (request.lowStockThreshold() != null) product.setLowStockThreshold(request.lowStockThreshold());
 
         adjustCategoryCounts(originalCategory, newCategory);
 
@@ -138,6 +140,7 @@ public class ProductService {
         product.setImageURL(objectKey);
         if (request.sku() != null) product.setSku(request.sku());
         if (request.barcode() != null) product.setBarcode(request.barcode());
+        if (request.lowStockThreshold() != null) product.setLowStockThreshold(request.lowStockThreshold());
 
         adjustCategoryCounts(originalCategory, newCategory);
 
@@ -211,6 +214,10 @@ public class ProductService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found"));
 
         return stockMovementRepository.findByProductOrderByCreatedAtDesc(product);
+    }
+
+    public List<Product> getLowStockProducts() {
+        return repository.findLowStockProducts();
     }
 
     private Category resolveCategory(String categoryName) {

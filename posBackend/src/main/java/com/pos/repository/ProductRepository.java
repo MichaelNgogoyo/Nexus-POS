@@ -17,4 +17,10 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     @Query("SELECT p FROM Product p LEFT JOIN FETCH p.category")
     List<Product> findAllWithCategory();
+
+    /** Products where quantity <= lowStockThreshold (low-stock alert) */
+    @Query("SELECT p FROM Product p WHERE p.active = true AND p.quantity <= p.lowStockThreshold ORDER BY p.quantity ASC")
+    List<Product> findLowStockProducts();
+
+    long countByActiveTrue();
 }

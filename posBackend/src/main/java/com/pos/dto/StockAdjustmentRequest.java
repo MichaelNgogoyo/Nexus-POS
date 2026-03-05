@@ -1,10 +1,10 @@
 package com.pos.dto;
 
-import jakarta.validation.constraints.NotZero;
+import jakarta.validation.constraints.NotNull;
 
 public record StockAdjustmentRequest(
-        @NotZero(message = "Delta cannot be zero")
-        int delta,
+        @NotNull(message = "Delta is required")
+        Integer delta,
         String reason
 ) {
 }

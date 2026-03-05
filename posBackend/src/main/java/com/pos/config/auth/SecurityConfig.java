@@ -33,7 +33,8 @@ public class SecurityConfig {
                                 "/", "/index.html", "/api/public/**", "/assets/**",
                                 "/static/**", "/shop.svg", "/favicon.ico",
                                 "/swagger-ui/**", "/v3/api-docs/**",
-                                "/api/product/*/image", "/api/register"
+                                "/api/product/*/image", "/api/register",
+                                "/api/report/summary", "/api/report/low-stock"
                         ).permitAll()
                         .requestMatchers("/admin/**").hasRole("ADMIN")
                         .requestMatchers("/user/**").hasAnyRole("USER", "ADMIN")

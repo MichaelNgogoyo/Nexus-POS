@@ -52,6 +52,11 @@ public class ProductController {
         return ResponseEntity.ok(productService.createProduct(request, imageFile));
     }
 
+    @GetMapping("/low-stock")
+    public ResponseEntity<List<Product>> getLowStockProducts() {
+        return ResponseEntity.ok(productService.getLowStockProducts());
+    }
+
     //get one product
     @GetMapping("/{id}")
     public Product findById(@PathVariable long id) {
