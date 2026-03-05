@@ -28,6 +28,8 @@
     </scm>
     <properties>
         <java.version>17</java.version>
+        <!-- Set to true to skip frontend build: ./mvnw ... -Dfrontend.skip=true -->
+        <frontend.skip>false</frontend.skip>
     </properties>
     <dependencies>
 
@@ -150,7 +152,9 @@
                 https://repo1.maven.org/maven2/com/github/eirslett/frontend-maven-plugin/ -->
                 <version>1.9.1</version>
                 <configuration>
-                    <workingDirectory>src/main/posFrontend</workingDirectory>
+                    <workingDirectory>../posFrontend</workingDirectory>
+                    <!-- Skip frontend build with: -Dfrontend.skip=true -->
+                    <skip>${frontend.skip}</skip>
                 </configuration>
                 <executions>
                     <!-- Step 1: Install Node and npm -->

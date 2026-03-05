@@ -47,7 +47,7 @@ public class ProductController {
             return ResponseEntity.badRequest().body("Image file is required");
         }
 
-        ProductRequest request = new ProductRequest(name, price, active, discount, quantity, category, sku, barcode);
+        ProductRequest request = new ProductRequest(name, price, active, discount, quantity, category, sku, barcode, null);
 
         return ResponseEntity.ok(productService.createProduct(request, imageFile));
     }
@@ -84,9 +84,11 @@ public class ProductController {
                                                     @RequestParam("discount") double discount,
                                                     @RequestParam("quantity") int quantity,
                                                     @RequestParam(value = "category", required = false) String category,
+                                                    @RequestParam(value = "sku", required = false) String sku,
+                                                    @RequestParam(value = "barcode", required = false) String barcode,
                                                     @RequestParam(value = "file", required = false) MultipartFile imageFile) throws Exception {
 
-        ProductRequest request = new ProductRequest(name, price, active, discount, quantity, category);
+        ProductRequest request = new ProductRequest(name, price, active, discount, quantity, category, sku, barcode, null);
         return productService.updateProductWithImage(id, request, imageFile);
     }
 

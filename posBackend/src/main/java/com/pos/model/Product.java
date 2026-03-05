@@ -28,6 +28,8 @@ public class Product {
     private int quantity;
 
     /** When quantity drops to this level or below, the product appears in low-stock alerts. Default: 5 */
+    @Builder.Default
+    @Column(name = "low_stock_threshold", columnDefinition = "integer not null default 5")
     private int lowStockThreshold = 5;
 
     @Column(unique = true)
