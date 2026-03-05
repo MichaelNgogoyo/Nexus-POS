@@ -3,14 +3,19 @@ import InventoryIcon from "@mui/icons-material/Inventory";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import SettingsIcon from '@mui/icons-material/Settings';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
+import ReceiptIcon from '@mui/icons-material/Receipt';
+import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
 import AccountCircleRoundedIcon from '@mui/icons-material/AccountCircleRounded';
 import DashboardRoundedIcon from '@mui/icons-material/DashboardRounded';
 import AssessmentRoundedIcon from '@mui/icons-material/AssessmentRounded';
 import WarehouseRoundedIcon from '@mui/icons-material/WarehouseRounded';
 import {ROUTES} from "../routes.js";
 import NavBar from "./NavBar.jsx";
+import {usePermissions} from "../auth/permissions";
 
 export default function Layout() {
+    const {can} = usePermissions();
+
     return (
         <div className="min-h-screen bg-bg-primary">
             {/* Fixed Navbar */}
@@ -42,57 +47,72 @@ export default function Layout() {
                                 <DashboardRoundedIcon className="text-brand-primary" sx={{ fontSize: 22 }} />
                                 <span className="font-medium">Dashboard</span>
                             </NavLink>
-                            <NavLink
-                                to={ROUTES.SALES}
-                                className={({isActive}) =>
-                                    `nav-link ${isActive ? 'active' : ''}`
-                                }
-                            >
+                            {can("view_sales") && (<>
+                                <p className="px-4 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-widest text-text-muted">Sales</p>
+                                <NavLink
+                                    to={ROUTES.CHECKOUT}
+                                    className={({isActive}) => `nav-link ${isActive ? 'active' : ''}`}
+                                >
+                                    <PointOfSaleIcon className="text-brand-primary" sx={{ fontSize: 22 }} />
+                                    <span className="font-medium">Checkout</span>
+                                </NavLink>
+                                <NavLink
+                                    to={ROUTES.TRANSACTIONS}
+                                    className={({isActive}) => `nav-link ${isActive ? 'active' : ''}`}
+                                >
+                                    <ReceiptIcon className="text-brand-primary" sx={{ fontSize: 22 }} />
+                                    <span className="font-medium">Transactions</span>
+                                </NavLink>
+                            </>)}
 
-                                <ShoppingCartIcon className="text-brand-primary" sx={{ fontSize: 22 }} />
-                                <span className="font-medium">Sales</span>
-                            </NavLink>
 
+                            {can("view_inventory") && (
+                                <NavLink
+                                    to={ROUTES.INVENTORY}
+                                    className={({isActive}) =>
+                                        `nav-link ${isActive ? 'active' : ''}`
+                                    }
+                                >
+                                    <WarehouseRoundedIcon className="text-accent-success" sx={{ fontSize: 22 }} />
+                                    <span className="font-medium">Inventory</span>
+                                </NavLink>
+                            )}
 
-                            <NavLink
-                                to={ROUTES.INVENTORY}
-                                className={({isActive}) =>
-                                    `nav-link ${isActive ? 'active' : ''}`
-                                }
-                            >
-                                <WarehouseRoundedIcon className="text-accent-success" sx={{ fontSize: 22 }} />
-                                <span className="font-medium">Inventory</span>
-                            </NavLink>
+                            {can("view_products") && (
+                                <NavLink
+                                    to={ROUTES.PRODUCTS}
+                                    className={({isActive}) =>
+                                        `nav-link ${isActive ? 'active' : ''}`
+                                    }
+                                >
+                                    <InventoryIcon className="text-accent-success" sx={{ fontSize: 22 }} />
+                                    <span className="font-medium">Products</span>
+                                </NavLink>
+                            )}
 
-                            <NavLink
-                                to={ROUTES.PRODUCTS}
-                                className={({isActive}) =>
-                                    `nav-link ${isActive ? 'active' : ''}`
-                                }
-                            >
-                                <InventoryIcon className="text-accent-success" sx={{ fontSize: 22 }} />
-                                <span className="font-medium">Products</span>
-                            </NavLink>
+                            {can("view_reports") && (
+                                <NavLink
+                                    to={ROUTES.REPORTS}
+                                    className={({isActive}) =>
+                                        `nav-link ${isActive ? 'active' : ''}`
+                                    }
+                                >
+                                    <AssessmentRoundedIcon className="text-accent-warning" sx={{ fontSize: 22 }} />
+                                    <span className="font-medium">Reports</span>
+                                </NavLink>
+                            )}
 
-                            <NavLink
-                                to={ROUTES.REPORTS}
-                                className={({isActive}) =>
-                                    `nav-link ${isActive ? 'active' : ''}`
-                                }
-                            >
-                                <AssessmentRoundedIcon className="text-accent-warning" sx={{ fontSize: 22 }} />
-                                <span className="font-medium">Reports</span>
-                            </NavLink>
-
-                            <NavLink
-                                to={ROUTES.USERS}
-                                className={({isActive}) =>
-                                    `nav-link ${isActive ? 'active' : ''}`
-                                }
-                            >
-                                <PersonAddIcon className="text-accent-warning" sx={{ fontSize: 22 }} />
-                                <span className="font-medium">Users</span>
-                            </NavLink>
+                            {can("manage_users") && (
+                                <NavLink
+                                    to={ROUTES.USERS}
+                                    className={({isActive}) =>
+                                        `nav-link ${isActive ? 'active' : ''}`
+                                    }
+                                >
+                                    <PersonAddIcon className="text-accent-warning" sx={{ fontSize: 22 }} />
+                                    <span className="font-medium">Users</span>
+                                </NavLink>
+                            )}
                         </div>
 
                         {/* Bottom Navigation */}

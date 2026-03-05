@@ -7,12 +7,15 @@ export const ROUTES = {
     PRODUCTS: '/products',
     INVENTORY: '/inventory',
     SALES: '/sales',
+    CHECKOUT: '/checkout',
+    TRANSACTIONS: '/transactions',
     REPORTS: '/reports',
     USERS: '/users',
     SETTINGS: '/settings',
+    CATEGORIES: '/categories',
+    PRODUCT_DETAIL: '/products/:id',
     CREATE: '/create',
     CREATEPRODUCT: '/createproduct',
     ERROR: '/error',
     LOGOUT: '/logout',
-
 };

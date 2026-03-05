@@ -4,9 +4,14 @@ import {useKeycloak} from "@react-keycloak/web";
 import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
 import ThemeToggle from "./ThemeToggle.jsx";
 import StorefrontRoundedIcon from '@mui/icons-material/StorefrontRounded';
+import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
+import {usePermissions} from "../auth/permissions";
+import {useCart} from "../context/CartContext.jsx";
 
 function NavBar() {
     const {keycloak, initialized} = useKeycloak();
+    const {can} = usePermissions();
+    const {totalItems} = useCart();
     const handleLogout =()=>{
         if (initialized && keycloak?.authenticated) {
             keycloak.logout({redirectUri: window.location.origin})
@@ -50,30 +55,46 @@ function NavBar() {
                             >
                                 Dashboard
                             </Link>
-                            <Link
-                                className="px-3 py-2 text-text-secondary hover:text-brand-primary transition-all duration-250 font-medium hover:bg-bg-secondary rounded-lg"
-                                to={ROUTES.INVENTORY}
-                            >
-                                Inventory
-                            </Link>
-                            <Link
-                                className="px-3 py-2 text-text-secondary hover:text-brand-primary transition-all duration-250 font-medium hover:bg-bg-secondary rounded-lg"
-                                to={ROUTES.SALES}
-                            >
-                                Sales
-                            </Link>
-                            <Link
-                                className="px-3 py-2 text-text-secondary hover:text-brand-primary transition-all duration-250 font-medium hover:bg-bg-secondary rounded-lg"
-                                to={ROUTES.REPORTS}
-                            >
-                                Reports
-                            </Link>
-                            <Link
-                                className="px-3 py-2 text-text-secondary hover:text-brand-primary transition-all duration-250 font-medium hover:bg-bg-secondary rounded-lg"
-                                to={ROUTES.USERS}
-                            >
-                                Users
-                            </Link>
+                            {can("view_inventory") && (
+                                <Link
+                                    className="px-3 py-2 text-text-secondary hover:text-brand-primary transition-all duration-250 font-medium hover:bg-bg-secondary rounded-lg"
+                                    to={ROUTES.INVENTORY}
+                                >
+                                    Inventory
+                                </Link>
+                            )}
+                            {can("view_sales") && (
+                                <Link
+                                    className="px-3 py-2 text-text-secondary hover:text-brand-primary transition-all duration-250 font-medium hover:bg-bg-secondary rounded-lg"
+                                    to={ROUTES.SALES}
+                                >
+                                    Sales
+                                </Link>
+                            )}
+                            {can("view_reports") && (
+                                <Link
+                                    className="px-3 py-2 text-text-secondary hover:text-brand-primary transition-all duration-250 font-medium hover:bg-bg-secondary rounded-lg"
+                                    to={ROUTES.REPORTS}
+                                >
+                                    Reports
+                                </Link>
+                            )}
+                            {can("manage_categories") && (
+                                <Link
+                                    className="px-3 py-2 text-text-secondary hover:text-brand-primary transition-all duration-250 font-medium hover:bg-bg-secondary rounded-lg"
+                                    to={ROUTES.CATEGORIES}
+                                >
+                                    Categories
+                                </Link>
+                            )}
+                            {can("manage_users") && (
+                                <Link
+                                    className="px-3 py-2 text-text-secondary hover:text-brand-primary transition-all duration-250 font-medium hover:bg-bg-secondary rounded-lg"
+                                    to={ROUTES.USERS}
+                                >
+                                    Users
+                                </Link>
+                            )}
                             <Link
                                 className="px-3 py-2 text-text-secondary hover:text-brand-primary transition-all duration-250 font-medium hover:bg-bg-secondary rounded-lg"
                                 to={ROUTES.SETTINGS}
@@ -88,6 +109,20 @@ function NavBar() {
                             >
                                 <LogoutRoundedIcon sx={{ fontSize: 24 }} />
                             </button>
+                            {can("view_sales") && (
+                                <Link
+                                    to={ROUTES.CHECKOUT}
+                                    className="relative p-2 text-text-secondary hover:text-brand-primary hover:bg-bg-secondary rounded-lg transition-all duration-250"
+                                    title="Checkout cart"
+                                >
+                                    <ShoppingCartIcon sx={{ fontSize: 24 }} />
+                                    {totalItems > 0 && (
+                                        <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full bg-brand-primary text-white text-[10px] font-bold flex items-center justify-center px-1">
+                                            {totalItems > 99 ? "99+" : totalItems}
+                                        </span>
+                                    )}
+                                </Link>
+                            )}
                         </>
                     )}
 

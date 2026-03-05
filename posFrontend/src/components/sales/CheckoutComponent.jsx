@@ -5,20 +5,13 @@ import api from '../../services/api';
 import ProductCard from './ProductCard';
 import ReceiptDocument from './ReceiptDocument';
 import {useKeycloak} from "@react-keycloak/web";
+import {useCart} from "../../context/CartContext.jsx";
 
-const CART_STORAGE_KEY = 'pos_checkout_cart';
 const PAGE_SIZE = 12;
 
 const CheckoutComponent = () => {
     const {keycloak} = useKeycloak();
-    const [cart, setCart] = useState(() => {
-        try {
-            const saved = localStorage.getItem(CART_STORAGE_KEY);
-            return saved ? JSON.parse(saved) : [];
-        } catch {
-            return [];
-        }
-    });
+    const { cart, addToCart: ctxAddToCart, removeFromCart, clearCart } = useCart();
     const [searchTerm, setSearchTerm] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [products, setProducts] = useState([]);
@@ -47,15 +40,6 @@ const CheckoutComponent = () => {
             currency: 'KES'
         }).format(value || 0);
     };
-
-    // Persist cart to localStorage on every change
-    useEffect(() => {
-        try {
-            localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
-        } catch {
-            // ignore storage errors
-        }
-    }, [cart]);
 
     // Debounce search input — reset to page 0 on new query
     useEffect(() => {
@@ -96,25 +80,8 @@ const CheckoutComponent = () => {
     const addToCart = (product) => {
         const existingItem = cart.find(item => item.id === product.id);
         const currentQuantity = existingItem ? existingItem.quantity : 0;
-
-        if (currentQuantity >= Number(product.quantity || 0)) {
-            return;
-        }
-
-        if (existingItem) {
-            setCart(cart.map(item => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item));
-        } else {
-            setCart([...cart, { ...product, quantity: 1 }]);
-        }
-    };
-
-    const removeFromCart = (productId) => {
-        const existingItem = cart.find(item => item.id === productId);
-        if (existingItem.quantity === 1) {
-            setCart(cart.filter(item => item.id !== productId));
-        } else {
-            setCart(cart.map(item => item.id === productId ? { ...item, quantity: item.quantity - 1 } : item));
-        }
+        if (currentQuantity >= Number(product.quantity || 0)) return;
+        ctxAddToCart(product);
     };
 
     const handleCompleteSale = async () => {
@@ -163,9 +130,8 @@ const CheckoutComponent = () => {
                 changeGiven: savedSale.changeGiven ?? Math.max(0, tendered - total),
             });
 
-            // Clear cart from state and localStorage
-            setCart([]);
-            localStorage.removeItem(CART_STORAGE_KEY);
+            // Clear cart
+            clearCart();
             setDiscountPercent(0);
             setAmountTendered('');
         } catch (err) {
@@ -275,7 +241,7 @@ const CheckoutComponent = () => {
                 <div className="card p-4">
                     <h2 className="text-xl font-bold mb-4 flex justify-between items-center">
                         <span>Cart</span>
-                        <button onClick={() => { setCart([]); localStorage.removeItem(CART_STORAGE_KEY); }} className="text-text-muted hover:text-accent-error" title="Clear Cart">
+                        <button onClick={clearCart} className="text-text-muted hover:text-accent-error" title="Clear Cart">
                             <ClearAll />
                         </button>
                     </h2>

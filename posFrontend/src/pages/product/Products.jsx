@@ -1,17 +1,20 @@
-import {useState} from "react";
+import {useMemo, useState} from "react";
 import {useNavigate} from "react-router-dom";
 import {useKeycloak} from "@react-keycloak/web";
 import {ROUTES} from "../../routes";
 import api from "../../services/api";
 import {useQuery, useQueryClient} from "@tanstack/react-query";
-
+import {useToast} from "../../components/ToastProvider.jsx";
+import {useCart} from "../../context/CartContext.jsx";
+import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
 function Products() {
     const {keycloak} = useKeycloak();
     const navigate = useNavigate();
     const queryClient = useQueryClient();
+    const {push} = useToast();
+    const {addToCart, cart} = useCart();
 
     const [inventoryError, setInventoryError] = useState("");
-    const [categoryFilter, setCategoryFilter] = useState("");
     const [adjustingProductId, setAdjustingProductId] = useState(null);
     const [adjustmentValue, setAdjustmentValue] = useState(1);
     const [adjustmentReason, setAdjustmentReason] = useState("Stock Refill");
@@ -19,6 +22,14 @@ function Products() {
     const [selectedHistoryProductId, setSelectedHistoryProductId] = useState(null);
     const [stockMovements, setStockMovements] = useState([]);
     const [historyLoading, setHistoryLoading] = useState(false);
+    const [filters, setFilters] = useState({
+        search: "",
+        category: "",
+        stock: "all",
+        sort: "name-asc",
+    });
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(9);
 
     const {data: products = []} = useQuery({
         queryKey: ["products"],
@@ -29,7 +40,7 @@ function Products() {
 
     const {data: categories = []} = useQuery({
         queryKey: ["categories"],
-        queryFn: () => api.getCategories().then((res) => res.data || []),
+        queryFn: () => api.listCategories().then((res) => res.data || []),
         enabled: !!keycloak?.authenticated,
         staleTime: 10 * 60 * 1000,
     });
@@ -46,11 +57,17 @@ function Products() {
 
         try {
             setLoadingAdjustment(true);
+            // optimistic update
+            queryClient.setQueryData(["products"], (old = []) =>
+                old.map((p) => (p.id === productId ? {...p, quantity: Number(p.quantity || 0) + delta} : p))
+            );
+
             await api.adjustProductStock(productId, {
                 delta,
                 reason: adjustmentReason,
             });
             setInventoryError("");
+            push("Stock updated", "success");
             await fetchProducts();
 
             if (selectedHistoryProductId === productId) {
@@ -59,6 +76,8 @@ function Products() {
         } catch (error) {
             console.error("Error adjusting stock", error);
             setInventoryError("Stock adjustment failed. Confirm backend endpoint and try again.");
+            // rollback
+            queryClient.invalidateQueries({queryKey: ["products"]});
         } finally {
             setLoadingAdjustment(false);
         }
@@ -79,6 +98,40 @@ function Products() {
             setHistoryLoading(false);
         }
     };
+
+    const filteredProducts = useMemo(() => {
+        const search = filters.search.toLowerCase();
+        return products
+            .filter((p) => p.name?.toLowerCase().includes(search) || String(p.id || "").includes(search))
+            .filter((p) => !filters.category || (p.category?.name || "") === filters.category)
+            .filter((p) => {
+                if (filters.stock === "in") return Number(p.quantity) > 0;
+                if (filters.stock === "out") return Number(p.quantity) <= 0;
+                if (filters.stock === "low") return Number(p.quantity) > 0 && Number(p.quantity) <= 5;
+                return true;
+            })
+            .sort((a, b) => {
+                switch (filters.sort) {
+                    case "name-desc":
+                        return (b.name || "").localeCompare(a.name || "");
+                    case "price-asc":
+                        return Number(a.price || 0) - Number(b.price || 0);
+                    case "price-desc":
+                        return Number(b.price || 0) - Number(a.price || 0);
+                    case "qty-asc":
+                        return Number(a.quantity || 0) - Number(b.quantity || 0);
+                    case "qty-desc":
+                        return Number(b.quantity || 0) - Number(a.quantity || 0);
+                    case "name-asc":
+                    default:
+                        return (a.name || "").localeCompare(b.name || "");
+                }
+            });
+    }, [products, filters]);
+
+    const totalPages = Math.max(1, Math.ceil(filteredProducts.length / pageSize));
+    const currentPage = Math.min(page, totalPages);
+    const paginatedProducts = filteredProducts.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
     const formatCurrency = (value) => {
         const formatter = new Intl.NumberFormat("en-KE", {style: "currency", currency: "KES"});
@@ -102,18 +155,65 @@ function Products() {
                             <h1 className="text-3xl font-bold text-text-primary">Products</h1>
                             <p className="text-text-secondary mt-1">Browse your inventory and add new items quickly.</p>
                         </div>
-                        <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                        <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-end flex-wrap">
+                            <div className="flex items-center gap-2">
+                                <label className="text-sm text-text-secondary">Search</label>
+                                <input
+                                    type="text"
+                                    value={filters.search}
+                                    onChange={(e) => {
+                                        setFilters((prev) => ({...prev, search: e.target.value}));
+                                        setPage(1);
+                                    }}
+                                    className="w-40 rounded-xl border border-border-secondary bg-bg-tertiary px-3 py-2 text-sm"
+                                    placeholder="Name or ID"
+                                />
+                            </div>
                             <div className="flex items-center gap-2">
                                 <label className="text-sm text-text-secondary">Category</label>
                                 <select
-                                    value={categoryFilter}
-                                    onChange={(e) => setCategoryFilter(e.target.value)}
+                                    value={filters.category}
+                                    onChange={(e) => {
+                                        setFilters((prev) => ({...prev, category: e.target.value}));
+                                        setPage(1);
+                                    }}
                                     className="rounded-xl border border-border-secondary bg-bg-tertiary px-3 py-2 text-sm"
                                 >
                                     <option value="">All</option>
                                     {categories.map((cat) => (
                                         <option key={cat.id} value={cat.name}>{cat.name}</option>
                                     ))}
+                                </select>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <label className="text-sm text-text-secondary">Stock</label>
+                                <select
+                                    value={filters.stock}
+                                    onChange={(e) => {
+                                        setFilters((prev) => ({...prev, stock: e.target.value}));
+                                        setPage(1);
+                                    }}
+                                    className="rounded-xl border border-border-secondary bg-bg-tertiary px-3 py-2 text-sm"
+                                >
+                                    <option value="all">All</option>
+                                    <option value="in">In Stock</option>
+                                    <option value="low">Low Stock</option>
+                                    <option value="out">Out of Stock</option>
+                                </select>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <label className="text-sm text-text-secondary">Sort</label>
+                                <select
+                                    value={filters.sort}
+                                    onChange={(e) => setFilters((prev) => ({...prev, sort: e.target.value}))}
+                                    className="rounded-xl border border-border-secondary bg-bg-tertiary px-3 py-2 text-sm"
+                                >
+                                    <option value="name-asc">Name A-Z</option>
+                                    <option value="name-desc">Name Z-A</option>
+                                    <option value="price-asc">Price Low-High</option>
+                                    <option value="price-desc">Price High-Low</option>
+                                    <option value="qty-desc">Stock High-Low</option>
+                                    <option value="qty-asc">Stock Low-High</option>
                                 </select>
                             </div>
                             <button
@@ -156,9 +256,14 @@ function Products() {
                                     Add Product
                                 </button>
                             </div>
+                        ) : filteredProducts.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-12 text-center space-y-2">
+                                <h2 className="text-lg font-semibold text-text-primary">No matching products</h2>
+                                <p className="text-text-secondary text-sm">Try adjusting your filters or search.</p>
+                            </div>
                         ) : (
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {(categoryFilter ? products.filter((p) => (p.category?.name || "") === categoryFilter) : products).map((product) => {
+                                {paginatedProducts.map((product) => {
                                     const inStock = Number(product.quantity) > 0;
                                     return (
                                         <div
@@ -198,6 +303,15 @@ function Products() {
                                             </div>
 
                                             <div className="px-4 pb-4 space-y-2 border-t border-border-primary pt-3">
+                                                {/* Add to Cart */}
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); addToCart(product); push({ message: `${product.name} added to cart`, type: "success" }); }}
+                                                    disabled={!inStock}
+                                                    className="w-full flex items-center justify-center gap-2 rounded-lg bg-brand-primary hover:bg-brand-hover text-white py-2 text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                                >
+                                                    <ShoppingCartIcon sx={{ fontSize: 16 }} />
+                                                    {inStock ? `Add to Cart${cart.find(i => i.id === product.id) ? ` (${cart.find(i => i.id === product.id).quantity})` : ""}` : "Out of Stock"}
+                                                </button>
                                                 <div className="flex gap-2">
                                                     <input
                                                         type="number"
@@ -259,6 +373,26 @@ function Products() {
                                         </div>
                                     );
                                 })}
+                            </div>
+                        )}
+
+                        {filteredProducts.length > 0 && totalPages > 1 && (
+                            <div className="flex items-center justify-center gap-4 mt-8">
+                                <button
+                                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                                    disabled={currentPage === 1}
+                                    className="rounded-lg border border-border-secondary px-4 py-2 text-sm disabled:opacity-60"
+                                >
+                                    Previous
+                                </button>
+                                <span className="text-sm text-text-secondary">Page {currentPage} of {totalPages}</span>
+                                <button
+                                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                                    disabled={currentPage === totalPages}
+                                    className="rounded-lg border border-border-secondary px-4 py-2 text-sm disabled:opacity-60"
+                                >
+                                    Next
+                                </button>
                             </div>
                         )}
 
