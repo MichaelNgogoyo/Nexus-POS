@@ -3,8 +3,10 @@ package com.pos.service.impl;
 import com.pos.dto.ProductRequest;
 import com.pos.model.Category;
 import com.pos.model.Product;
+import com.pos.model.StockMovement;
 import com.pos.repository.CategoryRepository;
 import com.pos.repository.ProductRepository;
+import com.pos.repository.StockMovementRepository;
 import com.pos.service.CategoryService;
 import com.pos.service.MinIOService;
 import lombok.RequiredArgsConstructor;
@@ -41,6 +43,9 @@ public class ProductService {
     @Autowired
     MinIOService minIOService;
 
+    @Autowired
+    private StockMovementRepository stockMovementRepository;
+
     @CacheEvict(value = "products", allEntries = true)
     public ResponseEntity<?> createProduct(ProductRequest request, MultipartFile imageFile) throws Exception {
 
@@ -54,6 +59,8 @@ public class ProductService {
             .discount(request.discount())
             .imageURL(objectKey)
             .quantity(request.quantity())
+            .sku(request.sku())
+            .barcode(request.barcode())
             .category(category)
             .build();
 
@@ -94,6 +101,8 @@ public class ProductService {
         product.setDiscount(request.discount());
         product.setQuantity(request.quantity());
         product.setCategory(newCategory);
+        if (request.sku() != null) product.setSku(request.sku());
+        if (request.barcode() != null) product.setBarcode(request.barcode());
 
         adjustCategoryCounts(originalCategory, newCategory);
 
@@ -127,6 +136,8 @@ public class ProductService {
         product.setQuantity(request.quantity());
         product.setCategory(newCategory);
         product.setImageURL(objectKey);
+        if (request.sku() != null) product.setSku(request.sku());
+        if (request.barcode() != null) product.setBarcode(request.barcode());
 
         adjustCategoryCounts(originalCategory, newCategory);
 
@@ -170,6 +181,38 @@ public class ProductService {
         return minIOService.getFile(product.getImageURL());
     }
 
+    @Caching(evict = {
+        @CacheEvict(value = "products", allEntries = true),
+        @CacheEvict(value = "product", key = "#productId")
+    })
+    public Product adjustStock(long productId, int delta, String reason) {
+        if (delta == 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Delta cannot be zero");
+        }
+
+        Product product = repository.findById(productId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found"));
+
+        int newQuantity = product.getQuantity() + delta;
+        if (newQuantity < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Resulting stock cannot be negative");
+        }
+
+        product.setQuantity(newQuantity);
+        Product saved = repository.save(product);
+
+        logStockMovement(saved, delta, reason);
+        return saved;
+    }
+
+    @Transactional(readOnly = true)
+    public List<StockMovement> getStockMovements(long productId) {
+        Product product = repository.findById(productId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found"));
+
+        return stockMovementRepository.findByProductOrderByCreatedAtDesc(product);
+    }
+
     private Category resolveCategory(String categoryName) {
         if (categoryName == null || categoryName.isBlank()) {
             return categoryService.getOrCreateUncategorized();
@@ -190,6 +233,19 @@ public class ProductService {
             newCategory.setProductCount(newCategory.getProductCount() + 1);
             categoryRepository.save(newCategory);
         }
+    }
+
+    private void logStockMovement(Product product, int delta, String reason) {
+        String trimmedReason = (reason == null || reason.isBlank()) ? "Inventory adjustment" : reason.trim();
+
+        StockMovement movement = StockMovement.builder()
+                .product(product)
+                .delta(delta)
+                .balanceAfter(product.getQuantity())
+                .reason(trimmedReason)
+                .build();
+
+        stockMovementRepository.save(movement);
     }
 
 }

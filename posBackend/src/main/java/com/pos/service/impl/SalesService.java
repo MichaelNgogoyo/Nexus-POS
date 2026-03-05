@@ -13,6 +13,7 @@ import com.pos.repository.SalesRepository;
 import com.pos.repository.StockMovementRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -32,6 +33,10 @@ public class SalesService {
     private final ProductRepository productRepository;
     private final StockMovementRepository stockMovementRepository;
 
+    /** Tax rate as a percentage, e.g. 16 for 16% VAT. Configurable via pos.tax-rate property. */
+    @Value("${pos.tax-rate:0}")
+    private double taxRatePercent;
+
     @Transactional
     public Sales createSales(SaleRequest request) {
         if (request.items() == null || request.items().isEmpty()) {
@@ -45,7 +50,7 @@ public class SalesService {
                 .build();
 
         List<SaleItem> saleItems = new ArrayList<>();
-        double total = 0.0;
+        double subtotal = 0.0;
 
         for (var itemReq : request.items()) {
             Product product = productRepository.findById(itemReq.productId())
@@ -68,12 +73,28 @@ public class SalesService {
             saleItem.setSales(sales);
             saleItems.add(saleItem);
 
-            total += product.getPrice() * itemReq.quantity();
+            subtotal += product.getPrice() * itemReq.quantity();
         }
 
+        double taxAmount = subtotal * (taxRatePercent / 100.0);
+        double total = subtotal + taxAmount;
+
+        double amountTendered = request.amountTendered() != null ? request.amountTendered() : total;
+        double changeGiven = Math.max(0, amountTendered - total);
+
+        if (amountTendered < total) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Amount tendered (" + amountTendered + ") is less than total (" + total + ")");
+        }
+
+        sales.setTaxAmount(taxAmount);
         sales.setTotalAmount(total);
+        sales.setAmountTendered(amountTendered);
+        sales.setChangeGiven(changeGiven);
         sales.setSaleItems(saleItems);
-        return repository.save(sales);
+        Sales saved = repository.save(sales);
+        log.info("Sale #{} created — subtotal={} tax={} total={} change={}", saved.getId(), subtotal, taxAmount, total, changeGiven);
+        return saved;
     }
 
     @Transactional(readOnly = true)

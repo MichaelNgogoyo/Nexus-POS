@@ -27,6 +27,12 @@ public class Product {
     private double discount;
     private int quantity;
 
+    @Column(unique = true)
+    private String sku;        // e.g. "PRD-00123"
+
+    @Column(unique = true)
+    private String barcode;    // EAN-13 / UPC
+
     @ManyToOne
     @JoinColumn(name = "category_id")
     private Category category;

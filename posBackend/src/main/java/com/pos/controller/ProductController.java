@@ -2,8 +2,11 @@ package com.pos.controller;
 
 
 import com.pos.dto.ProductRequest;
+import com.pos.dto.StockAdjustmentRequest;
 import com.pos.model.Product;
+import com.pos.model.StockMovement;
 import com.pos.service.impl.ProductService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,7 +19,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.net.URLConnection;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -37,13 +39,15 @@ public class ProductController {
                                            @RequestParam("discount") double discount,
                                            @RequestParam("quantity") int quantity,
                                            @RequestParam(value = "category", required = false) String category,
+                                           @RequestParam(value = "sku", required = false) String sku,
+                                           @RequestParam(value = "barcode", required = false) String barcode,
                                            @RequestParam("file") MultipartFile imageFile) throws Exception {
 
         if (imageFile == null || imageFile.isEmpty()) {
             return ResponseEntity.badRequest().body("Image file is required");
         }
 
-        ProductRequest request = new ProductRequest(name, price, active, discount, quantity, category);
+        ProductRequest request = new ProductRequest(name, price, active, discount, quantity, category, sku, barcode);
 
         return ResponseEntity.ok(productService.createProduct(request, imageFile));
     }
@@ -63,7 +67,7 @@ public class ProductController {
     //update product
     @PutMapping("/{id}")
     @ResponseStatus(HttpStatus.CREATED)
-    public void updateProduct(@PathVariable long id, @RequestBody ProductRequest request) {
+    public void updateProduct(@PathVariable long id, @Valid @RequestBody ProductRequest request) {
         productService.updateProduct(id, request);
     }
 
@@ -101,11 +105,15 @@ public class ProductController {
 
     }
 
-    // temporary placeholder until stock movement tracking is implemented
+    @PostMapping("/{id}/stock-adjustment")
+    public ResponseEntity<Product> adjustStock(@PathVariable long id, @Valid @RequestBody StockAdjustmentRequest request) {
+        Product updated = productService.adjustStock(id, request.delta(), request.reason());
+        return ResponseEntity.ok(updated);
+    }
+
     @GetMapping("/{id}/stock-movements")
-    public ResponseEntity<List<?>> getStockMovements(@PathVariable long id) {
-        productService.getProductById(id); // ensure product exists; will 404/400 if not
-        return ResponseEntity.ok(Collections.emptyList());
+    public ResponseEntity<List<StockMovement>> getStockMovements(@PathVariable long id) {
+        return ResponseEntity.ok(productService.getStockMovements(id));
     }
 }
 

@@ -27,6 +27,9 @@ public class Sales {
 
     private String cashierId;
     private double totalAmount;
+    private double taxAmount;          // tax portion of totalAmount
+    private double amountTendered;     // cash handed by customer
+    private double changeGiven;        // change returned
     private String paymentMethod;
 
     @Enumerated(EnumType.STRING)
