@@ -22,6 +22,10 @@ public class CartService implements ICartService {
     private final CartItemRepository cartItemRepository;
     private final CheckoutService checkoutService;
 
+    public Sales checkout(Long userId, String cashierId, String paymentMethod) {
+        return checkoutService.processCheckout(userId, cashierId, paymentMethod);
+    }
+
     @Override
     public Cart cart(long id) {
         return cartRepository.findById(id)
@@ -65,11 +69,6 @@ public class CartService implements ICartService {
         }
 
         return cartRepository.save(cart);
-    }
-
-    @Transactional
-    public Sales checkout(Long userId, String cashierId, String paymentMethod) {
-        return checkoutService.processCheckout(userId, cashierId, paymentMethod);
     }
 
     @Transactional

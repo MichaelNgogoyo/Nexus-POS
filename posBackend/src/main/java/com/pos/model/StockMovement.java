@@ -2,16 +2,16 @@ package com.pos.model;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "stock_movements")
-@Getter
-@Setter
+@Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
 public class StockMovement {
 
     @Id
@@ -23,16 +23,15 @@ public class StockMovement {
     private Product product;
 
     /** Positive = stock in, negative = stock out */
+    @Column(nullable = false)
     private int delta;
 
+    /** Running balance of product quantity after this movement */
     private int balanceAfter;
 
     private String reason;
 
+    @CreationTimestamp
+    @Column(updatable = false)
     private LocalDateTime createdAt;
-
-    @PrePersist
-    protected void onCreate() {
-        createdAt = LocalDateTime.now();
-    }
 }
