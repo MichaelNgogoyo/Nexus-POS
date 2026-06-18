@@ -1,11 +1,10 @@
-let listener = null;
+const listeners = new Set();
 
-export function setToastListener(fn) {
-    listener = fn;
+export function emitToast(message, type = 'info') {
+    listeners.forEach(fn => fn({ message, type }));
 }
 
-export function emitToast(message, variant = "info") {
-    if (typeof listener === "function") {
-        listener(message, variant);
-    }
+export function subscribeToast(fn) {
+    listeners.add(fn);
+    return () => listeners.delete(fn);
 }

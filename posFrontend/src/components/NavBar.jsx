@@ -2,13 +2,18 @@ import {Link} from "react-router-dom";
 import {ROUTES} from "../routes.js";
 import {useKeycloak} from "@react-keycloak/web";
 import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
+import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import ThemeToggle from "./ThemeToggle.jsx";
 import StorefrontRoundedIcon from '@mui/icons-material/StorefrontRounded';
 import {usePermissions} from "../auth/permissions";
+import NotificationBell from "./NotificationBell.jsx";
+import GlobalSearch, { useGlobalSearch } from "./GlobalSearch.jsx";
 
 function NavBar() {
     const {keycloak, initialized} = useKeycloak();
     const {can} = usePermissions();
+    const { open, setOpen } = useGlobalSearch();
+
     const handleLogout =()=>{
         if (initialized && keycloak?.authenticated) {
             keycloak.logout({redirectUri: window.location.origin})
@@ -17,6 +22,8 @@ function NavBar() {
 
 
     return (
+        <>
+        <GlobalSearch open={open} onClose={() => setOpen(false)} />
         <nav className="fixed top-0 left-0 right-0 h-16 z-50 glass-effect border-b border-border-primary shadow-sm">
             <div className="h-full max-w-7xl mx-auto px-6 flex items-center justify-between">
                 {/* Brand Logo */}
@@ -98,6 +105,19 @@ function NavBar() {
                             >
                                 Settings
                             </Link>
+
+                            {/* Global Search trigger */}
+                            <button
+                                onClick={() => setOpen(true)}
+                                title="Search (Ctrl+K)"
+                                className="p-2 text-text-secondary hover:text-brand-primary hover:bg-bg-secondary rounded-lg transition-all duration-250"
+                            >
+                                <SearchRoundedIcon sx={{ fontSize: 22 }} />
+                            </button>
+
+                            {/* Notification Bell */}
+                            <NotificationBell />
+
                             <button
                                 onClick={handleLogout}
                                 className="p-2 text-text-secondary hover:text-accent-error hover:bg-bg-secondary rounded-lg transition-all duration-250 hover:scale-110 active:scale-95"
@@ -122,6 +142,7 @@ function NavBar() {
                 </div>
             </div>
         </nav>
+        </>
     )
 
 }

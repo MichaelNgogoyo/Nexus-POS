@@ -1,10 +1,11 @@
+// routes.js
 export const ROUTES = {
     // Auth
     LOGIN: '/login',
     REGISTER: '/register',
     ERROR: '/error',
 
-    // POS Mode — cashier/waiter facing
+    // POS Mode
     POS: '/pos',
     POS_CHECKOUT: '/pos/checkout',
     POS_TABLES: '/pos/tables',
@@ -12,8 +13,9 @@ export const ROUTES = {
     POS_KITCHEN: '/pos/kitchen',
     POS_CUSTOMERS: '/pos/customers',
     POS_SHIFT: '/pos/shift',
+    POS_RESERVATIONS: '/pos/reservations',
 
-    // Admin Mode — management facing
+    // Admin Mode
     ADMIN: '/admin',
     ADMIN_DASHBOARD: '/admin/dashboard',
     ADMIN_PRODUCTS: '/admin/products',
@@ -24,8 +26,16 @@ export const ROUTES = {
     ADMIN_REPORTS: '/admin/reports',
     ADMIN_USERS: '/admin/users',
     ADMIN_SETTINGS: '/admin/settings',
+    ADMIN_CUSTOMERS: '/admin/customers',
+    ADMIN_AUDIT: '/admin/audit',
 
-    // Legacy compat redirects (keep so old links don't 404)
+    // Finance
+    FINANCE: '/finance',
+    FINANCE_EXPENSES: '/finance/expenses',
+    FINANCE_PURCHASES: '/finance/purchases',
+    FINANCE_SUPPLIERS: '/finance/suppliers',
+
+    // Legacy compat redirects
     HOME: '/',
     DASHBOARD: '/admin/dashboard',
     PRODUCTS: '/admin/products',
