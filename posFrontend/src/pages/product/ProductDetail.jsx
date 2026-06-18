@@ -149,7 +149,7 @@ function ProductDetail() {
         try {
             setDeleting(true);
             await api.deleteProduct(product.id);
-            navigate(ROUTES.PRODUCTS);
+            navigate(ROUTES.ADMIN_PRODUCTS);
         } catch (err) {
             console.error("Error deleting product", err);
             setError("Delete failed. Please try again.");
@@ -184,7 +184,7 @@ function ProductDetail() {
             <div className="h-screen flex flex-col items-center justify-center bg-bg-primary text-text-secondary gap-5 px-4">
                 <div className="text-5xl">📦</div>
                 <p className="text-lg font-semibold text-text-primary text-center">{error}</p>
-                <button onClick={() => navigate(ROUTES.PRODUCTS)} className="btn-primary rounded-xl px-6 py-3 text-sm font-semibold">
+                <button onClick={() => navigate(ROUTES.ADMIN_PRODUCTS)} className="btn-primary rounded-xl px-6 py-3 text-sm font-semibold">
                     ← Back to products
                 </button>
             </div>
@@ -198,7 +198,7 @@ function ProductDetail() {
             {/* ── Top bar ── */}
             <div className="shrink-0 border-b border-border-primary bg-bg-secondary/80 backdrop-blur-md px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
                 <button
-                    onClick={() => navigate(ROUTES.PRODUCTS)}
+                    onClick={() => navigate(ROUTES.ADMIN_PRODUCTS)}
                     className="inline-flex items-center gap-1.5 text-sm font-semibold text-text-secondary hover:text-text-primary transition-colors"
                 >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>

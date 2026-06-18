@@ -5,14 +5,11 @@ import {ROUTES} from "../../routes";
 import api from "../../services/api";
 import {useQuery, useQueryClient} from "@tanstack/react-query";
 import {useToast} from "../../components/ToastProvider.jsx";
-import {useCart} from "../../context/CartContext.jsx";
-import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
 function Products() {
     const {keycloak} = useKeycloak();
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const {push} = useToast();
-    const {addToCart, cart} = useCart();
 
     const [inventoryError, setInventoryError] = useState("");
     const [adjustingProductId, setAdjustingProductId] = useState(null);
@@ -29,7 +26,7 @@ function Products() {
         sort: "name-asc",
     });
     const [page, setPage] = useState(1);
-    const [pageSize, setPageSize] = useState(9);
+    const [pageSize] = useState(9);
 
     const {data: products = []} = useQuery({
         queryKey: ["products"],
@@ -142,7 +139,7 @@ function Products() {
     const lowStockProducts = products.filter((product) => Number(product.quantity) > 0 && Number(product.quantity) <= 5);
 
     const goToDetail = (productId) => {
-        navigate(ROUTES.PRODUCT_DETAIL.replace(":id", productId));
+        navigate(ROUTES.ADMIN_PRODUCT_DETAIL.replace(":id", productId));
     };
 
     return (
@@ -223,7 +220,7 @@ function Products() {
                                 Manage Categories
                             </button>
                             <button
-                                onClick={() => navigate(ROUTES.CREATEPRODUCT)}
+                                onClick={() => navigate(ROUTES.ADMIN_CREATE_PRODUCT)}
                                 className="btn-primary inline-flex items-center justify-center rounded-xl px-4 py-3 text-sm font-semibold"
                             >
                                 + Add Product
@@ -250,7 +247,7 @@ function Products() {
                                 <h2 className="text-xl font-semibold text-text-primary">No products yet</h2>
                                 <p className="text-text-secondary">Add your first product to start selling.</p>
                                 <button
-                                    onClick={() => navigate(ROUTES.CREATEPRODUCT)}
+                                    onClick={() => navigate(ROUTES.ADMIN_CREATE_PRODUCT)}
                                     className="btn-primary inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold"
                                 >
                                     Add Product
@@ -303,15 +300,6 @@ function Products() {
                                             </div>
 
                                             <div className="px-4 pb-4 space-y-2 border-t border-border-primary pt-3">
-                                                {/* Add to Cart */}
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); addToCart(product); push({ message: `${product.name} added to cart`, type: "success" }); }}
-                                                    disabled={!inStock}
-                                                    className="w-full flex items-center justify-center gap-2 rounded-lg bg-brand-primary hover:bg-brand-hover text-white py-2 text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
-                                                >
-                                                    <ShoppingCartIcon sx={{ fontSize: 16 }} />
-                                                    {inStock ? `Add to Cart${cart.find(i => i.id === product.id) ? ` (${cart.find(i => i.id === product.id).quantity})` : ""}` : "Out of Stock"}
-                                                </button>
                                                 <div className="flex gap-2">
                                                     <input
                                                         type="number"
