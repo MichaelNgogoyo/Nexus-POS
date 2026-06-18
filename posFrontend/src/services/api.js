@@ -250,6 +250,32 @@ export const searchCustomers = (q) => apiClient.get('/api/customers/search', { p
 export const createCustomer = (data) => apiClient.post('/api/customers', data);
 export const getAllCustomers = () => apiClient.get('/api/customers');
 
+// ========================================
+// Phase 2 APIs
+// ========================================
+export const getExpenses = () => apiClient.get('/api/expenses');
+export const createExpense = (data) => apiClient.post('/api/expenses', data);
+export const deleteExpense = (id) => apiClient.delete(`/api/expenses/${id}`);
+
+export const getSuppliers = () => apiClient.get('/api/suppliers');
+export const createSupplier = (data) => apiClient.post('/api/suppliers', data);
+export const updateSupplier = (id, data) => apiClient.put(`/api/suppliers/${id}`, data);
+
+export const getPurchaseOrders = () => apiClient.get('/api/purchase-orders');
+export const createPurchaseOrder = (data) => apiClient.post('/api/purchase-orders', data);
+export const updatePurchaseOrderStatus = (id, status) => apiClient.put(`/api/purchase-orders/${id}/status`, { status });
+export const receivePurchaseOrder = (id) => apiClient.put(`/api/purchase-orders/${id}/receive`);
+
+export const getReservations = () => apiClient.get('/api/reservations');
+export const getTodayReservations = () => apiClient.get('/api/reservations/today');
+export const createReservation = (data) => apiClient.post('/api/reservations', data);
+export const updateReservationStatus = (id, status) => apiClient.put(`/api/reservations/${id}/status`, { status });
+
+export const getAuditLog = (page = 0, size = 20) => apiClient.get('/api/audit', { params: { page, size } });
+
+export const getCombos = () => apiClient.get('/api/combos');
+export const getModifierGroups = (productId) => apiClient.get('/api/modifier-groups', { params: { productId } });
+
 
 const api = {
     createSale,
@@ -293,6 +319,22 @@ const api = {
     searchCustomers,
     createCustomer,
     getAllCustomers,
+    // Phase 2
+    getExpenses,
+    createExpense,
+    deleteExpense,
+    getSuppliers,
+    createSupplier,
+    getPurchaseOrders,
+    createPurchaseOrder,
+    receivePurchaseOrder,
+    getReservations,
+    getTodayReservations,
+    createReservation,
+    updateReservationStatus,
+    getAuditLog,
+    getCombos,
+    getModifierGroups,
 };
 
 export default api;

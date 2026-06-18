@@ -8,7 +8,7 @@ import Error from './components/Error.jsx';
 import Login from './auth/Login.jsx';
 import Register from './auth/Register.jsx';
 
-// Admin pages (lazy)
+// Admin pages
 const Dashboard = lazy(() => import('./pages/dashboard/Dashboard.jsx'));
 const Products = lazy(() => import('./pages/product/Products.jsx'));
 const ProductDetail = lazy(() => import('./pages/product/ProductDetail.jsx'));
@@ -18,14 +18,21 @@ const Inventory = lazy(() => import('./pages/inventory/Inventory.jsx'));
 const Reports = lazy(() => import('./pages/reports/Reports.jsx'));
 const UserManagement = lazy(() => import('./pages/users/UserManagement.jsx'));
 const Settings = lazy(() => import('./pages/settings/Settings.jsx'));
+const AuditLog = lazy(() => import('./pages/admin/AuditLog.jsx'));
 
-// POS pages (lazy)
+// Finance pages
+const Expenses = lazy(() => import('./pages/finance/Expenses.jsx'));
+const Purchases = lazy(() => import('./pages/finance/Purchases.jsx'));
+const Suppliers = lazy(() => import('./pages/finance/Suppliers.jsx'));
+
+// POS pages
 const POSCheckout = lazy(() => import('./pos/checkout/POSCheckout.jsx'));
 const POSTables = lazy(() => import('./pos/tables/POSTables.jsx'));
 const POSOrders = lazy(() => import('./pos/orders/POSOrders.jsx'));
 const POSKitchen = lazy(() => import('./pos/kitchen/POSKitchen.jsx'));
 const POSCustomers = lazy(() => import('./pos/customers/POSCustomers.jsx'));
 const POSShift = lazy(() => import('./pos/shift/POSShift.jsx'));
+const POSReservations = lazy(() => import('./pos/reservations/POSReservations.jsx'));
 
 const Loader = () => (
     <div className="flex items-center justify-center h-full min-h-[300px]">
@@ -37,11 +44,10 @@ function App() {
     return (
         <Suspense fallback={<Loader />}>
             <Routes>
-                {/* ── Auth ── */}
                 <Route path={ROUTES.LOGIN} element={<Login />} />
                 <Route path={ROUTES.REGISTER} element={<Register />} />
 
-                {/* ── POS Mode ── */}
+                {/* POS Mode */}
                 <Route path="/pos" element={<RequireAuth requiredPermission="view_sales"><POSLayout /></RequireAuth>}>
                     <Route index element={<Navigate to={ROUTES.POS_CHECKOUT} replace />} />
                     <Route path="checkout" element={<POSCheckout />} />
@@ -50,9 +56,10 @@ function App() {
                     <Route path="kitchen" element={<POSKitchen />} />
                     <Route path="customers" element={<POSCustomers />} />
                     <Route path="shift" element={<POSShift />} />
+                    <Route path="reservations" element={<POSReservations />} />
                 </Route>
 
-                {/* ── Admin Mode ── */}
+                {/* Admin Mode */}
                 <Route path="/admin" element={<RequireAuth requiredPermission="view_dashboard"><AdminLayout /></RequireAuth>}>
                     <Route index element={<Navigate to={ROUTES.ADMIN_DASHBOARD} replace />} />
                     <Route path="dashboard" element={<Dashboard />} />
@@ -64,9 +71,18 @@ function App() {
                     <Route path="reports" element={<RequireAuth requiredPermission="view_reports"><Reports /></RequireAuth>} />
                     <Route path="users" element={<RequireAuth requiredPermission="manage_users"><UserManagement /></RequireAuth>} />
                     <Route path="settings" element={<Settings />} />
+                    <Route path="audit" element={<RequireAuth requiredPermission="manage_users"><AuditLog /></RequireAuth>} />
                 </Route>
 
-                {/* ── Legacy redirects ── */}
+                {/* Finance Mode */}
+                <Route path="/finance" element={<RequireAuth requiredPermission="view_reports"><AdminLayout /></RequireAuth>}>
+                    <Route index element={<Navigate to={ROUTES.FINANCE_EXPENSES} replace />} />
+                    <Route path="expenses" element={<Expenses />} />
+                    <Route path="purchases" element={<Purchases />} />
+                    <Route path="suppliers" element={<Suppliers />} />
+                </Route>
+
+                {/* Legacy redirects */}
                 <Route path="/" element={<Navigate to="/admin/dashboard" replace />} />
                 <Route path="/dashboard" element={<Navigate to="/admin/dashboard" replace />} />
                 <Route path="/products" element={<Navigate to="/admin/products" replace />} />

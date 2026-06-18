@@ -36,3 +36,4 @@ build/
 .vscode/
 
 ### intellij ###
+application-dev-local.yml
