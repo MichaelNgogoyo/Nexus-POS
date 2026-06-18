@@ -4,6 +4,7 @@ package com.pos.service.impl;
 import com.pos.model.Cart;
 import com.pos.model.CartItem;
 import com.pos.model.Product;
+import com.pos.model.Sales;
 import com.pos.repository.CartItemRepository;
 import com.pos.repository.CartRepository;
 import com.pos.service.ICartService;
@@ -19,6 +20,11 @@ public class CartService implements ICartService {
 
     private final CartRepository cartRepository;
     private final CartItemRepository cartItemRepository;
+    private final CheckoutService checkoutService;
+
+    public Sales checkout(Long userId, String cashierId, String paymentMethod) {
+        return checkoutService.processCheckout(userId, cashierId, paymentMethod);
+    }
 
     @Override
     public Cart cart(long id) {
