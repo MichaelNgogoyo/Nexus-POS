@@ -16,23 +16,23 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${KEYCLOAK_ISSUER_URI:https://pos.mobitechsolutions.co.ke/realms/pos}
+          issuer-uri: ${KEYCLOAK_ISSUER_URI}
       client:
         registration:
           pos-client:
             client-id: ${KEYCLOAK_CLIENT_ID:pos-client}
-            client-secret: ${KEYCLOAK_CLIENT_SECRET:changeme}
+            client-secret: ${KEYCLOAK_CLIENT_SECRET}
             scope: openid, profile, email
             authorization-grant-type: authorization_code
-            redirect-uri: ${KEYCLOAK_REDIRECT_URI:https://pos.mobitechsolutions.co.ke/*}
+            redirect-uri: ${KEYCLOAK_REDIRECT_URI}
             client-name: pos-client
 
         provider:
           pos-keycloak:
-            issuer-uri: ${KEYCLOAK_ISSUER_URI:https://pos.mobitechsolutions.co.ke/realms/pos}
-            authorization-uri: ${KEYCLOAK_ISSUER_URI:https://pos.mobitechsolutions.co.ke/realms/pos}/protocol/openid-connect/auth
-            token-uri: ${KEYCLOAK_ISSUER_URI:https://pos.mobitechsolutions.co.ke/realms/pos}/protocol/openid-connect/token
-            user-info-uri: ${KEYCLOAK_ISSUER_URI:https://pos.mobitechsolutions.co.ke/realms/pos}/protocol/openid-connect/userinfo
+            issuer-uri: ${KEYCLOAK_ISSUER_URI}
+            authorization-uri: ${KEYCLOAK_ISSUER_URI}/protocol/openid-connect/auth
+            token-uri: ${KEYCLOAK_ISSUER_URI}/protocol/openid-connect/token
+            user-info-uri: ${KEYCLOAK_ISSUER_URI}/protocol/openid-connect/userinfo
             user-name-attribute: preferred_username
 
   jpa:
@@ -51,8 +51,8 @@ spring:
 
 minio:
   endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
-  access-key: ${MINIO_ACCESS_KEY:minioadmin}
-  secret-key: ${MINIO_SECRET_KEY:minioadmin}
+  access-key: ${MINIO_ACCESS_KEY}
+  secret-key: ${MINIO_SECRET_KEY}
   bucket: ${MINIO_BUCKET:product-images}
 
 cors:
