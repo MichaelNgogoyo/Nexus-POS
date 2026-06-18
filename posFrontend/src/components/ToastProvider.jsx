@@ -1,5 +1,5 @@
 import React, {createContext, useCallback, useContext, useEffect, useMemo, useState} from "react";
-import {emitToast, setToastListener} from "./toastBus";
+import {setToastListener} from "./toastBus";
 
 const ToastContext = createContext(null);
 
