@@ -2,13 +2,17 @@ spring:
   application:
     name: pos
 
+  config:
+    # Optional local developer overrides from project root (gitignored)
+    import: optional:file:./application-dev-local.yml
+
   thymeleaf:
     cache: false
 
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/pos_db}
-    username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD:postgres}
+    username: ${DB_USERNAME:pos_user}
+    password: ${DB_PASSWORD:}
     driver-class-name: org.postgresql.Driver
 
   security:
