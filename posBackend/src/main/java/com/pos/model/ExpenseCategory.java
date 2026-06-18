@@ -1,0 +1,5 @@
+package com.pos.model;
+
+public enum ExpenseCategory {
+    RENT, SALARIES, ELECTRICITY, WATER, INTERNET, FUEL, MAINTENANCE, FOOD_SUPPLIES, MISCELLANEOUS
+}

@@ -32,6 +32,14 @@ public class Product {
     @Column(name = "low_stock_threshold", columnDefinition = "integer not null default 5")
     private int lowStockThreshold = 5;
 
+    /** Reorder alert threshold — procurement should be triggered when stock falls to this level. */
+    @Builder.Default
+    private Integer reorderLevel = 5;
+
+    /** Suggested quantity to order when restocking. */
+    @Builder.Default
+    private Integer reorderQuantity = 10;
+
     @Column(unique = true)
     private String sku;        // e.g. "PRD-00123"
 
