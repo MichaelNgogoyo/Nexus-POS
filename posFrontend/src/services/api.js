@@ -214,6 +214,42 @@ export const getLowStockProducts = () => apiClient.get('/api/report/low-stock');
 /** GET /api/config/tax-rate — returns { taxRate: number } from backend config. Public endpoint. */
 export const getTaxRate = () => apiClient.get('/api/config/tax-rate');
 
+// ========================================
+// Restaurant Tables API
+// ========================================
+export const getAllTables = () => apiClient.get('/api/tables');
+export const createTable = (data) => apiClient.post('/api/tables', data);
+export const updateTableStatus = (id, status) => apiClient.put(`/api/tables/${id}/status`, { status });
+
+// ========================================
+// Restaurant Orders API
+// ========================================
+export const getActiveOrders = () => apiClient.get('/api/orders');
+export const getOrderById = (id) => apiClient.get(`/api/orders/${id}`);
+export const createOrder = (data) => apiClient.post('/api/orders', data);
+export const updateOrderStatus = (id, status) => apiClient.put(`/api/orders/${id}/status`, { status });
+export const addOrderItem = (orderId, item) => apiClient.post(`/api/orders/${orderId}/items`, item);
+
+// ========================================
+// Kitchen API
+// ========================================
+export const getKitchenOrders = () => apiClient.get('/api/kitchen/orders');
+export const advanceKitchenStatus = (id, status) => apiClient.put(`/api/kitchen/orders/${id}/status`, { status });
+
+// ========================================
+// Shift API
+// ========================================
+export const getCurrentShift = (cashierId) => apiClient.get('/api/shifts/current', { params: { cashierId } });
+export const openShift = (data) => apiClient.post('/api/shifts/open', data);
+export const closeShift = (id, data) => apiClient.put(`/api/shifts/${id}/close`, data);
+
+// ========================================
+// Customers API (POS)
+// ========================================
+export const searchCustomers = (q) => apiClient.get('/api/customers/search', { params: { q } });
+export const createCustomer = (data) => apiClient.post('/api/customers', data);
+export const getAllCustomers = () => apiClient.get('/api/customers');
+
 
 const api = {
     createSale,
@@ -241,6 +277,22 @@ const api = {
     getDashboardSummary,
     getLowStockProducts,
     getTaxRate,
+    getAllTables,
+    createTable,
+    updateTableStatus,
+    getActiveOrders,
+    getOrderById,
+    createOrder,
+    updateOrderStatus,
+    addOrderItem,
+    getKitchenOrders,
+    advanceKitchenStatus,
+    getCurrentShift,
+    openShift,
+    closeShift,
+    searchCustomers,
+    createCustomer,
+    getAllCustomers,
 };
 
 export default api;
