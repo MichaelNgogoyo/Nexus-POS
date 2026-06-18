@@ -1,54 +1,87 @@
+import { memo } from 'react';
 import { useCart } from '../../context/CartContext.jsx';
 import { getProductImageUrl } from '../../services/api.js';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 
-export default function POSProductCard({ product }) {
+const POSProductCard = memo(function POSProductCard({ product }) {
     const { addToCart, cart } = useCart();
-    const inCart = cart.find(i => i.id === product.id);
+    const cartItem = cart.find(i => i.id === product.id);
+    const qty = cartItem?.quantity ?? 0;
+
+    const lowStock = product.quantity > 0 && product.quantity <= (product.lowStockThreshold ?? 5);
+    const outOfStock = product.quantity === 0;
 
     return (
         <button
-            onClick={() => addToCart(product)}
-            className="relative flex flex-col bg-[#1a1a1a] rounded-2xl overflow-hidden border border-white/5 hover:border-violet-500/50 hover:bg-[#222] active:scale-95 transition-all duration-150 text-left group"
+            onClick={() => !outOfStock && addToCart(product)}
+            disabled={outOfStock}
+            className={`relative flex flex-col bg-[#161616] rounded-2xl overflow-hidden border transition-all duration-150 text-left group min-h-[220px] ${
+                outOfStock
+                    ? 'border-white/5 opacity-50 cursor-not-allowed'
+                    : qty > 0
+                    ? 'border-violet-500/60 shadow-lg shadow-violet-600/10'
+                    : 'border-white/5 hover:border-violet-500/40 hover:bg-[#1c1c1c] active:scale-95'
+            }`}
         >
             {/* Image */}
-            <div className="relative w-full aspect-square bg-[#111]">
+            <div className="relative w-full bg-[#111] overflow-hidden" style={{ height: '140px' }}>
                 <img
                     src={getProductImageUrl(product.id)}
                     alt={product.name}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    loading="lazy"
                     onError={e => {
                         e.target.style.display = 'none';
                         e.target.nextSibling.style.display = 'flex';
                     }}
                 />
-                {/* Fallback icon */}
-                <div className="absolute inset-0 hidden items-center justify-center text-gray-600 text-3xl">
+                {/* Emoji fallback */}
+                <div className="absolute inset-0 hidden items-center justify-center text-5xl bg-[#111]">
                     🍽️
                 </div>
 
-                {/* Cart quantity badge */}
-                {inCart && (
-                    <div className="absolute top-2 right-2 min-w-[24px] h-6 bg-violet-600 rounded-full text-white text-xs font-bold flex items-center justify-center px-1.5">
-                        {inCart.quantity}
+                {/* Cart qty badge */}
+                {qty > 0 && (
+                    <div className="absolute top-2.5 right-2.5 min-w-[28px] h-7 bg-violet-600 rounded-full text-white text-sm font-bold flex items-center justify-center px-2 shadow-lg">
+                        {qty}
                     </div>
                 )}
 
-                {/* Hover add overlay */}
-                <div className="absolute inset-0 bg-violet-600/0 group-hover:bg-violet-600/20 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
-                    <div className="w-12 h-12 bg-violet-600 rounded-full flex items-center justify-center shadow-lg">
-                        <AddRoundedIcon className="text-white" sx={{ fontSize: 24 }} />
+                {/* Low stock badge */}
+                {lowStock && !outOfStock && (
+                    <div className="absolute top-2.5 left-2.5 px-2 py-0.5 bg-amber-500/90 rounded-lg text-white text-[10px] font-bold uppercase tracking-wide">
+                        Low Stock
                     </div>
-                </div>
+                )}
+
+                {/* Out of stock overlay */}
+                {outOfStock && (
+                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                        <span className="text-gray-300 text-sm font-semibold">Out of Stock</span>
+                    </div>
+                )}
+
+                {/* Hover add button */}
+                {!outOfStock && (
+                    <div className="absolute inset-0 bg-violet-600/0 group-hover:bg-violet-600/15 transition-all flex items-end justify-end p-2 opacity-0 group-hover:opacity-100">
+                        <div className="w-10 h-10 bg-violet-600 rounded-xl flex items-center justify-center shadow-xl">
+                            <AddRoundedIcon className="text-white" sx={{ fontSize: 22 }} />
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Info */}
-            <div className="p-2.5">
-                <p className="text-white text-sm font-semibold leading-tight line-clamp-2">{product.name}</p>
-                <p className="text-violet-400 font-bold text-base mt-1">
+            <div className="p-3 flex-1 flex flex-col justify-between">
+                <p className="text-white font-semibold leading-snug line-clamp-2 text-[15px]">
+                    {product.name}
+                </p>
+                <p className="text-violet-400 font-bold text-xl mt-1.5">
                     KSh {Number(product.price).toLocaleString()}
                 </p>
             </div>
         </button>
     );
-}
+});
+
+export default POSProductCard;

@@ -2,60 +2,69 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { ROUTES } from '../routes.js';
 import StorefrontRoundedIcon from '@mui/icons-material/StorefrontRounded';
 import PointOfSaleRoundedIcon from '@mui/icons-material/PointOfSaleRounded';
+import TableRestaurantRoundedIcon from '@mui/icons-material/TableRestaurantRounded';
 import ReceiptLongRoundedIcon from '@mui/icons-material/ReceiptLongRounded';
-import AssessmentRoundedIcon from '@mui/icons-material/AssessmentRounded';
+import LocalDiningRoundedIcon from '@mui/icons-material/LocalDiningRounded';
+import GroupsRoundedIcon from '@mui/icons-material/GroupsRounded';
 import BookOnlineRoundedIcon from '@mui/icons-material/BookOnlineRounded';
+import AccessAlarmRoundedIcon from '@mui/icons-material/AccessAlarmRounded';
 import DashboardRoundedIcon from '@mui/icons-material/DashboardRounded';
 
-function SideLink({ to, icon: Icon, children }) {
-  return (
-    <NavLink
-      to={to}
-      className={({ isActive }) =>
-        `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-          isActive
-            ? 'bg-brand-primary/10 text-brand-primary'
-            : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
-        }`
-      }
-    >
-      <Icon sx={{ fontSize: 20 }} />
-      <span>{children}</span>
-    </NavLink>
-  );
-}
+const NAV_ITEMS = [
+    { to: ROUTES.POS_CHECKOUT,     Icon: PointOfSaleRoundedIcon,      label: 'Checkout' },
+    { to: ROUTES.POS_TABLES,       Icon: TableRestaurantRoundedIcon,   label: 'Tables' },
+    { to: ROUTES.POS_KITCHEN,      Icon: LocalDiningRoundedIcon,       label: 'Kitchen' },
+    { to: ROUTES.POS_ORDERS,       Icon: ReceiptLongRoundedIcon,       label: 'Orders' },
+    { to: ROUTES.POS_CUSTOMERS,    Icon: GroupsRoundedIcon,            label: 'Customers' },
+    { to: ROUTES.POS_RESERVATIONS, Icon: BookOnlineRoundedIcon,        label: 'Reservations' },
+    { to: ROUTES.POS_SHIFT,        Icon: AccessAlarmRoundedIcon,       label: 'Shift' },
+];
 
 export default function POSLayout() {
-  return (
-    <div className="min-h-screen bg-[#0a0a0a] flex">
-      {/* Sidebar */}
-      <aside className="fixed left-0 top-0 w-16 h-full bg-[#111] border-r border-white/5 flex flex-col items-center py-4 gap-2 z-50">
-        <div className="mb-4">
-          <StorefrontRoundedIcon sx={{ fontSize: 28 }} className="text-brand-primary" />
-        </div>
-        {[
-          { to: ROUTES.DASHBOARD, Icon: DashboardRoundedIcon, label: 'Dashboard' },
-          { to: ROUTES.CHECKOUT, Icon: PointOfSaleRoundedIcon, label: 'Checkout' },
-          { to: ROUTES.TRANSACTIONS, Icon: ReceiptLongRoundedIcon, label: 'Transactions' },
-          { to: ROUTES.REPORTS, Icon: AssessmentRoundedIcon, label: 'Reports' },
-          { to: ROUTES.POS_RESERVATIONS, Icon: BookOnlineRoundedIcon, label: 'Reservations' },
-        ].map(({ to, Icon, label }) => (
-          <NavLink
-            key={to}
-            to={to}
-            title={label}
-            className={({ isActive }) =>
-              `p-2.5 rounded-xl transition-all ${isActive ? 'bg-brand-primary/20 text-brand-primary' : 'text-white/40 hover:text-white hover:bg-white/5'}`
-            }
-          >
-            <Icon sx={{ fontSize: 22 }} />
-          </NavLink>
-        ))}
-      </aside>
+    return (
+        <div className="flex h-screen w-screen overflow-hidden bg-[#0a0a0a]">
 
-      <main className="flex-1 ml-16 min-h-screen">
-        <Outlet />
-      </main>
-    </div>
-  );
+            {/* ── Icon sidebar ── */}
+            <aside className="flex-shrink-0 w-[60px] h-full bg-[#0d0d0d] border-r border-white/5 flex flex-col items-center py-4 gap-1 z-50">
+                {/* Logo */}
+                <div className="mb-4 p-1">
+                    <StorefrontRoundedIcon sx={{ fontSize: 26 }} className="text-violet-400" />
+                </div>
+
+                {/* Nav links */}
+                <div className="flex-1 flex flex-col items-center gap-1 w-full px-1.5">
+                    {NAV_ITEMS.map(({ to, Icon, label }) => (
+                        <NavLink
+                            key={to}
+                            to={to}
+                            title={label}
+                            className={({ isActive }) =>
+                                `w-full flex items-center justify-center p-3 rounded-xl transition-all ${
+                                    isActive
+                                        ? 'bg-violet-600/25 text-violet-400'
+                                        : 'text-white/30 hover:text-white/70 hover:bg-white/5'
+                                }`
+                            }
+                        >
+                            <Icon sx={{ fontSize: 22 }} />
+                        </NavLink>
+                    ))}
+                </div>
+
+                {/* Admin link at bottom */}
+                <NavLink
+                    to={ROUTES.DASHBOARD}
+                    title="Admin Dashboard"
+                    className="p-3 rounded-xl text-white/20 hover:text-white/50 hover:bg-white/5 transition-all mt-auto"
+                >
+                    <DashboardRoundedIcon sx={{ fontSize: 22 }} />
+                </NavLink>
+            </aside>
+
+            {/* ── Page content ── */}
+            <main className="flex-1 h-full overflow-hidden">
+                <Outlet />
+            </main>
+        </div>
+    );
 }
