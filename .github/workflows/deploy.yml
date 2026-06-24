@@ -205,6 +205,7 @@ jobs:
                 environment:
                   SPRING_PROFILES_ACTIVE: "prod"
                   SERVER_PORT: "8080"
+                  SPRING_JPA_HIBERNATE_DDL_AUTO: "update"
                   DB_URL: "${DB_URL}"
                   DB_USERNAME: "${DB_USERNAME}"
                   DB_PASSWORD: "${DB_PASSWORD}"
