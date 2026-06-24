@@ -18,7 +18,7 @@ env:
   VPS_USER: ${{ secrets.VPS_USER }} # Example: michael
   VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }} # Contents of ~/.ssh/id_ed25519 (private key)
   GHCR_USERNAME: ${{ secrets.GHCR_USERNAME || github.repository_owner }} # Falls back to the repo owner when no dedicated GHCR username secret is set
-  GHCR_PAT: ${{ secrets.GHCR_PAT }} # GitHub PAT with write:packages permission
+  GHCR_PAT: ${{ secrets.GHCR_PAT }} # GitHub PAT with write:packages permission and repo read access for private repos
   APP_DOMAIN: ${{ secrets.APP_DOMAIN }} # Example: nexuspos.apperstar.dev
   IMAGE_NAME_FRONTEND: pos-frontend
   IMAGE_NAME_BACKEND: pos-backend
@@ -40,6 +40,8 @@ jobs:
             echo "GHCR_PAT is missing. Add it in Settings > Secrets and variables > Actions."
             exit 1
           fi
+          echo "Using GHCR username: ${{ env.GHCR_USERNAME }}"
+          echo "Tip: create a PAT with 'write:packages' and 'read:packages' scopes, and ensure it has access to this repository."
           if [ -z "${{ secrets.VPS_HOST }}" ]; then
             echo "VPS_HOST is missing. Add it in Settings > Secrets and variables > Actions."
             exit 1
