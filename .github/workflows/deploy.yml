@@ -62,13 +62,15 @@ jobs:
 
       - name: Build and push frontend image
         run: |
-          docker build -t ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }} -f docker/Dockerfile.frontend .
-          docker push ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }}
+          OWNER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          docker build -t ghcr.io/${OWNER_LC}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }} -f docker/Dockerfile.frontend .
+          docker push ghcr.io/${OWNER_LC}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }}
 
       - name: Build and push backend image
         run: |
-          docker build -t ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }} -f docker/Dockerfile.backend .
-          docker push ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }}
+          OWNER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          docker build -t ghcr.io/${OWNER_LC}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }} -f docker/Dockerfile.backend .
+          docker push ghcr.io/${OWNER_LC}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }}
 
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.0.1
@@ -83,10 +85,12 @@ jobs:
 
             echo "${{ env.GHCR_PAT }}" | docker login ghcr.io -u "${{ env.GHCR_USERNAME }}" --password-stdin
 
-            cat > docker-compose.yml <<'YAML'
+            OWNER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+
+            cat > docker-compose.yml <<YAML
             services:
               backend:
-                image: ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }}
+                image: ghcr.io/${OWNER_LC}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }}
                 ports:
                   - "8080:8080"
                 environment:
@@ -107,7 +111,7 @@ jobs:
                 restart: always
 
               frontend:
-                image: ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }}
+                image: ghcr.io/${OWNER_LC}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }}
                 ports:
                   - "3000:80"
                 restart: always
