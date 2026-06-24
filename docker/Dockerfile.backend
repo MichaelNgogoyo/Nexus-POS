@@ -4,7 +4,7 @@ WORKDIR /workspace
 COPY posBackend/pom.xml ./
 COPY posBackend/.mvn .mvn
 COPY posBackend/src src
-RUN mvn -B -DskipTests package
+RUN mvn -B -DskipTests -Dfrontend.skip=true package
 
 FROM eclipse-temurin:17-jre
 WORKDIR /app
