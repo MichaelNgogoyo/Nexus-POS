@@ -17,6 +17,7 @@ env:
   VPS_HOST: ${{ secrets.VPS_HOST }} # Example: 31.97.116.56
   VPS_USER: ${{ secrets.VPS_USER }} # Example: michael
   VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }} # Contents of ~/.ssh/id_ed25519 (private key)
+  VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }} # Optional fallback when password-based SSH is enabled
   GHCR_USERNAME: ${{ secrets.GHCR_USERNAME || github.repository_owner }} # Falls back to the repo owner when no dedicated GHCR username secret is set
   GHCR_PAT: ${{ secrets.GHCR_PAT }} # GitHub PAT with write:packages permission and repo read access for private repos
   APP_DOMAIN: ${{ secrets.APP_DOMAIN }} # Example: nexuspos.apperstar.dev
@@ -73,6 +74,36 @@ jobs:
           OWNER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           docker build -t ghcr.io/${OWNER_LC}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }} -f docker/Dockerfile.backend .
           docker push ghcr.io/${OWNER_LC}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }}
+
+      - name: Verify SSH access to VPS
+        shell: bash
+        env:
+          VPS_HOST: ${{ env.VPS_HOST }}
+          VPS_USER: ${{ env.VPS_USER }}
+          VPS_SSH_PRIVATE_KEY: ${{ env.VPS_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          cat > /tmp/vps_key <<'EOF'
+          ${{ env.VPS_SSH_PRIVATE_KEY }}
+          EOF
+
+          chmod 600 /tmp/vps_key
+
+          if ! ssh-keygen -y -f /tmp/vps_key >/tmp/vps_key.pub 2>/dev/null; then
+            echo "The provided VPS_SSH_PRIVATE_KEY is not a valid private key."
+            exit 1
+          fi
+
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+          if ! ssh -i /tmp/vps_key -o BatchMode=yes -o StrictHostKeyChecking=yes "${VPS_USER}@${VPS_HOST}" "echo SSH_OK"; then
+            echo "SSH authentication failed. Add the following public key to /home/${VPS_USER}/.ssh/authorized_keys on the VPS:"
+            cat /tmp/vps_key.pub
+            exit 1
+          fi
 
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.0.1
