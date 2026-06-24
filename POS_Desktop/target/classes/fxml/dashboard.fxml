@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.geometry.*?>
+<BorderPane xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="com.pos.desktop.ui.controller.DashboardController">
+    <fx:define>
+        <ToggleGroup fx:id="monthsGroup" />
+    </fx:define>
+    <left>
+        <VBox spacing="18" styleClass="side-nav">
+            <padding><Insets top="24" right="18" bottom="24" left="18"/></padding>
+            <children>
+                <VBox spacing="6" alignment="CENTER_LEFT">
+                    <Label text="Syma Market" styleClass="nav-brand" />
+                    <Label text="Gestion Panel" styleClass="nav-sub" />
+                </VBox>
+                <VBox spacing="12">
+                    <Button text="Overview" styleClass="nav-button" />
+                    <Button text="Orders" styleClass="nav-button" />
+                    <Button text="Cashiers" styleClass="nav-button" />
+                    <Button text="Products" styleClass="nav-button active" />
+                    <Button text="Sign Out" styleClass="nav-button" />
+                </VBox>
+            </children>
+        </VBox>
+    </left>
+    <top>
+        <HBox spacing="12" alignment="CENTER_LEFT" styleClass="top-toolbar">
+            <padding><Insets top="14" right="18" bottom="14" left="18"/></padding>
+            <children>
+                <Label text="Dashboard" styleClass="brand-title" />
+                <Label text="syma" styleClass="brand-title-accent" />
+                <Pane HBox.hgrow="ALWAYS" />
+                <Label text="Année:" styleClass="filter-label" />
+                <ChoiceBox fx:id="yearChoice" />
+                <HBox spacing="4">
+                    <ToggleButton text="Tout" toggleGroup="$monthsGroup" selected="true" styleClass="month-toggle" />
+                    <ToggleButton text="Jan" toggleGroup="$monthsGroup" styleClass="month-toggle" />
+                    <ToggleButton text="Feb" toggleGroup="$monthsGroup" styleClass="month-toggle" />
+                    <ToggleButton text="Mar" toggleGroup="$monthsGroup" styleClass="month-toggle" />
+                    <ToggleButton text="Apr" toggleGroup="$monthsGroup" styleClass="month-toggle" />
+                    <ToggleButton text="May" toggleGroup="$monthsGroup" styleClass="month-toggle" />
+                    <ToggleButton text="Jun" toggleGroup="$monthsGroup" styleClass="month-toggle" />
+                </HBox>
+                <Label fx:id="userLabel" text="" styleClass="brand-subtitle" />
+                <Button fx:id="syncButton" text="Sync" styleClass="pill-button" />
+            </children>
+        </HBox>
+    </top>
+    <center>
+        <ScrollPane fitToWidth="true" fitToHeight="true" styleClass="scroll-pane-clear">
+            <content>
+                <VBox spacing="18" alignment="TOP_CENTER" styleClass="dashboard-root">
+                    <padding><Insets top="18" right="18" bottom="18" left="18"/></padding>
+                    <children>
+                        <HBox spacing="14" alignment="CENTER_LEFT">
+                            <VBox styleClass="metric-card metric-primary">
+                                <Label text="total caissier" styleClass="metric-label" />
+                                <Label fx:id="cashierCountLabel" text="0" styleClass="metric-value" />
+                            </VBox>
+                            <VBox styleClass="metric-card metric-secondary">
+                                <Label text="total produit" styleClass="metric-label" />
+                                <Label fx:id="productCountLabel" text="0" styleClass="metric-value" />
+                            </VBox>
+                            <VBox styleClass="metric-card metric-tertiary">
+                                <Label text="total revenu" styleClass="metric-label" />
+                                <Label fx:id="revenueLabel" text="0" styleClass="metric-value" />
+                            </VBox>
+                            <VBox styleClass="metric-card metric-muted">
+                                <Label text="nombre de commande" styleClass="metric-label" />
+                                <Label fx:id="orderCountLabel" text="0" styleClass="metric-value" />
+                                <Label fx:id="todayRevenueLabel" text="0 aujourd'hui" styleClass="metric-subvalue" />
+                            </VBox>
+                        </HBox>
+
+                        <HBox spacing="14" alignment="CENTER_LEFT">
+                            <VBox styleClass="chart-card" VBox.vgrow="ALWAYS">
+                                <Label text="Ventes totales par caissier" styleClass="chart-title" />
+                                <StackPane styleClass="chart-placeholder" />
+                                <HBox spacing="6" styleClass="legend-row">
+                                    <Label text="saft" styleClass="legend-dot legend-orange" />
+                                    <Label text="SAID" styleClass="legend-dot legend-blue" />
+                                    <Label text="tawfiq" styleClass="legend-dot legend-green" />
+                                </HBox>
+                            </VBox>
+
+                            <VBox styleClass="chart-card" VBox.vgrow="ALWAYS">
+                                <Label text="Total Sales by Weekday" styleClass="chart-title" />
+                                <StackPane styleClass="chart-placeholder" />
+                            </VBox>
+                        </HBox>
+
+                        <HBox spacing="14" alignment="CENTER_LEFT">
+                            <VBox styleClass="chart-card" VBox.vgrow="ALWAYS">
+                                <Label text="Total Sales by Product" styleClass="chart-title" />
+                                <StackPane styleClass="chart-placeholder" />
+                            </VBox>
+                            <VBox styleClass="chart-card" VBox.vgrow="ALWAYS">
+                                <Label text="Total Sales by Category and Date" styleClass="chart-title" />
+                                <StackPane styleClass="chart-placeholder" />
+                            </VBox>
+                            <VBox styleClass="chart-card" VBox.vgrow="ALWAYS">
+                                <Label text="Nombre d'orders par date" styleClass="chart-title" />
+                                <StackPane styleClass="chart-placeholder" />
+                            </VBox>
+                        </HBox>
+
+                        <VBox spacing="10" alignment="TOP_LEFT">
+                            <Label text="Produits" styleClass="module-title" />
+                            <FlowPane fx:id="productFlow" hgap="12" vgap="12" prefWrapLength="1100" />
+                        </VBox>
+                    </children>
+                </VBox>
+            </content>
+        </ScrollPane>
+    </center>
+</BorderPane>
