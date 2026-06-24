@@ -180,8 +180,26 @@ jobs:
 
             cat > docker-compose.yml <<YAML
             services:
+              postgres:
+                image: postgres:16-alpine
+                environment:
+                  POSTGRES_DB: pos_db
+                  POSTGRES_USER: ${DB_USERNAME}
+                  POSTGRES_PASSWORD: ${DB_PASSWORD}
+                volumes:
+                  - postgres-data:/var/lib/postgresql/data
+                healthcheck:
+                  test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d pos_db"]
+                  interval: 10s
+                  timeout: 5s
+                  retries: 10
+                restart: always
+
               backend:
                 image: ghcr.io/${OWNER_LC}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }}
+                depends_on:
+                  postgres:
+                    condition: service_healthy
                 ports:
                   - "127.0.0.1:${BACKEND_PORT}:8080"
                 environment:
@@ -208,6 +226,9 @@ jobs:
                 volumes:
                   - ./frontend-nginx.conf:/etc/nginx/conf.d/default.conf:ro
                 restart: always
+
+            volumes:
+              postgres-data:
             YAML
 
             cat > frontend-nginx.conf <<EOF
