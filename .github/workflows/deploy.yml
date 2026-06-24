@@ -17,7 +17,7 @@ env:
   VPS_HOST: ${{ secrets.VPS_HOST }} # Example: 31.97.116.56
   VPS_USER: ${{ secrets.VPS_USER }} # Example: michael
   VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }} # Contents of ~/.ssh/id_ed25519 (private key)
-  GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }} # Your GitHub username
+  GHCR_USERNAME: ${{ secrets.GHCR_USERNAME || github.repository_owner }} # Falls back to the repo owner when no dedicated GHCR username secret is set
   GHCR_PAT: ${{ secrets.GHCR_PAT }} # GitHub PAT with write:packages permission
   APP_DOMAIN: ${{ secrets.APP_DOMAIN }} # Example: nexuspos.apperstar.dev
   IMAGE_NAME_FRONTEND: pos-frontend
@@ -33,6 +33,25 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: Validate required deployment secrets
+        run: |
+          if [ -z "${{ secrets.GHCR_PAT }}" ]; then
+            echo "GHCR_PAT is missing. Add it in Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          if [ -z "${{ secrets.VPS_HOST }}" ]; then
+            echo "VPS_HOST is missing. Add it in Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          if [ -z "${{ secrets.VPS_USER }}" ]; then
+            echo "VPS_USER is missing. Add it in Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          if [ -z "${{ secrets.VPS_SSH_PRIVATE_KEY }}" ]; then
+            echo "VPS_SSH_PRIVATE_KEY is missing. Add it in Settings > Secrets and variables > Actions."
+            exit 1
+          fi
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
