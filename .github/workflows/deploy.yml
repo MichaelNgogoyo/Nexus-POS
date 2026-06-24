@@ -133,6 +133,18 @@ jobs:
 
             OWNER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
             export APP_DOMAIN="${{ env.APP_DOMAIN }}"
+            export DB_URL="${{ secrets.DB_URL || 'jdbc:postgresql://postgres:5432/pos_db' }}"
+            export DB_USERNAME="${{ secrets.DB_USERNAME || 'pos_user' }}"
+            export DB_PASSWORD="${{ secrets.DB_PASSWORD || 'CHANGE_ME_IN_PRODUCTION' }}"
+            export KEYCLOAK_ISSUER_URI="${{ secrets.KEYCLOAK_ISSUER_URI || 'https://nexuspos.apperstar.dev/auth/realms/master' }}"
+            export KEYCLOAK_CLIENT_ID="${{ secrets.KEYCLOAK_CLIENT_ID || 'pos-client' }}"
+            export KEYCLOAK_CLIENT_SECRET="${{ secrets.KEYCLOAK_CLIENT_SECRET || 'CHANGE_ME_FROM_KEYCLOAK_ADMIN' }}"
+            export KEYCLOAK_REDIRECT_URI="${{ secrets.KEYCLOAK_REDIRECT_URI || 'https://nexuspos.apperstar.dev/api/callback' }}"
+            export MINIO_ENDPOINT="${{ secrets.MINIO_ENDPOINT || 'http://minio:9000' }}"
+            export MINIO_ACCESS_KEY="${{ secrets.MINIO_ACCESS_KEY || 'minioadmin' }}"
+            export MINIO_SECRET_KEY="${{ secrets.MINIO_SECRET_KEY || 'CHANGE_ME_IN_PRODUCTION' }}"
+            export MINIO_BUCKET="${{ secrets.MINIO_BUCKET || 'product-images' }}"
+            export CORS_ALLOWED_ORIGINS="${{ secrets.CORS_ALLOWED_ORIGINS || 'https://nexuspos.apperstar.dev' }}"
             export FRONTEND_PORT=$(python3 - <<'PY'
             import socket
             for start in (3000, 3001, 3002, 3100, 3200, 4000):
@@ -175,18 +187,18 @@ jobs:
                 environment:
                   SPRING_PROFILES_ACTIVE: "prod"
                   SERVER_PORT: "8080"
-                  DB_URL: "jdbc:postgresql://postgres:5432/pos_db"
-                  DB_USERNAME: "pos_user"
-                  DB_PASSWORD: "CHANGE_ME_IN_PRODUCTION"
-                  KEYCLOAK_ISSUER_URI: "https://nexuspos.apperstar.dev/auth/realms/master"
-                  KEYCLOAK_CLIENT_ID: "pos-client"
-                  KEYCLOAK_CLIENT_SECRET: "CHANGE_ME_FROM_KEYCLOAK_ADMIN"
-                  KEYCLOAK_REDIRECT_URI: "https://nexuspos.apperstar.dev/api/callback"
-                  MINIO_ENDPOINT: "http://minio:9000"
-                  MINIO_ACCESS_KEY: "minioadmin"
-                  MINIO_SECRET_KEY: "CHANGE_ME_IN_PRODUCTION"
-                  MINIO_BUCKET: "product-images"
-                  CORS_ALLOWED_ORIGINS: "https://nexuspos.apperstar.dev"
+                  DB_URL: "${DB_URL}"
+                  DB_USERNAME: "${DB_USERNAME}"
+                  DB_PASSWORD: "${DB_PASSWORD}"
+                  KEYCLOAK_ISSUER_URI: "${KEYCLOAK_ISSUER_URI}"
+                  KEYCLOAK_CLIENT_ID: "${KEYCLOAK_CLIENT_ID}"
+                  KEYCLOAK_CLIENT_SECRET: "${KEYCLOAK_CLIENT_SECRET}"
+                  KEYCLOAK_REDIRECT_URI: "${KEYCLOAK_REDIRECT_URI}"
+                  MINIO_ENDPOINT: "${MINIO_ENDPOINT}"
+                  MINIO_ACCESS_KEY: "${MINIO_ACCESS_KEY}"
+                  MINIO_SECRET_KEY: "${MINIO_SECRET_KEY}"
+                  MINIO_BUCKET: "${MINIO_BUCKET}"
+                  CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS}"
                 restart: always
 
               frontend:
