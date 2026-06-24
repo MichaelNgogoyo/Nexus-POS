@@ -5,7 +5,7 @@ COPY posFrontend/package.json posFrontend/package-lock.json ./
 RUN npm ci
 
 COPY posFrontend/. .
-RUN npm run build
+RUN npm run build -- --outDir /app/dist --emptyOutDir
 
 FROM nginx:alpine
 COPY --from=build /app/dist /usr/share/nginx/html
