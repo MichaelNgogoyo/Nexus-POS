@@ -43,12 +43,12 @@ jobs:
 
       - name: Build and push frontend image
         run: |
-          docker build -t ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }} -f docker/Dockerfile.frontend ./posFrontend
+          docker build -t ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }} -f docker/Dockerfile.frontend .
           docker push ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }}
 
       - name: Build and push backend image
         run: |
-          docker build -t ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }} -f docker/Dockerfile.backend ./posBackend
+          docker build -t ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }} -f docker/Dockerfile.backend .
           docker push ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }}
 
       - name: Deploy to VPS
@@ -71,6 +71,7 @@ jobs:
                 ports:
                   - "8080:8080"
                 environment:
+                  SPRING_PROFILES_ACTIVE: "prod"
                   SERVER_PORT: "8080"
                   DB_URL: "jdbc:postgresql://postgres:5432/pos_db"
                   DB_USERNAME: "pos_user"
