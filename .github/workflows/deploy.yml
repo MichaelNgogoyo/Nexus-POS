@@ -1,0 +1,97 @@
+name: Deploy to VPS
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  # GitHub Actions secrets to add in the repository:
+  # Settings -> Secrets and variables -> Actions
+  VPS_HOST: ${{ secrets.VPS_HOST }} # Example: 31.97.116.56
+  VPS_USER: ${{ secrets.VPS_USER }} # Example: michael
+  VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }} # Contents of ~/.ssh/id_ed25519 (private key)
+  GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }} # Your GitHub username
+  GHCR_PAT: ${{ secrets.GHCR_PAT }} # GitHub PAT with write:packages permission
+  APP_DOMAIN: ${{ secrets.APP_DOMAIN }} # Example: nexuspos.apperstar.dev
+  IMAGE_NAME_FRONTEND: pos-frontend
+  IMAGE_NAME_BACKEND: pos-backend
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ env.GHCR_USERNAME }}
+          password: ${{ env.GHCR_PAT }}
+
+      - name: Build and push frontend image
+        run: |
+          docker build -t ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }} -f docker/Dockerfile.frontend ./posFrontend
+          docker push ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }}
+
+      - name: Build and push backend image
+        run: |
+          docker build -t ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }} -f docker/Dockerfile.backend ./posBackend
+          docker push ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }}
+
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.0.1
+        with:
+          host: ${{ env.VPS_HOST }}
+          username: ${{ env.VPS_USER }}
+          key: ${{ env.VPS_SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            mkdir -p /opt/pos
+            cd /opt/pos
+
+            echo "${{ env.GHCR_PAT }}" | docker login ghcr.io -u "${{ env.GHCR_USERNAME }}" --password-stdin
+
+            cat > docker-compose.yml <<'YAML'
+            services:
+              backend:
+                image: ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }}
+                ports:
+                  - "8080:8080"
+                environment:
+                  SERVER_PORT: "8080"
+                  DB_URL: "jdbc:postgresql://postgres:5432/pos_db"
+                  DB_USERNAME: "pos_user"
+                  DB_PASSWORD: "CHANGE_ME_IN_PRODUCTION"
+                  KEYCLOAK_ISSUER_URI: "https://nexuspos.apperstar.dev/auth/realms/master"
+                  KEYCLOAK_CLIENT_ID: "pos-client"
+                  KEYCLOAK_CLIENT_SECRET: "CHANGE_ME_FROM_KEYCLOAK_ADMIN"
+                  KEYCLOAK_REDIRECT_URI: "https://nexuspos.apperstar.dev/api/callback"
+                  MINIO_ENDPOINT: "http://minio:9000"
+                  MINIO_ACCESS_KEY: "minioadmin"
+                  MINIO_SECRET_KEY: "CHANGE_ME_IN_PRODUCTION"
+                  MINIO_BUCKET: "product-images"
+                  CORS_ALLOWED_ORIGINS: "https://nexuspos.apperstar.dev"
+                restart: always
+
+              frontend:
+                image: ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }}
+                ports:
+                  - "3000:80"
+                restart: always
+            YAML
+
+            docker compose pull
+            docker compose up -d --remove-orphans
+            docker ps

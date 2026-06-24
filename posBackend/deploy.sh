@@ -6,7 +6,7 @@ set -e
 
 JAR_NAME="pos-0.0.1-SNAPSHOT.jar"
 REMOTE_USER="michael"
-REMOTE_HOST="20.124.12.140"
+REMOTE_HOST="31.97.116.56"
 REMOTE_DIRECTORY="/opt/pos"
 
 #=== Build Jar ===
