@@ -4,12 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       target_service:
-        description: "Deploy only frontend, backend, or all services"
+        description: "Deploy stack: core (shared infra), backend, frontend, or all"
         required: false
         default: "all"
         type: choice
         options:
           - all
+          - core
           - frontend
           - backend
   push:
@@ -78,7 +79,14 @@ jobs:
         if: ${{ env.TARGET_SERVICE == 'all' || env.TARGET_SERVICE == 'frontend' }}
         run: |
           OWNER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          docker build -t ghcr.io/${OWNER_LC}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }} -f docker/Dockerfile.frontend .
+          docker build \
+            --build-arg VITE_API_BASE_URL="https://${{ env.APP_DOMAIN }}" \
+            --build-arg VITE_KEYCLOAK_URL="https://${{ env.APP_DOMAIN }}/auth" \
+            --build-arg VITE_KEYCLOAK_REALM="${{ secrets.KEYCLOAK_REALM || 'pos' }}" \
+            --build-arg VITE_KEYCLOAK_CLIENT_ID="${{ secrets.KEYCLOAK_CLIENT_ID || 'pos-client' }}" \
+            --build-arg VITE_REDIRECT_URI="https://${{ env.APP_DOMAIN }}" \
+            -t ghcr.io/${OWNER_LC}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }} \
+            -f docker/Dockerfile.frontend .
           docker push ghcr.io/${OWNER_LC}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }}
 
       - name: Build and push backend image
@@ -136,15 +144,29 @@ jobs:
             export DB_URL="${{ secrets.DB_URL || 'jdbc:postgresql://postgres:5432/pos_db' }}"
             export DB_USERNAME="${{ secrets.DB_USERNAME || 'pos_user' }}"
             export DB_PASSWORD="${{ secrets.DB_PASSWORD || 'CHANGE_ME_IN_PRODUCTION' }}"
-            export KEYCLOAK_ISSUER_URI="${{ secrets.KEYCLOAK_ISSUER_URI || 'https://nexuspos.apperstar.dev/auth/realms/master' }}"
+            export KEYCLOAK_REALM="${{ secrets.KEYCLOAK_REALM || 'pos' }}"
+            export KEYCLOAK_ISSUER_URI="${{ secrets.KEYCLOAK_ISSUER_URI || '' }}"
+            if [ -z "$KEYCLOAK_ISSUER_URI" ]; then
+              export KEYCLOAK_ISSUER_URI="https://${APP_DOMAIN}/auth/realms/${KEYCLOAK_REALM}"
+            fi
             export KEYCLOAK_CLIENT_ID="${{ secrets.KEYCLOAK_CLIENT_ID || 'pos-client' }}"
             export KEYCLOAK_CLIENT_SECRET="${{ secrets.KEYCLOAK_CLIENT_SECRET || 'CHANGE_ME_FROM_KEYCLOAK_ADMIN' }}"
-            export KEYCLOAK_REDIRECT_URI="${{ secrets.KEYCLOAK_REDIRECT_URI || 'https://nexuspos.apperstar.dev/api/callback' }}"
+            export KEYCLOAK_REDIRECT_URI="${{ secrets.KEYCLOAK_REDIRECT_URI || '' }}"
+            if [ -z "$KEYCLOAK_REDIRECT_URI" ]; then
+              export KEYCLOAK_REDIRECT_URI="https://${APP_DOMAIN}"
+            fi
             export MINIO_ENDPOINT="${{ secrets.MINIO_ENDPOINT || 'http://minio:9000' }}"
             export MINIO_ACCESS_KEY="${{ secrets.MINIO_ACCESS_KEY || 'minioadmin' }}"
             export MINIO_SECRET_KEY="${{ secrets.MINIO_SECRET_KEY || 'CHANGE_ME_IN_PRODUCTION' }}"
             export MINIO_BUCKET="${{ secrets.MINIO_BUCKET || 'product-images' }}"
-            export CORS_ALLOWED_ORIGINS="${{ secrets.CORS_ALLOWED_ORIGINS || 'https://nexuspos.apperstar.dev' }}"
+            export CORS_ALLOWED_ORIGINS="${{ secrets.CORS_ALLOWED_ORIGINS || '' }}"
+            if [ -z "$CORS_ALLOWED_ORIGINS" ]; then
+              export CORS_ALLOWED_ORIGINS="https://${APP_DOMAIN}"
+            fi
+            export KEYCLOAK_ADMIN="${{ secrets.KEYCLOAK_ADMIN || 'admin' }}"
+            export KEYCLOAK_ADMIN_PASSWORD="${{ secrets.KEYCLOAK_ADMIN_PASSWORD || 'CHANGE_ME_KEYCLOAK_ADMIN_PASSWORD' }}"
+            export MINIO_ROOT_USER="${{ secrets.MINIO_ROOT_USER || 'minioadmin' }}"
+            export MINIO_ROOT_PASSWORD="${{ secrets.MINIO_ROOT_PASSWORD || 'CHANGE_ME_MINIO_ROOT_PASSWORD' }}"
             export FRONTEND_PORT=$(python3 - <<'PY'
             import socket
             for start in (3000, 3001, 3002, 3100, 3200, 4000):
@@ -177,8 +199,9 @@ jobs:
                 print(8081)
             PY
             )
+            docker network inspect pos-shared >/dev/null 2>&1 || docker network create pos-shared
 
-            cat > docker-compose.yml <<YAML
+            cat > docker-compose.core.yml <<YAML
             services:
               postgres:
                 image: postgres:16-alpine
@@ -194,18 +217,59 @@ jobs:
                   timeout: 5s
                   retries: 10
                 restart: always
+                networks:
+                  - pos-shared
 
-              backend:
-                image: ghcr.io/${OWNER_LC}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }}
+              keycloak:
+                image: quay.io/keycloak/keycloak:26.2
+                command: start --http-enabled=true --proxy-headers=xforwarded --hostname-strict=false --http-relative-path=/auth
+                environment:
+                  KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN}
+                  KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+                  KC_DB: postgres
+                  KC_DB_URL: jdbc:postgresql://postgres:5432/pos_db
+                  KC_DB_USERNAME: ${DB_USERNAME}
+                  KC_DB_PASSWORD: ${DB_PASSWORD}
                 depends_on:
                   postgres:
                     condition: service_healthy
+                restart: always
+                networks:
+                  - pos-shared
+                volumes:
+                  - keycloak-data:/opt/keycloak/data
+
+              minio:
+                image: minio/minio:latest
+                command: server /data --console-address ":9001"
+                environment:
+                  MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+                  MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+                restart: always
+                networks:
+                  - pos-shared
+                volumes:
+                  - minio-data:/data
+
+            volumes:
+              postgres-data:
+              keycloak-data:
+              minio-data:
+
+            networks:
+              pos-shared:
+                external: true
+            YAML
+
+            cat > docker-compose.backend.yml <<YAML
+            services:
+              backend:
+                image: ghcr.io/${OWNER_LC}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }}
                 ports:
                   - "127.0.0.1:${BACKEND_PORT}:8080"
                 environment:
                   SPRING_PROFILES_ACTIVE: "prod"
                   SERVER_PORT: "8080"
-                  SPRING_JPA_HIBERNATE_DDL_AUTO: "update"
                   DB_URL: "${DB_URL}"
                   DB_USERNAME: "${DB_USERNAME}"
                   DB_PASSWORD: "${DB_PASSWORD}"
@@ -219,7 +283,16 @@ jobs:
                   MINIO_BUCKET: "${MINIO_BUCKET}"
                   CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS}"
                 restart: always
+                networks:
+                  - pos-shared
 
+            networks:
+              pos-shared:
+                external: true
+            YAML
+
+            cat > docker-compose.frontend.yml <<YAML
+            services:
               frontend:
                 image: ghcr.io/${OWNER_LC}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }}
                 ports:
@@ -227,9 +300,12 @@ jobs:
                 volumes:
                   - ./frontend-nginx.conf:/etc/nginx/conf.d/default.conf:ro
                 restart: always
+                networks:
+                  - pos-shared
 
-            volumes:
-              postgres-data:
+            networks:
+              pos-shared:
+                external: true
             YAML
 
             cat > frontend-nginx.conf <<EOF
@@ -247,7 +323,7 @@ jobs:
               }
 
               location /auth/ {
-                proxy_pass http://backend:8080;
+                proxy_pass http://keycloak:8080/auth/;
                 proxy_set_header Host $host;
                 proxy_set_header X-Real-IP $remote_addr;
                 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -262,17 +338,25 @@ jobs:
             }
             EOF
 
-            docker compose down --remove-orphans || true
-
-            if [ "${{ env.TARGET_SERVICE }}" = "frontend" ]; then
-              docker compose pull frontend
-              docker compose up -d --remove-orphans frontend
-            elif [ "${{ env.TARGET_SERVICE }}" = "backend" ]; then
-              docker compose pull backend
-              docker compose up -d --remove-orphans backend
-            else
-              docker compose pull
-              docker compose up -d --remove-orphans
-            fi
+            case "${{ env.TARGET_SERVICE }}" in
+              core)
+                docker compose -p pos-core -f docker-compose.core.yml up -d --remove-orphans
+                ;;
+              backend)
+                docker compose -p pos-backend -f docker-compose.backend.yml pull backend
+                docker compose -p pos-backend -f docker-compose.backend.yml up -d --remove-orphans backend
+                ;;
+              frontend)
+                docker compose -p pos-frontend -f docker-compose.frontend.yml pull frontend
+                docker compose -p pos-frontend -f docker-compose.frontend.yml up -d --remove-orphans frontend
+                ;;
+              all)
+                docker compose -p pos-core -f docker-compose.core.yml up -d --remove-orphans
+                docker compose -p pos-backend -f docker-compose.backend.yml pull backend
+                docker compose -p pos-backend -f docker-compose.backend.yml up -d --remove-orphans backend
+                docker compose -p pos-frontend -f docker-compose.frontend.yml pull frontend
+                docker compose -p pos-frontend -f docker-compose.frontend.yml up -d --remove-orphans frontend
+                ;;
+            esac
             docker ps
  
