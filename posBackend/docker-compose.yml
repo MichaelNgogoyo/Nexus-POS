@@ -1,0 +1,90 @@
+version: "3.9"
+
+services:
+
+  postgres:
+    image: postgres:17
+    container_name: pos-postgres
+
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.2
+
+    container_name: pos-keycloak
+
+    restart: unless-stopped
+
+    command: start-dev
+
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      KC_DB_USERNAME: ${POSTGRES_USER}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
+
+    depends_on:
+      - postgres
+
+    ports:
+      - "8081:8080"
+
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+
+  minio:
+    image: minio/minio:latest
+
+    container_name: pos-minio
+
+    restart: unless-stopped
+
+    command: server /data --console-address ":9001"
+
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+
+    volumes:
+      - minio_data:/data
+
+  backend:
+    image: pos-backend:latest
+
+    container_name: pos-backend
+
+    restart: unless-stopped
+
+    env_file:
+      - .env
+
+    depends_on:
+      - postgres
+      - keycloak
+      - minio
+
+    ports:
+      - "8080:8080"
+
+volumes:
+  postgres_data:
+  keycloak_data:
+  minio_data:

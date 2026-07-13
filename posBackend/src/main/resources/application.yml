@@ -3,13 +3,13 @@ spring:
     name: pos
 
   profiles:
-    active: dev
+    active: ${SPRING_PROFILES_ACTIVE:dev}
   thymeleaf:
     cache: false
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/pos_db}
-    username: ${DB_USERNAME:pos_user}
-    password: ${DB_PASSWORD:}
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
   security:
@@ -50,13 +50,13 @@ spring:
       max-request-size: 10MB
 
 minio:
-  endpoint: ${MINIO_ENDPOINT:http://localhost:9001}
+  endpoint: ${MINIO_ENDPOINT}
   access-key: ${MINIO_ACCESS_KEY}
   secret-key: ${MINIO_SECRET_KEY}
   bucket: ${MINIO_BUCKET:product-images}
 
 cors:
-  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  allowed-origins: ${CORS_ALLOWED_ORIGINS}
 
 # POS business rules
 pos:
