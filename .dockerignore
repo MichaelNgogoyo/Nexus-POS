@@ -1,0 +1,23 @@
+# Git metadata and editor settings
+.git
+.github
+.vscode
+.idea
+
+# Build artifacts
+**/target
+**/build
+**/dist
+
+# Dependencies
+**/node_modules
+
+# Local runtime files
+**/.env
+**/.env.*
+
+# Non-deployment modules
+POS_Desktop
+seed
+
+docs/screenshots
