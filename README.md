@@ -288,6 +288,149 @@ VITE_REDIRECT_URI=http://localhost:5173
 
 ---
 
+## 🚢 Production Deployment (VPS)
+
+This repository includes a production compose manifest at [docker-compose.production.yml](docker-compose.production.yml) and an environment template at [.env.production.example](.env.production.example).
+
+### 1. Server Prerequisites (Ubuntu/Debian)
+
+Install Docker Engine:
+
+```bash
+sudo apt update
+sudo apt install -y ca-certificates curl gnupg
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo \"$VERSION_CODENAME\") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+sudo apt update
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo usermod -aG docker $USER
+```
+
+Re-login after adding your user to the docker group.
+
+### 2. Configure Environment
+
+```bash
+cp .env.production.example .env.production
+```
+
+Edit `.env.production` and set strong secrets and real image tags.
+
+### 3. Deploy the Stack
+
+```bash
+docker compose --env-file .env.production -f docker-compose.production.yml pull
+docker compose --env-file .env.production -f docker-compose.production.yml up -d
+docker compose --env-file .env.production -f docker-compose.production.yml ps
+```
+
+### 4. Upgrade / Roll Forward
+
+```bash
+docker compose --env-file .env.production -f docker-compose.production.yml pull
+docker compose --env-file .env.production -f docker-compose.production.yml up -d
+```
+
+### 5. Rollback
+
+Pin previous working tags in `.env.production` for `BACKEND_IMAGE` and `FRONTEND_IMAGE`, then run:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.production.yml up -d
+```
+
+---
+
+## 💾 Backup and Restore
+
+### PostgreSQL Backup
+
+```bash
+docker exec -t pos-postgres pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" > backup-pos-$(date +%F-%H%M).sql
+```
+
+### PostgreSQL Restore
+
+```bash
+cat backup-pos-YYYY-MM-DD-HHMM.sql | docker exec -i pos-postgres psql -U "$POSTGRES_USER" "$POSTGRES_DB"
+```
+
+### MinIO Data Backup
+
+```bash
+docker run --rm -v nexus-pos_minio_data:/data -v "$PWD:/backup" alpine tar czf /backup/minio-data-$(date +%F-%H%M).tgz -C /data .
+```
+
+### MinIO Data Restore
+
+```bash
+docker run --rm -v nexus-pos_minio_data:/data -v "$PWD:/backup" alpine sh -c "rm -rf /data/* && tar xzf /backup/minio-data-YYYY-MM-DD-HHMM.tgz -C /data"
+```
+
+---
+
+## 🩺 Health Checks and Smoke Tests
+
+### Container Health
+
+```bash
+docker compose --env-file .env.production -f docker-compose.production.yml ps
+```
+
+### Service Endpoints
+
+```bash
+curl -f http://localhost:8080/actuator/health/readiness
+curl -f http://localhost:8081/auth/realms/master/.well-known/openid-configuration
+curl -f http://localhost:9000/minio/health/live
+curl -f http://localhost:3000/runtime-config.js
+```
+
+### API Smoke Checks
+
+```bash
+curl -f http://localhost:8080/api/report/summary
+curl -f http://localhost:8080/api/product/low-stock
+```
+
+### Frontend Smoke Checks
+
+1. Open `/admin/dashboard` and verify charts load.
+2. Open `/pos/checkout` and verify products render.
+3. Verify login redirects to Keycloak and returns to the app.
+
+---
+
+## 🔍 Troubleshooting
+
+### See logs
+
+```bash
+docker compose --env-file .env.production -f docker-compose.production.yml logs -f backend
+docker compose --env-file .env.production -f docker-compose.production.yml logs -f frontend
+docker compose --env-file .env.production -f docker-compose.production.yml logs -f keycloak
+```
+
+### Validate compose rendering
+
+```bash
+docker compose --env-file .env.production -f docker-compose.production.yml config
+```
+
+### Restart one service
+
+```bash
+docker compose --env-file .env.production -f docker-compose.production.yml restart backend
+```
+
+---
+
 ## 💛 Support & Sponsorship
 
 This project is **free and open source**. If you find it useful for your business or development, please consider supporting its continued development.
