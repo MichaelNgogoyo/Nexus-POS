@@ -16,7 +16,6 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
@@ -86,7 +85,7 @@ class ProductControllerWebMvcTest {
         Product product = Product.builder()
                 .id(11L)
                 .name("Bread")
-                .price(new BigDecimal("8.50"))
+            .price(8.50)
                 .quantity(20)
                 .active(true)
                 .build();

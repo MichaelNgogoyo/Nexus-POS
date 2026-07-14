@@ -87,7 +87,7 @@ export default function OrderPanel({ orderType, onPaymentOpen }) {
                     </div>
                 ) : (
                     <div className="p-4 space-y-2.5">
-                        {cart.map((item, idx) => (
+                        {cart.map((item) => (
                             <div
                                 key={item.id}
                                 className="bg-[#1a1a1a] rounded-2xl p-4 border border-white/5 hover:border-white/10 transition-colors"

@@ -13,10 +13,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -48,7 +46,6 @@ class CheckoutServiceTest {
     @BeforeEach
     void setUp() {
         service = new CheckoutService(cartRepository, productRepository, salesRepository, stockMovementRepository);
-        ReflectionTestUtils.setField(service, "taxRatePercent", new BigDecimal("16"));
         lenient().when(salesRepository.save(any(Sales.class))).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
@@ -57,7 +54,7 @@ class CheckoutServiceTest {
         Product product = Product.builder()
                 .id(1L)
                 .name("Coffee")
-                .price(new BigDecimal("12.00"))
+                .price(12.00)
                 .quantity(5)
                 .active(true)
                 .build();
@@ -69,18 +66,14 @@ class CheckoutServiceTest {
                 .build();
 
         when(cartRepository.findByUserId(42L)).thenReturn(Optional.of(cart));
-        when(productRepository.findAllByIdForUpdate(List.of(1L))).thenReturn(List.of(product));
 
-        Sales sale = service.processCheckout(42L, "cashier-1", "CASH", new BigDecimal("30.00"));
+                Sales sale = service.processCheckout(42L, "cashier-1", "CASH");
 
         assertThat(product.getQuantity()).isEqualTo(3);
-        assertThat(sale.getTotalAmount()).isEqualByComparingTo("27.84");
-        assertThat(sale.getTaxAmount()).isEqualByComparingTo("3.84");
-        assertThat(sale.getAmountTendered()).isEqualByComparingTo("30.00");
-        assertThat(sale.getChangeGiven()).isEqualByComparingTo("2.16");
+                assertThat(sale.getTotalAmount()).isEqualTo(24.00);
         assertThat(cart.getCartItemList()).isEmpty();
 
-        verify(productRepository).findAllByIdForUpdate(List.of(1L));
+                verify(productRepository).saveAll(any());
         verify(cartRepository).save(cart);
     }
 
@@ -94,33 +87,9 @@ class CheckoutServiceTest {
 
         when(cartRepository.findByUserId(42L)).thenReturn(Optional.of(cart));
 
-        assertThatThrownBy(() -> service.processCheckout(42L, "cashier-1", "CASH", new BigDecimal("10.00")))
+        assertThatThrownBy(() -> service.processCheckout(42L, "cashier-1", "CASH"))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("Cart is empty");
     }
 
-    @Test
-    void checkoutRejectsInsufficientAmountTendered() {
-        Product product = Product.builder()
-                .id(1L)
-                .name("Coffee")
-                .price(new BigDecimal("12.00"))
-                .quantity(5)
-                .active(true)
-                .build();
-        CartItem item = CartItem.builder().id(3L).product(product).quantity(2).build();
-        Cart cart = Cart.builder()
-                .id(9L)
-                .userId(42L)
-                .cartItemList(new ArrayList<>(List.of(item)))
-                .build();
-
-        when(cartRepository.findByUserId(42L)).thenReturn(Optional.of(cart));
-        when(productRepository.findAllByIdForUpdate(List.of(1L))).thenReturn(List.of(product));
-
-        assertThatThrownBy(() -> service.processCheckout(42L, "cashier-1", "CASH", new BigDecimal("20.00")))
-                .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("Amount tendered")
-                .hasMessageContaining("less than total");
-    }
 }

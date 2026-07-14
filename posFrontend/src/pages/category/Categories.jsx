@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { listCategories, createCategory, deleteCategory } from '../../services/api';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';

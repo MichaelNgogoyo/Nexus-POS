@@ -20,7 +20,8 @@ function SectionLabel({ label }) {
   );
 }
 
-function SideLink({ to, icon: Icon, children, iconClass = 'text-brand-primary' }) {
+function SideLink({ to, icon, children, iconClass = 'text-brand-primary' }) {
+  const IconComponent = icon;
   return (
     <NavLink
       to={to}
@@ -28,7 +29,7 @@ function SideLink({ to, icon: Icon, children, iconClass = 'text-brand-primary' }
         `nav-link ${isActive ? 'active' : ''}`
       }
     >
-      <Icon className={iconClass} sx={{ fontSize: 22 }} />
+      <IconComponent className={iconClass} sx={{ fontSize: 22 }} />
       <span className="font-medium">{children}</span>
     </NavLink>
   );

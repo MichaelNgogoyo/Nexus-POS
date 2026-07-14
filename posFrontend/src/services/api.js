@@ -1,8 +1,11 @@
 import axios from 'axios';
 import keycloak from '../auth/keycloak';
 import {emitToast} from "../components/toastBus";
+import { runtimeConfig } from "../config/runtimeConfig";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || window.location.origin;
+const API_BASE_URL = runtimeConfig.apiBaseUrl;
+const AUTH_RETRY_KEY = "kc-login-retry-ts";
+const AUTH_RETRY_COOLDOWN_MS = 10_000;
 
 const apiClient = axios.create({
     baseURL: API_BASE_URL,
@@ -27,7 +30,13 @@ apiClient.interceptors.response.use(
     (response) => response,
     (error) => {
         if (error?.response?.status === 401 && keycloak?.authenticated) {
-            keycloak.login({redirectUri: window.location.href});
+            const now = Date.now();
+            const lastRetry = Number(sessionStorage.getItem(AUTH_RETRY_KEY) || 0);
+
+            if (now - lastRetry > AUTH_RETRY_COOLDOWN_MS) {
+                sessionStorage.setItem(AUTH_RETRY_KEY, String(now));
+                keycloak.login({redirectUri: window.location.href});
+            }
         }
 
         const status = error?.response?.status;

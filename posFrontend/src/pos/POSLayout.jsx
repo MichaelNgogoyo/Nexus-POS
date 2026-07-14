@@ -33,22 +33,25 @@ export default function POSLayout() {
 
                 {/* Nav links */}
                 <div className="flex-1 flex flex-col items-center gap-1 w-full px-1.5">
-                    {NAV_ITEMS.map(({ to, Icon, label }) => (
-                        <NavLink
-                            key={to}
-                            to={to}
-                            title={label}
-                            className={({ isActive }) =>
-                                `w-full flex items-center justify-center p-3 rounded-xl transition-all ${
-                                    isActive
-                                        ? 'bg-violet-600/25 text-violet-400'
-                                        : 'text-white/30 hover:text-white/70 hover:bg-white/5'
-                                }`
-                            }
-                        >
-                            <Icon sx={{ fontSize: 22 }} />
-                        </NavLink>
-                    ))}
+                    {NAV_ITEMS.map(({ to, Icon, label }) => {
+                        const IconComponent = Icon;
+                        return (
+                            <NavLink
+                                key={to}
+                                to={to}
+                                title={label}
+                                className={({ isActive }) =>
+                                    `w-full flex items-center justify-center p-3 rounded-xl transition-all ${
+                                        isActive
+                                            ? 'bg-violet-600/25 text-violet-400'
+                                            : 'text-white/30 hover:text-white/70 hover:bg-white/5'
+                                    }`
+                                }
+                            >
+                                <IconComponent sx={{ fontSize: 22 }} />
+                            </NavLink>
+                        );
+                    })}
                 </div>
 
                 {/* Admin link at bottom */}

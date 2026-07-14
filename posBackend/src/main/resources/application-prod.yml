@@ -25,3 +25,13 @@ logging:
   level:
     root: warn
     com.pos: info
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
