@@ -1,17 +1,24 @@
 import Keycloak from "keycloak-js";
+import { runtimeConfig } from "../config/runtimeConfig";
+
+const hasWebCrypto =
+    typeof window !== "undefined" &&
+    window.isSecureContext &&
+    typeof window.crypto !== "undefined" &&
+    typeof window.crypto.subtle !== "undefined";
 
 const keycloakConfig = {
-    url: import.meta.env.VITE_KEYCLOAK_URL || "http://localhost:8081",
-    realm: import.meta.env.VITE_KEYCLOAK_REALM || "pos",
-    clientId: import.meta.env.VITE_KEYCLOAK_CLIENT_ID || "poskeycloakid",
+    url: runtimeConfig.keycloakUrl,
+    realm: runtimeConfig.keycloakRealm,
+    clientId: runtimeConfig.keycloakClientId,
 };
 
 export const keycloakInitOptions = {
     onLoad: "check-sso",
     silentCheckSsoRedirectUri: `${window.location.origin}/silent-check-sso.html`,
     checkLoginIframe: false,
-    redirectUri: import.meta.env.VITE_REDIRECT_URI || window.location.origin,
-    pkceMethod: "S256",
+    redirectUri: runtimeConfig.redirectUri,
+    pkceMethod: hasWebCrypto ? "S256" : false,
 };
 
 const keycloak = new Keycloak(keycloakConfig);

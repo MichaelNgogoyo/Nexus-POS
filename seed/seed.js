@@ -224,7 +224,7 @@ async function main() {
         // 3. Insert product
         await client.query(
           `INSERT INTO product
-             (name, price, active, image_url, discount, quantity,
+             (name, price, active, imageurl, discount, quantity,
               low_stock_threshold, sku, barcode, category_id)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
            ON CONFLICT (sku) DO NOTHING`,

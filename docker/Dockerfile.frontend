@@ -21,5 +21,15 @@ RUN npm run build -- --outDir /app/dist --emptyOutDir
 
 FROM nginx:alpine
 COPY --from=build /app/dist /usr/share/nginx/html
+COPY docker/nginx/default.conf /etc/nginx/conf.d/default.conf
+COPY docker/nginx/40-runtime-config.sh /docker-entrypoint.d/40-runtime-config.sh
+RUN chmod +x /docker-entrypoint.d/40-runtime-config.sh
+
+ENV VITE_API_BASE_URL=http://localhost:8080
+ENV VITE_KEYCLOAK_URL=http://localhost:8081
+ENV VITE_KEYCLOAK_REALM=pos
+ENV VITE_KEYCLOAK_CLIENT_ID=pos-client
+ENV VITE_REDIRECT_URI=http://localhost:3000
+
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
