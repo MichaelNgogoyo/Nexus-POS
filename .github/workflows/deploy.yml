@@ -100,13 +100,43 @@ jobs:
         run: |
           set -euo pipefail
           OWNER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          MINIO_SOURCE_IMAGE="${{ secrets.MINIO_SOURCE_IMAGE || 'quay.io/minio/minio:latest' }}"
+          DOCKERHUB_USERNAME="${{ secrets.DOCKERHUB_USERNAME || '' }}"
+          DOCKERHUB_TOKEN="${{ secrets.DOCKERHUB_TOKEN || '' }}"
+          MINIO_SOURCE_IMAGE_OVERRIDE="${{ secrets.MINIO_SOURCE_IMAGE || '' }}"
 
-          echo "Trying MinIO source image on runner: ${MINIO_SOURCE_IMAGE}"
-          if ! docker pull "${MINIO_SOURCE_IMAGE}"; then
-            MINIO_SOURCE_IMAGE="docker.io/minio/minio:latest"
-            echo "Primary MinIO source pull failed. Falling back to ${MINIO_SOURCE_IMAGE}"
-            docker pull "${MINIO_SOURCE_IMAGE}"
+          if [ -n "$DOCKERHUB_USERNAME" ] && [ -n "$DOCKERHUB_TOKEN" ]; then
+            echo "$DOCKERHUB_TOKEN" | docker login docker.io -u "$DOCKERHUB_USERNAME" --password-stdin >/dev/null 2>&1 || true
+          fi
+
+            LATEST_RELEASE_TAG=""
+            LATEST_RELEASE_TAG=$(curl -fsSL "https://registry.hub.docker.com/v2/repositories/minio/minio/tags?page_size=100" | python3 -c "import json,sys; d=json.load(sys.stdin); print(next((i.get('name','') for i in d.get('results',[]) if i.get('name','').startswith('RELEASE.')), ''))" || true)
+
+          MINIO_SOURCE_CANDIDATES=""
+          if [ -n "$MINIO_SOURCE_IMAGE_OVERRIDE" ]; then
+            MINIO_SOURCE_CANDIDATES="$MINIO_SOURCE_IMAGE_OVERRIDE"
+          fi
+          if [ -n "$LATEST_RELEASE_TAG" ]; then
+            MINIO_SOURCE_CANDIDATES="$MINIO_SOURCE_CANDIDATES docker.io/minio/minio:$LATEST_RELEASE_TAG"
+          fi
+
+          if [ -z "$MINIO_SOURCE_CANDIDATES" ]; then
+            echo "Unable to resolve a MinIO source image automatically."
+            echo "Set MINIO_SOURCE_IMAGE secret to a known working image (for example docker.io/minio/minio:RELEASE.xxxxx)."
+            exit 1
+          fi
+
+          MINIO_SOURCE_IMAGE=""
+          for candidate in $MINIO_SOURCE_CANDIDATES; do
+            echo "Trying MinIO source image on runner: ${candidate}"
+            if docker pull "$candidate"; then
+              MINIO_SOURCE_IMAGE="$candidate"
+              break
+            fi
+          done
+
+          if [ -z "$MINIO_SOURCE_IMAGE" ]; then
+            echo "Failed to pull any MinIO source image candidate: $MINIO_SOURCE_CANDIDATES"
+            exit 1
           fi
 
           GHCR_MINIO_IMAGE="ghcr.io/${OWNER_LC}/${{ env.IMAGE_NAME_MINIO }}:${{ github.sha }}"
@@ -230,7 +260,7 @@ jobs:
               echo "$DOCKERHUB_TOKEN" | docker login docker.io -u "$DOCKERHUB_USERNAME" --password-stdin >/dev/null 2>&1 || true
             fi
 
-            MINIO_CANDIDATES="$MINIO_GHCR_IMAGE quay.io/minio/minio:latest docker.io/minio/minio:latest"
+            MINIO_CANDIDATES="$MINIO_GHCR_IMAGE"
             if [ -n "$MINIO_IMAGE_OVERRIDE" ]; then
               MINIO_CANDIDATES="$MINIO_IMAGE_OVERRIDE $MINIO_CANDIDATES"
             fi
