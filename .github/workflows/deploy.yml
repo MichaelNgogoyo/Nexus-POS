@@ -169,6 +169,7 @@ jobs:
             export KEYCLOAK_ADMIN_PASSWORD="${{ secrets.KEYCLOAK_ADMIN_PASSWORD || 'CHANGE_ME_KEYCLOAK_ADMIN_PASSWORD' }}"
             export MINIO_ROOT_USER="${{ secrets.MINIO_ROOT_USER || 'minioadmin' }}"
             export MINIO_ROOT_PASSWORD="${{ secrets.MINIO_ROOT_PASSWORD || 'CHANGE_ME_MINIO_ROOT_PASSWORD' }}"
+            export MINIO_IMAGE="${{ secrets.MINIO_IMAGE || 'quay.io/minio/minio:latest' }}"
             export FRONTEND_PORT=$(python3 - <<'PY'
             import socket
             for start in (3000, 3001, 3002, 3100, 3200, 4000):
@@ -202,6 +203,12 @@ jobs:
             PY
             )
             docker network inspect pos-shared >/dev/null 2>&1 || docker network create pos-shared
+
+            if ! docker pull "$MINIO_IMAGE" >/dev/null 2>&1; then
+              echo "Failed to pull MinIO image: $MINIO_IMAGE"
+              echo "Set MINIO_IMAGE secret if your host requires a different registry path."
+              exit 1
+            fi
 
             cat > docker-compose.core.yml <<YAML
             services:
@@ -242,7 +249,7 @@ jobs:
                   - keycloak-data:/opt/keycloak/data
 
               minio:
-                image: minio/minio:latest
+                image: ${MINIO_IMAGE}
                 command: server /data --console-address ":9001"
                 environment:
                   MINIO_ROOT_USER: ${MINIO_ROOT_USER}

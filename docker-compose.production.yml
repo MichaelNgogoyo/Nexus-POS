@@ -45,7 +45,7 @@ services:
       - pos-net
 
   minio:
-    image: minio/minio:latest
+    image: ${MINIO_IMAGE:-quay.io/minio/minio:latest}
     container_name: pos-minio
     restart: unless-stopped
     command: server /data --console-address ':9001'
