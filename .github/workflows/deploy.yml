@@ -108,16 +108,20 @@ jobs:
             echo "$DOCKERHUB_TOKEN" | docker login docker.io -u "$DOCKERHUB_USERNAME" --password-stdin >/dev/null 2>&1 || true
           fi
 
-            LATEST_RELEASE_TAG=""
-            LATEST_RELEASE_TAG=$(curl -fsSL "https://registry.hub.docker.com/v2/repositories/minio/minio/tags?page_size=100" | python3 -c "import json,sys; d=json.load(sys.stdin); print(next((i.get('name','') for i in d.get('results',[]) if i.get('name','').startswith('RELEASE.')), ''))" || true)
+          HUB_TAGS_JSON="$(curl -fsSL "https://hub.docker.com/v2/repositories/minio/minio/tags?page_size=100" || true)"
+          LATEST_RELEASE_TAG=""
+          if [ -n "$HUB_TAGS_JSON" ]; then
+            LATEST_RELEASE_TAG=$(printf '%s' "$HUB_TAGS_JSON" | grep -oE '"name"\s*:\s*"RELEASE\.[^"]+"' | head -n1 | sed -E 's/"name"\s*:\s*"([^"]+)"/\1/' || true)
+          fi
 
           MINIO_SOURCE_CANDIDATES=""
           if [ -n "$MINIO_SOURCE_IMAGE_OVERRIDE" ]; then
             MINIO_SOURCE_CANDIDATES="$MINIO_SOURCE_IMAGE_OVERRIDE"
           fi
           if [ -n "$LATEST_RELEASE_TAG" ]; then
-            MINIO_SOURCE_CANDIDATES="$MINIO_SOURCE_CANDIDATES docker.io/minio/minio:$LATEST_RELEASE_TAG"
+            MINIO_SOURCE_CANDIDATES="$MINIO_SOURCE_CANDIDATES docker.io/minio/minio:$LATEST_RELEASE_TAG quay.io/minio/minio:$LATEST_RELEASE_TAG"
           fi
+          MINIO_SOURCE_CANDIDATES="$MINIO_SOURCE_CANDIDATES docker.io/minio/minio:RELEASE.2024-10-13T13-34-11Z quay.io/minio/minio:RELEASE.2024-10-13T13-34-11Z"
 
           if [ -z "$MINIO_SOURCE_CANDIDATES" ]; then
             echo "Unable to resolve a MinIO source image automatically."
