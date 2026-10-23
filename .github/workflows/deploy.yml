@@ -32,6 +32,7 @@ env:
   APP_DOMAIN: ${{ secrets.APP_DOMAIN || 'nexuspos.apperstar.dev' }} # Example: nexuspos.apperstar.dev
   IMAGE_NAME_FRONTEND: nexus-pos-frontend
   IMAGE_NAME_BACKEND: nexus-pos-backend
+  IMAGE_NAME_MINIO: nexus-pos-minio
   TARGET_SERVICE: ${{ github.event.inputs.target_service || 'all' }}
 
 jobs:
@@ -93,6 +94,24 @@ jobs:
           OWNER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           docker build -t ghcr.io/${OWNER_LC}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }} -f docker/Dockerfile.backend .
           docker push ghcr.io/${OWNER_LC}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }}
+
+      - name: Mirror MinIO image to GHCR
+        if: ${{ env.TARGET_SERVICE == 'all' || env.TARGET_SERVICE == 'core' }}
+        run: |
+          set -euo pipefail
+          OWNER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          MINIO_SOURCE_IMAGE="${{ secrets.MINIO_SOURCE_IMAGE || 'quay.io/minio/minio:latest' }}"
+
+          echo "Trying MinIO source image on runner: ${MINIO_SOURCE_IMAGE}"
+          if ! docker pull "${MINIO_SOURCE_IMAGE}"; then
+            MINIO_SOURCE_IMAGE="docker.io/minio/minio:latest"
+            echo "Primary MinIO source pull failed. Falling back to ${MINIO_SOURCE_IMAGE}"
+            docker pull "${MINIO_SOURCE_IMAGE}"
+          fi
+
+          GHCR_MINIO_IMAGE="ghcr.io/${OWNER_LC}/${{ env.IMAGE_NAME_MINIO }}:${{ github.sha }}"
+          docker tag "${MINIO_SOURCE_IMAGE}" "${GHCR_MINIO_IMAGE}"
+          docker push "${GHCR_MINIO_IMAGE}"
 
       - name: Verify SSH access to VPS
         shell: bash
@@ -172,6 +191,7 @@ jobs:
             export MINIO_IMAGE_OVERRIDE="${{ secrets.MINIO_IMAGE || '' }}"
             export DOCKERHUB_USERNAME="${{ secrets.DOCKERHUB_USERNAME || '' }}"
             export DOCKERHUB_TOKEN="${{ secrets.DOCKERHUB_TOKEN || '' }}"
+            export MINIO_GHCR_IMAGE="ghcr.io/${OWNER_LC}/${{ env.IMAGE_NAME_MINIO }}:${{ github.sha }}"
             export FRONTEND_PORT=$(python3 - <<'PY'
             import socket
             for start in (3000, 3001, 3002, 3100, 3200, 4000):
@@ -210,7 +230,7 @@ jobs:
               echo "$DOCKERHUB_TOKEN" | docker login docker.io -u "$DOCKERHUB_USERNAME" --password-stdin >/dev/null 2>&1 || true
             fi
 
-            MINIO_CANDIDATES="quay.io/minio/minio:latest docker.io/minio/minio:latest"
+            MINIO_CANDIDATES="$MINIO_GHCR_IMAGE quay.io/minio/minio:latest docker.io/minio/minio:latest"
             if [ -n "$MINIO_IMAGE_OVERRIDE" ]; then
               MINIO_CANDIDATES="$MINIO_IMAGE_OVERRIDE $MINIO_CANDIDATES"
             fi
