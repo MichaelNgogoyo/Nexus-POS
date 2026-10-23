@@ -292,6 +292,11 @@ VITE_REDIRECT_URI=http://localhost:5173
 
 This repository includes a production compose manifest at [docker-compose.production.yml](docker-compose.production.yml) and an environment template at [.env.production.example](.env.production.example).
 
+Detailed step-by-step guides:
+
+- Keycloak setup guide: [docs/keycloak/README.md](docs/keycloak/README.md)
+- Production rollout guide: [docs/production-rollout/README.md](docs/production-rollout/README.md)
+
 ### 1. Server Prerequisites (Ubuntu/Debian)
 
 Install Docker Engine:
