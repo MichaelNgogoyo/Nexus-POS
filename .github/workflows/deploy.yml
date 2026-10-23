@@ -139,6 +139,10 @@ jobs:
 
             OWNER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
             export APP_DOMAIN="${{ env.APP_DOMAIN }}"
+            if [ -z "$APP_DOMAIN" ]; then
+              echo "APP_DOMAIN is required. Set APP_DOMAIN secret (e.g. nexuspos.apperstar.dev)."
+              exit 1
+            fi
             export DB_URL="${{ secrets.DB_URL || 'jdbc:postgresql://postgres:5432/pos_db' }}"
             export DB_USERNAME="${{ secrets.DB_USERNAME || 'pos_user' }}"
             export DB_PASSWORD="${{ secrets.DB_PASSWORD || 'CHANGE_ME_IN_PRODUCTION' }}"
@@ -306,7 +310,7 @@ jobs:
                 external: true
             YAML
 
-            cat > frontend-nginx.conf <<EOF
+            cat > frontend-nginx.conf <<'EOF'
             server {
               listen 80;
               server_name _;
