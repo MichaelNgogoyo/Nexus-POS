@@ -30,8 +30,8 @@ env:
   VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }} # Contents of ~/.ssh/id_ed25519 (private key)
   VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }} # Optional fallback when password-based SSH is enabled
   APP_DOMAIN: ${{ secrets.APP_DOMAIN }} # Example: nexuspos.apperstar.dev
-  IMAGE_NAME_FRONTEND: pos-frontend
-  IMAGE_NAME_BACKEND: pos-backend
+  IMAGE_NAME_FRONTEND: nexus-pos-frontend
+  IMAGE_NAME_BACKEND: nexus-pos-backend
   TARGET_SERVICE: ${{ github.event.inputs.target_service || 'all' }}
 
 jobs:
