@@ -29,8 +29,8 @@ env:
   VPS_USER: ${{ secrets.VPS_USER }} # Example: michael
   VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }} # Contents of ~/.ssh/id_ed25519 (private key)
   VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }} # Optional fallback when password-based SSH is enabled
-  GHCR_USERNAME: ${{ secrets.GHCR_USERNAME || github.repository_owner }} # Falls back to the repo owner when no dedicated GHCR username secret is set
-  GHCR_PAT: ${{ secrets.GHCR_PAT }} # GitHub PAT with write:packages permission and repo read access for private repos
+  GHCR_USERNAME: ${{ secrets.GHCR_USERNAME || github.actor }} # Prefer explicit secret, fallback to workflow actor to match token identity
+  GHCR_TOKEN: ${{ secrets.GHCR_PAT || github.token }} # Prefer PAT when provided, fallback to GITHUB_TOKEN
   APP_DOMAIN: ${{ secrets.APP_DOMAIN }} # Example: nexuspos.apperstar.dev
   IMAGE_NAME_FRONTEND: pos-frontend
   IMAGE_NAME_BACKEND: pos-backend
@@ -49,12 +49,12 @@ jobs:
 
       - name: Validate required deployment secrets
         run: |
-          if [ -z "${{ secrets.GHCR_PAT }}" ]; then
-            echo "GHCR_PAT is missing. Add it in Settings > Secrets and variables > Actions."
+          echo "Using GHCR username: ${{ env.GHCR_USERNAME }}"
+          if [ -z "${{ env.GHCR_TOKEN }}" ]; then
+            echo "No GHCR token available. Provide GHCR_PAT or allow GITHUB_TOKEN."
             exit 1
           fi
-          echo "Using GHCR username: ${{ env.GHCR_USERNAME }}"
-          echo "Tip: create a PAT with 'write:packages' and 'read:packages' scopes, and ensure it has access to this repository."
+          echo "GHCR token source: GHCR_PAT if set, otherwise GITHUB_TOKEN."
           if [ -z "${{ secrets.VPS_HOST }}" ]; then
             echo "VPS_HOST is missing. Add it in Settings > Secrets and variables > Actions."
             exit 1
@@ -73,7 +73,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ env.GHCR_USERNAME }}
-          password: ${{ env.GHCR_PAT }}
+          password: ${{ env.GHCR_TOKEN }}
 
       - name: Build and push frontend image
         if: ${{ env.TARGET_SERVICE == 'all' || env.TARGET_SERVICE == 'frontend' }}
@@ -137,7 +137,7 @@ jobs:
             mkdir -p /opt/pos
             cd /opt/pos
 
-            echo "${{ env.GHCR_PAT }}" | docker login ghcr.io -u "${{ env.GHCR_USERNAME }}" --password-stdin
+            echo "${{ env.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ env.GHCR_USERNAME }}" --password-stdin
 
             OWNER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
             export APP_DOMAIN="${{ env.APP_DOMAIN }}"
