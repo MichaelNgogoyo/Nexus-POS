@@ -13,6 +13,14 @@ on:
           - core
           - frontend
           - backend
+      deploy_minio:
+        description: "Deploy MinIO as part of core stack"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
   push:
     branches:
       - main
@@ -34,6 +42,7 @@ env:
   IMAGE_NAME_BACKEND: nexus-pos-backend
   IMAGE_NAME_MINIO: nexus-pos-minio
   TARGET_SERVICE: ${{ github.event.inputs.target_service || 'all' }}
+  DEPLOY_MINIO: ${{ github.event.inputs.deploy_minio || 'false' }}
 
 jobs:
   deploy:
@@ -96,7 +105,7 @@ jobs:
           docker push ghcr.io/${OWNER_LC}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }}
 
       - name: Mirror MinIO image to GHCR
-        if: ${{ env.TARGET_SERVICE == 'all' || env.TARGET_SERVICE == 'core' }}
+        if: ${{ (env.TARGET_SERVICE == 'all' || env.TARGET_SERVICE == 'core') && env.DEPLOY_MINIO == 'true' }}
         run: |
           set -euo pipefail
           OWNER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
@@ -226,6 +235,7 @@ jobs:
             export DOCKERHUB_USERNAME="${{ secrets.DOCKERHUB_USERNAME || '' }}"
             export DOCKERHUB_TOKEN="${{ secrets.DOCKERHUB_TOKEN || '' }}"
             export MINIO_GHCR_IMAGE="ghcr.io/${OWNER_LC}/${{ env.IMAGE_NAME_MINIO }}:${{ github.sha }}"
+            export DEPLOY_MINIO="${{ env.DEPLOY_MINIO }}"
             export FRONTEND_PORT=$(python3 - <<'PY'
             import socket
             for start in (3000, 3001, 3002, 3100, 3200, 4000):
@@ -260,30 +270,35 @@ jobs:
             )
             docker network inspect pos-shared >/dev/null 2>&1 || docker network create pos-shared
 
-            if [ -n "$DOCKERHUB_USERNAME" ] && [ -n "$DOCKERHUB_TOKEN" ]; then
-              echo "$DOCKERHUB_TOKEN" | docker login docker.io -u "$DOCKERHUB_USERNAME" --password-stdin >/dev/null 2>&1 || true
-            fi
-
-            MINIO_CANDIDATES="$MINIO_GHCR_IMAGE"
-            if [ -n "$MINIO_IMAGE_OVERRIDE" ]; then
-              MINIO_CANDIDATES="$MINIO_IMAGE_OVERRIDE $MINIO_CANDIDATES"
-            fi
-
-            MINIO_IMAGE=""
-            for candidate in $MINIO_CANDIDATES; do
-              echo "Trying MinIO image: $candidate"
-              if docker pull "$candidate" >/dev/null 2>&1; then
-                MINIO_IMAGE="$candidate"
-                break
+            MINIO_IMAGE="${MINIO_IMAGE_OVERRIDE:-$MINIO_GHCR_IMAGE}"
+            if [ "$DEPLOY_MINIO" = "true" ]; then
+              if [ -n "$DOCKERHUB_USERNAME" ] && [ -n "$DOCKERHUB_TOKEN" ]; then
+                echo "$DOCKERHUB_TOKEN" | docker login docker.io -u "$DOCKERHUB_USERNAME" --password-stdin >/dev/null 2>&1 || true
               fi
-            done
 
-            if [ -z "$MINIO_IMAGE" ]; then
-              echo "Failed to pull MinIO image from all candidates: $MINIO_CANDIDATES"
-              echo "Set MINIO_IMAGE secret to a known working image in your environment."
-              exit 1
+              MINIO_CANDIDATES="$MINIO_IMAGE"
+              if [ -n "$MINIO_IMAGE_OVERRIDE" ]; then
+                MINIO_CANDIDATES="$MINIO_IMAGE_OVERRIDE $MINIO_GHCR_IMAGE"
+              fi
+
+              MINIO_IMAGE=""
+              for candidate in $MINIO_CANDIDATES; do
+                echo "Trying MinIO image: $candidate"
+                if docker pull "$candidate" >/dev/null 2>&1; then
+                  MINIO_IMAGE="$candidate"
+                  break
+                fi
+              done
+
+              if [ -z "$MINIO_IMAGE" ]; then
+                echo "Failed to pull MinIO image from all candidates: $MINIO_CANDIDATES"
+                echo "Set MINIO_IMAGE secret to a known working image in your environment."
+                exit 1
+              fi
+              echo "Using MinIO image: $MINIO_IMAGE"
+            else
+              echo "DEPLOY_MINIO=false, skipping MinIO image pull checks."
             fi
-            echo "Using MinIO image: $MINIO_IMAGE"
 
             cat > docker-compose.core.yml <<YAML
             services:
@@ -325,6 +340,7 @@ jobs:
 
               minio:
                 image: ${MINIO_IMAGE}
+                profiles: ["minio"]
                 command: server /data --console-address ":9001"
                 environment:
                   MINIO_ROOT_USER: ${MINIO_ROOT_USER}
@@ -422,9 +438,14 @@ jobs:
             }
             EOF
 
+            CORE_PROFILE_ARGS=""
+            if [ "$DEPLOY_MINIO" = "true" ]; then
+              CORE_PROFILE_ARGS="--profile minio"
+            fi
+
             case "${{ env.TARGET_SERVICE }}" in
               core)
-                docker compose -p pos-core -f docker-compose.core.yml up -d --remove-orphans
+                docker compose $CORE_PROFILE_ARGS -p pos-core -f docker-compose.core.yml up -d --remove-orphans
                 ;;
               backend)
                 docker compose -p pos-backend -f docker-compose.backend.yml pull backend
@@ -435,7 +456,7 @@ jobs:
                 docker compose -p pos-frontend -f docker-compose.frontend.yml up -d --remove-orphans frontend
                 ;;
               all)
-                docker compose -p pos-core -f docker-compose.core.yml up -d --remove-orphans
+                docker compose $CORE_PROFILE_ARGS -p pos-core -f docker-compose.core.yml up -d --remove-orphans
                 docker compose -p pos-backend -f docker-compose.backend.yml pull backend
                 docker compose -p pos-backend -f docker-compose.backend.yml up -d --remove-orphans backend
                 docker compose -p pos-frontend -f docker-compose.frontend.yml pull frontend
