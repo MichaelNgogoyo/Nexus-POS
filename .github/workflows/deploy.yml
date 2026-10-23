@@ -29,7 +29,7 @@ env:
   VPS_USER: ${{ secrets.VPS_USER }} # Example: michael
   VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }} # Contents of ~/.ssh/id_ed25519 (private key)
   VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }} # Optional fallback when password-based SSH is enabled
-  APP_DOMAIN: ${{ secrets.APP_DOMAIN }} # Example: nexuspos.apperstar.dev
+  APP_DOMAIN: ${{ secrets.APP_DOMAIN || 'nexuspos.apperstar.dev' }} # Example: nexuspos.apperstar.dev
   IMAGE_NAME_FRONTEND: nexus-pos-frontend
   IMAGE_NAME_BACKEND: nexus-pos-backend
   TARGET_SERVICE: ${{ github.event.inputs.target_service || 'all' }}
@@ -169,7 +169,9 @@ jobs:
             export KEYCLOAK_ADMIN_PASSWORD="${{ secrets.KEYCLOAK_ADMIN_PASSWORD || 'CHANGE_ME_KEYCLOAK_ADMIN_PASSWORD' }}"
             export MINIO_ROOT_USER="${{ secrets.MINIO_ROOT_USER || 'minioadmin' }}"
             export MINIO_ROOT_PASSWORD="${{ secrets.MINIO_ROOT_PASSWORD || 'CHANGE_ME_MINIO_ROOT_PASSWORD' }}"
-            export MINIO_IMAGE="${{ secrets.MINIO_IMAGE || 'quay.io/minio/minio:latest' }}"
+            export MINIO_IMAGE_OVERRIDE="${{ secrets.MINIO_IMAGE || '' }}"
+            export DOCKERHUB_USERNAME="${{ secrets.DOCKERHUB_USERNAME || '' }}"
+            export DOCKERHUB_TOKEN="${{ secrets.DOCKERHUB_TOKEN || '' }}"
             export FRONTEND_PORT=$(python3 - <<'PY'
             import socket
             for start in (3000, 3001, 3002, 3100, 3200, 4000):
@@ -204,11 +206,30 @@ jobs:
             )
             docker network inspect pos-shared >/dev/null 2>&1 || docker network create pos-shared
 
-            if ! docker pull "$MINIO_IMAGE" >/dev/null 2>&1; then
-              echo "Failed to pull MinIO image: $MINIO_IMAGE"
-              echo "Set MINIO_IMAGE secret if your host requires a different registry path."
+            if [ -n "$DOCKERHUB_USERNAME" ] && [ -n "$DOCKERHUB_TOKEN" ]; then
+              echo "$DOCKERHUB_TOKEN" | docker login docker.io -u "$DOCKERHUB_USERNAME" --password-stdin >/dev/null 2>&1 || true
+            fi
+
+            MINIO_CANDIDATES="quay.io/minio/minio:latest docker.io/minio/minio:latest"
+            if [ -n "$MINIO_IMAGE_OVERRIDE" ]; then
+              MINIO_CANDIDATES="$MINIO_IMAGE_OVERRIDE $MINIO_CANDIDATES"
+            fi
+
+            MINIO_IMAGE=""
+            for candidate in $MINIO_CANDIDATES; do
+              echo "Trying MinIO image: $candidate"
+              if docker pull "$candidate" >/dev/null 2>&1; then
+                MINIO_IMAGE="$candidate"
+                break
+              fi
+            done
+
+            if [ -z "$MINIO_IMAGE" ]; then
+              echo "Failed to pull MinIO image from all candidates: $MINIO_CANDIDATES"
+              echo "Set MINIO_IMAGE secret to a known working image in your environment."
               exit 1
             fi
+            echo "Using MinIO image: $MINIO_IMAGE"
 
             cat > docker-compose.core.yml <<YAML
             services:
