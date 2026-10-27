@@ -8,6 +8,7 @@ import org.springframework.core.convert.converter.Converter;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -30,6 +31,7 @@ import java.util.Set;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 @Profile("!seed")
 public class SecurityConfig {
 
@@ -48,11 +50,10 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/", "/index.html", "/api/public/**", "/assets/**",
                                 "/static/**", "/shop.svg", "/favicon.ico",
-                                "/swagger-ui/**", "/v3/api-docs/**",
-                                "/api/product/*/image", "/api/register",
-                                "/api/report/summary", "/api/report/low-stock",
+                                "/api/product/*/image",
                                 "/api/config/**", "/actuator/health/**", "/actuator/info"
                         ).permitAll()
+                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").hasRole("ADMIN")
                         .requestMatchers("/admin/**").hasRole("ADMIN")
                         .requestMatchers("/user/**").hasAnyRole("USER", "ADMIN")
                         .anyRequest().authenticated()

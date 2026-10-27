@@ -5,12 +5,14 @@ import com.pos.repository.ComboRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/combos")
 @RequiredArgsConstructor
+@PreAuthorize("hasAnyRole('ADMIN','MANAGER','CASHIER')")
 public class ComboController {
 
     private final ComboRepository comboRepository;
@@ -31,11 +33,13 @@ public class ComboController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public ResponseEntity<Combo> create(@RequestBody Combo combo) {
         return ResponseEntity.ok(comboRepository.save(combo));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public ResponseEntity<Combo> update(@PathVariable Long id, @RequestBody Combo updated) {
         return comboRepository.findById(id).map(existing -> {
             existing.setName(updated.getName());
@@ -47,6 +51,7 @@ public class ComboController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         if (!comboRepository.existsById(id)) return ResponseEntity.notFound().build();
         comboRepository.deleteById(id);

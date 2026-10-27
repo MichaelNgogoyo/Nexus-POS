@@ -8,6 +8,7 @@ import com.pos.repository.PurchaseOrderRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -17,6 +18,7 @@ import java.util.Optional;
 @RestController
 @RequestMapping("/api/purchase-orders")
 @RequiredArgsConstructor
+@PreAuthorize("hasAnyRole('ADMIN','MANAGER','STOCK_CLERK')")
 public class PurchaseOrderController {
 
     private final PurchaseOrderRepository purchaseOrderRepository;

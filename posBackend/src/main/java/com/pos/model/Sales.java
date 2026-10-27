@@ -32,6 +32,29 @@ public class Sales {
     private double changeGiven;        // change returned
     private String paymentMethod;
 
+    @Column(name = "service_charge_amount", nullable = false)
+    @Builder.Default
+    private double serviceChargeAmount = 0.0;
+
+    @Column(name = "idempotency_key", unique = true, length = 64)
+    private String idempotencyKey;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "order_type", length = 32)
+    private OrderType orderType;
+
+    @Column(name = "table_id")
+    private Long tableId;
+
+    @Column(name = "room_number", length = 24)
+    private String roomNumber;
+
+    @Column(name = "guest_name", length = 120)
+    private String guestName;
+
+    @Column(length = 500)
+    private String notes;
+
     @Enumerated(EnumType.STRING)
     private SaleStatus status;
 

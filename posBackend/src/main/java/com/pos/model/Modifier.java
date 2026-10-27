@@ -22,5 +22,6 @@ public class Modifier {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "group_id", nullable = false)
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties({"modifiers", "product"})
     private ModifierGroup group;
 }

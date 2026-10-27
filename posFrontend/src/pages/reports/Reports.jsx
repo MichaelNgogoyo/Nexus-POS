@@ -14,7 +14,7 @@ import PaymentsTab from './tabs/PaymentsTab.jsx';
 import InventoryTab from './tabs/InventoryTab.jsx';
 import InsightsTab from './tabs/InsightsTab.jsx';
 
-import { exportToCSV, exportToExcel } from './utils/exportUtils.js';
+import { exportToCSV } from './utils/exportUtils.js';
 
 import InsightsRounded from '@mui/icons-material/InsightsRounded';
 import DashboardRounded from '@mui/icons-material/DashboardRounded';
@@ -103,7 +103,7 @@ function Reports() {
     })) ?? [];
 
     if (type === 'csv') exportToCSV(summaryExport, 'bi-report-summary');
-    else if (type === 'excel') exportToExcel(summaryExport, 'bi-report-summary', 'Summary');
+    else if (type === 'excel') exportToCSV(summaryExport, 'bi-report-summary');
   };
 
   const sharedProps = {
@@ -169,7 +169,7 @@ function Reports() {
                     onClick={() => handleExport('excel')}
                     className="w-full text-left px-4 py-2.5 text-sm text-text-primary hover:bg-bg-tertiary transition-colors"
                   >
-                    📊 Excel (.xlsx)
+                    📊 Spreadsheet CSV
                   </button>
                   <button
                     onClick={() => handleExport('csv')}

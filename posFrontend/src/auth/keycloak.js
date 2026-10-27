@@ -19,7 +19,6 @@ const keycloakConfig = {
 
 export const keycloakInitOptions = {
     onLoad: "check-sso",
-    silentCheckSsoRedirectUri: `${appOrigin}/silent-check-sso.html`,
     checkLoginIframe: false,
     redirectUri: runtimeConfig.redirectUri || appOrigin,
     pkceMethod: hasWebCrypto ? "S256" : false,

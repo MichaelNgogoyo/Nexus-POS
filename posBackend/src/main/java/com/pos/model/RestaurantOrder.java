@@ -24,6 +24,9 @@ public class RestaurantOrder {
     @Column(unique = true, nullable = false)
     private String orderNumber;
 
+    @Column(name = "idempotency_key", unique = true, length = 64)
+    private String idempotencyKey;
+
     @Enumerated(EnumType.STRING)
     @Builder.Default
     private OrderType orderType = OrderType.DINE_IN;
@@ -38,6 +41,7 @@ public class RestaurantOrder {
 
     private String cashierId;
     private String customerName;
+    private String roomNumber;
     private String notes;
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
@@ -49,6 +53,9 @@ public class RestaurantOrder {
 
     @Builder.Default
     private BigDecimal taxAmount = BigDecimal.ZERO;
+
+    @Builder.Default
+    private BigDecimal serviceChargeAmount = BigDecimal.ZERO;
 
     @Builder.Default
     private BigDecimal discountAmount = BigDecimal.ZERO;

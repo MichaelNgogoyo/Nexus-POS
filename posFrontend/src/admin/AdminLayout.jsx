@@ -37,10 +37,10 @@ function SideLink({ to, icon, children, iconClass = 'text-brand-primary' }) {
 
 export default function AdminLayout() {
   return (
-    <div className="min-h-screen bg-bg-primary">
+    <div className="admin-layout min-h-screen bg-bg-primary">
       <NavBar />
-      <div className="flex pt-16">
-        <aside className="fixed left-0 w-64 h-[calc(100vh-4rem)] bg-bg-secondary border-r border-border-primary shadow-sm flex flex-col overflow-y-auto">
+      <div className="admin-layout-body flex pt-16">
+        <aside className="admin-sidebar fixed left-0 w-64 h-[calc(100vh-4rem)] bg-bg-secondary border-r border-border-primary shadow-sm flex flex-col overflow-y-auto">
           <div className="p-6 border-b border-border-primary">
             <h2 className="text-xl font-bold text-brand-primary flex items-center gap-2">
               <DashboardRoundedIcon sx={{ fontSize: 28 }} />
@@ -76,7 +76,7 @@ export default function AdminLayout() {
           </nav>
         </aside>
 
-        <main className="flex-grow ml-64 p-6 bg-bg-primary min-h-[calc(100vh-4rem)]">
+        <main className="admin-content flex-grow ml-64 p-6 bg-bg-primary min-h-[calc(100vh-4rem)]">
           <div className="max-w-7xl mx-auto">
             <Outlet />
           </div>

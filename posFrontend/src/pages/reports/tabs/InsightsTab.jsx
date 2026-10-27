@@ -158,15 +158,6 @@ function generateInsights(summary, lowStock) {
     }
   }
 
-  insights.push({
-    type: 'tip',
-    icon: 'Lightbulb',
-    title: 'Peak Hours Opportunity',
-    body: 'Lunch hours (12pm–2pm) and dinner hours (7pm–9pm) are typically peak periods. Ensure adequate staffing and stock during these times.',
-    metric: 'Operational',
-    category: 'Operations',
-  });
-
   if (summary?.todayRevenue > 0) {
     insights.push({
       type: 'positive',
@@ -180,14 +171,14 @@ function generateInsights(summary, lowStock) {
     });
   }
 
-  if (summary?.totalSalesCount > 0) {
-    const avg = (summary.totalRevenue || 0) / summary.totalSalesCount;
+  if (summary?.monthSalesCount > 0) {
+    const avg = (summary.monthRevenue || 0) / summary.monthSalesCount;
     if (avg > 0) {
       insights.push({
         type: 'info',
         icon: 'ShoppingCart',
         title: 'Average Order Value',
-        body: `Your average transaction is ${fmt(avg)}. Upselling premium items or bundles could push this higher and improve margins.`,
+        body: `Your average transaction this month is ${fmt(avg)}.`,
         metric: fmt(avg),
         category: 'Revenue',
       });
@@ -236,13 +227,13 @@ export default function InsightsTab({ summary, products, lowStock, isLoading }) 
 
   const perfMetrics = useMemo(() => {
     const totalValue = allProducts.reduce((s, p) => s + (p.price || 0) * (p.quantity || 0), 0);
-    const avgOrder = summary?.totalSalesCount > 0
-      ? (summary?.totalRevenue || 0) / summary.totalSalesCount
+    const avgOrder = summary?.monthSalesCount > 0
+      ? (summary?.monthRevenue || 0) / summary.monthSalesCount
       : 0;
     const topProduct = summary?.topProducts?.[0];
     const completionRate = summary?.recentSales?.length > 0
       ? (summary.recentSales.filter((s) => s.status === 'COMPLETED').length / summary.recentSales.length) * 100
-      : 100;
+      : null;
     return { totalValue, avgOrder, topProduct, completionRate };
   }, [summary, allProducts]);
 
@@ -288,7 +279,7 @@ export default function InsightsTab({ summary, products, lowStock, isLoading }) 
         <h3 className="font-bold text-text-primary mb-4">Performance Summary</h3>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-bg-secondary rounded-2xl border border-border-primary p-4 border-l-4 border-l-emerald-500">
-            <p className="text-xs text-text-muted font-semibold uppercase tracking-wider">Avg Order Value</p>
+            <p className="text-xs text-text-muted font-semibold uppercase tracking-wider">Average order · month to date</p>
             <p className="text-xl font-bold text-text-primary mt-1">{fmt(perfMetrics.avgOrder)}</p>
             <p className="text-xs text-text-muted mt-0.5">Per transaction</p>
           </div>
@@ -298,9 +289,9 @@ export default function InsightsTab({ summary, products, lowStock, isLoading }) 
             <p className="text-xs text-text-muted mt-0.5">Total stock value</p>
           </div>
           <div className="bg-bg-secondary rounded-2xl border border-border-primary p-4 border-l-4 border-l-violet-500">
-            <p className="text-xs text-text-muted font-semibold uppercase tracking-wider">Completion Rate</p>
-            <p className="text-xl font-bold text-text-primary mt-1">{perfMetrics.completionRate.toFixed(0)}%</p>
-            <p className="text-xs text-text-muted mt-0.5">Successful orders</p>
+            <p className="text-xs text-text-muted font-semibold uppercase tracking-wider">Completion · recent sales</p>
+            <p className="text-xl font-bold text-text-primary mt-1">{perfMetrics.completionRate === null ? '—' : `${perfMetrics.completionRate.toFixed(0)}%`}</p>
+            <p className="text-xs text-text-muted mt-0.5">Latest sales returned by API</p>
           </div>
           <div className="bg-bg-secondary rounded-2xl border border-border-primary p-4 border-l-4 border-l-amber-500">
             <p className="text-xs text-text-muted font-semibold uppercase tracking-wider">Top Product</p>

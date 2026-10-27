@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test": "node --test",
     "lint": "eslint .",
     "preview": "vite preview"
   },
@@ -25,8 +26,7 @@
     "react-router-dom": "^7.6.3",
     "react-to-print": "^3.3.0",
     "recharts": "^3.4.1",
-    "tailwindcss": "^3.4.17",
-    "xlsx": "^0.18.5"
+    "tailwindcss": "^3.4.17"
   },
   "devDependencies": {
     "@eslint/js": "^9.30.1",

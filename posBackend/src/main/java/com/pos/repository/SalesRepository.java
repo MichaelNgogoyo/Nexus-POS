@@ -14,6 +14,8 @@ import java.util.Optional;
 
 public interface SalesRepository extends JpaRepository<Sales, Long> {
 
+    Optional<Sales> findByIdempotencyKey(String idempotencyKey);
+
     /** Lightweight paginated list — no collection fetch, safe pagination */
     @Query("SELECT s FROM Sales s ORDER BY s.createdAt DESC")
     Page<Sales> findAllPaged(Pageable pageable);

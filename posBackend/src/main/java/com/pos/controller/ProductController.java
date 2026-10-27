@@ -21,6 +21,7 @@ import java.net.URLConnection;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import org.springframework.data.domain.Page;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 @Slf4j
 @RestController
@@ -33,6 +34,7 @@ public class ProductController {
 
 
     @PostMapping(value = "/create", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public ResponseEntity<?> createProduct(@RequestParam("name") String name,
                                            @RequestParam("price") Double price,
                                            @RequestParam("active") Boolean active,
@@ -80,12 +82,14 @@ public class ProductController {
 
     //update product
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     @ResponseStatus(HttpStatus.CREATED)
     public void updateProduct(@PathVariable long id, @Valid @RequestBody ProductRequest request) {
         productService.updateProduct(id, request);
     }
 
     @PutMapping(value = "/{id}/with-image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public ResponseEntity<?> updateProductWithImage(@PathVariable long id,
                                                     @RequestParam("name") String name,
                                                     @RequestParam("price") Double price,
@@ -103,6 +107,7 @@ public class ProductController {
 
     //delete product
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteProduct(@PathVariable long id) {
         productService.deleteProduct(id);
@@ -122,6 +127,7 @@ public class ProductController {
     }
 
     @PostMapping("/{id}/stock-adjustment")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER','STOCK_CLERK')")
     public ResponseEntity<Product> adjustStock(@PathVariable long id, @Valid @RequestBody StockAdjustmentRequest request) {
         Product updated = productService.adjustStock(id, request.delta(), request.reason());
         return ResponseEntity.ok(updated);

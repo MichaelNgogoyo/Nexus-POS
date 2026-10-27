@@ -7,12 +7,14 @@ import com.pos.repository.RestaurantTableRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/tables")
 @RequiredArgsConstructor
+@PreAuthorize("hasAnyRole('ADMIN','MANAGER','CASHIER')")
 public class TableController {
 
     private final RestaurantTableRepository tableRepository;
@@ -30,11 +32,13 @@ public class TableController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public ResponseEntity<RestaurantTable> createTable(@RequestBody RestaurantTable table) {
         return ResponseEntity.ok(tableRepository.save(table));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public ResponseEntity<RestaurantTable> updateTable(@PathVariable Long id,
                                                        @RequestBody RestaurantTable updated) {
         return tableRepository.findById(id).map(existing -> {
@@ -48,6 +52,7 @@ public class TableController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public ResponseEntity<Void> deleteTable(@PathVariable Long id) {
         if (!tableRepository.existsById(id)) {
             return ResponseEntity.notFound().build();

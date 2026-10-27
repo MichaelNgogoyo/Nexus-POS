@@ -1,94 +1,39 @@
 import { useMemo } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import ReceiptLongRoundedIcon from '@mui/icons-material/ReceiptLongRounded';
-import DineInRoundedIcon from '@mui/icons-material/RestaurantRounded';
-import DeliveryRoundedIcon from '@mui/icons-material/DeliveryDiningRounded';
-import TakeawayRoundedIcon from '@mui/icons-material/ShoppingBagRounded';
+import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
+import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded';
+import { getActiveOrders, updateOrderStatus } from '../../services/api.js';
 
-const ORDER_STATUS = {
-    OPEN:      { label: 'Open',      bg: 'bg-blue-900/40',   border: 'border-blue-700/50',   text: 'text-blue-400',   dot: 'bg-blue-500'   },
-    KITCHEN:   { label: 'Kitchen',   bg: 'bg-orange-900/40', border: 'border-orange-700/50', text: 'text-orange-400', dot: 'bg-orange-500' },
-    READY:     { label: 'Ready',     bg: 'bg-emerald-900/40',border: 'border-emerald-700/50',text: 'text-emerald-400',dot: 'bg-emerald-500'},
-    COMPLETED: { label: 'Completed', bg: 'bg-gray-900/40',   border: 'border-gray-700/50',   text: 'text-gray-400',   dot: 'bg-gray-500'   },
-};
-
-const TYPE_ICON = {
-    'Dine In':  DineInRoundedIcon,
-    'Takeaway': TakeawayRoundedIcon,
-    'Delivery': DeliveryRoundedIcon,
-};
-
-const MOCK_ORDERS = [
-    { id: '#1042', table: 'T-02', type: 'Dine In',  status: 'OPEN',      items: ['Margherita Pizza x2', 'Coke x2'],           time: '8 min ago', total: 42.50 },
-    { id: '#1043', table: 'T-07', type: 'Dine In',  status: 'KITCHEN',   items: ['Pasta Carbonara x1', 'Tiramisu x1'],         time: '12 min ago',total: 28.00 },
-    { id: '#1044', table: null,   type: 'Takeaway', status: 'KITCHEN',   items: ['Burger x2', 'Fries x2', 'Milkshake x1'],    time: '5 min ago', total: 37.80 },
-    { id: '#1045', table: null,   type: 'Delivery', status: 'READY',     items: ['BBQ Ribs x1', 'Coleslaw x1', 'Bread x2'],   time: '22 min ago',total: 55.00 },
-    { id: '#1046', table: 'T-03', type: 'Dine In',  status: 'OPEN',      items: ['Caesar Salad x2', 'Lemonade x2'],            time: '3 min ago', total: 24.00 },
-    { id: '#1047', table: 'T-10', type: 'Dine In',  status: 'COMPLETED', items: ['Seafood Pasta x2', 'White Wine x1'],        time: '35 min ago',total: 68.50 },
-    { id: '#1048', table: null,   type: 'Delivery', status: 'KITCHEN',   items: ['Chicken Wings x3', 'Dipping Sauce x2'],     time: '9 min ago', total: 31.20 },
-    { id: '#1049', table: 'T-05', type: 'Dine In',  status: 'READY',     items: ['Steak x1', 'Mashed Potatoes x1', 'Wine x1'],time: '18 min ago',total: 89.00 },
+const COLUMNS = [
+    { status: 'OPEN', title: 'Open', next: 'KITCHEN', action: 'Send to kitchen' },
+    { status: 'KITCHEN', title: 'In kitchen', next: 'READY', action: 'Mark ready' },
+    { status: 'READY', title: 'Ready', next: 'COMPLETED', action: 'Complete order' },
+    { status: 'COMPLETED', title: 'Completed' },
 ];
+const money = (amount) => `KSh ${Number(amount || 0).toLocaleString('en-KE', { maximumFractionDigits: 2 })}`;
 
 export default function POSOrders() {
+    const client = useQueryClient();
+    const ordersQuery = useQuery({ queryKey: ['orders'], queryFn: () => getActiveOrders().then(({ data }) => data), refetchInterval: 20_000 });
+    const statusMutation = useMutation({
+        mutationFn: ({ id, status }) => updateOrderStatus(id, status),
+        onSuccess: () => client.invalidateQueries({ queryKey: ['orders'] }),
+    });
     const grouped = useMemo(() => {
-        const map = { OPEN: [], KITCHEN: [], READY: [], COMPLETED: [] };
-        MOCK_ORDERS.forEach(o => map[o.status].push(o));
+        const map = Object.fromEntries(COLUMNS.map(({ status }) => [status, []]));
+        (ordersQuery.data ?? []).forEach((order) => {
+            const status = order.status === 'PAID' ? 'COMPLETED' : order.status;
+            if (map[status]) map[status].push(order);
+        });
         return map;
-    }, []);
+    }, [ordersQuery.data]);
+    const activeCount = (ordersQuery.data ?? []).filter((order) => !['COMPLETED', 'PAID', 'CANCELLED', 'REFUNDED'].includes(order.status)).length;
 
-    return (
-        <div className="flex flex-col h-full bg-[#0f0f0f] text-white overflow-hidden">
-            {/* Header */}
-            <div className="flex items-center gap-3 px-6 py-4 border-b border-white/5">
-                <ReceiptLongRoundedIcon sx={{ fontSize: 28 }} className="text-brand-primary" />
-                <h1 className="text-xl font-bold">Active Orders</h1>
-                <span className="ml-auto text-sm text-gray-500">{MOCK_ORDERS.filter(o => o.status !== 'COMPLETED').length} active</span>
-            </div>
-
-            {/* Board */}
-            <div className="flex gap-4 flex-1 overflow-x-auto p-6">
-                {Object.entries(ORDER_STATUS).map(([statusKey, style]) => (
-                    <div key={statusKey} className="flex flex-col min-w-[280px] w-[280px]">
-                        {/* Column header */}
-                        <div className="flex items-center gap-2 mb-3">
-                            <span className={`w-2.5 h-2.5 rounded-full ${style.dot}`} />
-                            <h2 className="text-sm font-semibold text-gray-300">{style.label}</h2>
-                            <span className="ml-auto text-xs text-gray-600 bg-white/5 px-2 py-0.5 rounded-full">
-                                {grouped[statusKey].length}
-                            </span>
-                        </div>
-
-                        {/* Cards */}
-                        <div className="flex flex-col gap-3 overflow-y-auto">
-                            {grouped[statusKey].map(order => {
-                                const TypeIcon = TYPE_ICON[order.type] ?? DineInRoundedIcon;
-                                return (
-                                    <div key={order.id} className={`rounded-2xl p-4 border ${style.bg} ${style.border}`}>
-                                        <div className="flex items-center justify-between mb-3">
-                                            <span className="text-white font-bold">{order.id}</span>
-                                            <span className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-black/30 ${style.text}`}>
-                                                <TypeIcon sx={{ fontSize: 12 }} />
-                                                {order.type}
-                                            </span>
-                                        </div>
-                                        {order.table && (
-                                            <p className="text-gray-400 text-xs mb-2">Table {order.table}</p>
-                                        )}
-                                        <ul className="space-y-0.5 mb-3">
-                                            {order.items.map((item, i) => (
-                                                <li key={i} className="text-gray-300 text-xs">• {item}</li>
-                                            ))}
-                                        </ul>
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-gray-500 text-[10px]">{order.time}</span>
-                                            <span className="text-white font-bold text-sm">${order.total.toFixed(2)}</span>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
+    return <section className="pos-data-page pos-board-page">
+        <header className="pos-page-heading"><div><p className="hotel-eyebrow">SERVICE FLOW</p><h1>Orders</h1><p>Orders refresh automatically while service is running.</p></div><div className="pos-heading-actions"><span className="pos-live-count">{activeCount} active</span><button className="pos-secondary-action" onClick={() => ordersQuery.refetch()}><RefreshRoundedIcon /> Refresh</button></div></header>
+        {ordersQuery.isLoading ? <div className="pos-state">Loading orders…</div> : ordersQuery.isError ? <div className="pos-error" role="alert">Orders could not be loaded. <button onClick={() => ordersQuery.refetch()}><RefreshRoundedIcon /> Try again</button></div> : <div className="pos-order-board">{COLUMNS.map((column) => <section className="pos-order-column" key={column.status}><header><h2>{column.title}</h2><span>{grouped[column.status].length}</span></header>{grouped[column.status].length === 0 ? <div className="pos-column-empty">No {column.title.toLowerCase()} orders.</div> : grouped[column.status].map((order) => <article className="pos-order-card" key={order.id}><div className="pos-order-card-head"><strong>{order.orderNumber || `#${order.id}`}</strong><span>{String(order.orderType || 'ORDER').replaceAll('_', ' ')}</span></div><p className="pos-order-card-sub">{order.table?.name ? `Table ${order.table.name}` : order.roomNumber ? `Room ${order.roomNumber}` : order.customerName || 'Takeaway'}</p><ul>{(order.items || []).map((item) => <li key={item.id || `${item.productId}-${item.productName}`}>{item.quantity} × {item.productName}</li>)}</ul>{order.notes && <p className="pos-order-note">Note: {order.notes}</p>}<div className="pos-order-card-foot"><span>{order.createdAt ? new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Time unavailable'}</span><strong>{money(order.total)}</strong></div>{column.next && <button disabled={statusMutation.isPending} className="pos-order-next" onClick={() => statusMutation.mutate({ id: order.id, status: column.next })}>{column.action}<ArrowForwardRoundedIcon /></button>}</article>)}</section>)}</div>}
+        {statusMutation.isError && <p className="pos-error" role="alert">Order status could not be updated. {statusMutation.error?.response?.data?.message || 'Refresh and retry.'}</p>}
+        {!ordersQuery.isLoading && !ordersQuery.isError && ordersQuery.data?.length === 0 && <div className="pos-state"><ReceiptLongRoundedIcon /><strong>No orders yet</strong><span>New restaurant orders will appear here.</span></div>}
+    </section>;
 }

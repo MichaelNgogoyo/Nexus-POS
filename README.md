@@ -155,7 +155,7 @@ Point_of_Sale_System/
 
 ### Prerequisites
 
-Ensure you have **Docker**, **Java 21**, **Node.js 20+**, and **Maven** installed.
+Ensure you have **Docker**, **Java 17**, **Node.js 20+**, and **Maven** installed.
 
 ### Step 1 — Start Infrastructure
 
@@ -181,7 +181,7 @@ docker run --name pos-keycloak \
   -p 8081:8080 -d quay.io/keycloak/keycloak:24.0 start-dev
 ```
 
-> **Keycloak setup**: Create realm `pos`, client `pos-client` (Public, PKCE enabled), and realm roles: `admin`, `manager`, `cashier`, `clerk`.
+> **Keycloak setup**: Create realm `pos`, client `pos-client` (Public, PKCE enabled), and realm roles: `admin`, `manager`, `cashier`, `stock_clerk`, and `kitchen`.
 
 ### Step 2 — Run the Backend
 
@@ -210,6 +210,7 @@ cd posBackend
 | `MINIO_BUCKET` | `product-images` | MinIO bucket |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:5173` | Allowed frontend origins |
 | `POS_TAX_RATE` | `0` | Tax rate % (e.g. `16` for 16% VAT) |
+| `POS_SERVICE_CHARGE_RATE` | `0` | Configured service charge percentage |
 
 ### Step 3 — Run the Frontend
 

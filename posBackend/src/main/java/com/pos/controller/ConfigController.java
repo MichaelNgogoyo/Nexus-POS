@@ -15,9 +15,12 @@ public class ConfigController {
     @Value("${pos.tax-rate:0}")
     private double taxRate;
 
+    @Value("${pos.service-charge-rate:0}")
+    private double serviceChargeRate;
+
     /** Returns the configured tax rate percentage (e.g. 16 for 16% VAT). Public endpoint. */
     @GetMapping("/tax-rate")
     public ResponseEntity<Map<String, Double>> getTaxRate() {
-        return ResponseEntity.ok(Map.of("taxRate", taxRate));
+        return ResponseEntity.ok(Map.of("taxRate", taxRate, "serviceChargeRate", serviceChargeRate));
     }
 }
