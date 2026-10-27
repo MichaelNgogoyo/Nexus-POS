@@ -364,6 +364,12 @@ jobs:
                 image: ghcr.io/${OWNER_LC}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }}
                 ports:
                   - "127.0.0.1:${FRONTEND_PORT}:80"
+                environment:
+                  VITE_API_BASE_URL: "https://${APP_DOMAIN}"
+                  VITE_KEYCLOAK_URL: "https://${APP_DOMAIN}/auth"
+                  VITE_KEYCLOAK_REALM: "${KEYCLOAK_REALM}"
+                  VITE_KEYCLOAK_CLIENT_ID: "${KEYCLOAK_CLIENT_ID}"
+                  VITE_REDIRECT_URI: "https://${APP_DOMAIN}"
                 volumes:
                   - ./frontend-nginx.conf:/etc/nginx/conf.d/default.conf:ro
                 restart: always
