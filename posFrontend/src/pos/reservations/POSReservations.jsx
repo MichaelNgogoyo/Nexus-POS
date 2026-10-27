@@ -140,7 +140,7 @@ export default function POSReservations() {
                                                 {NEXT_LABEL[r.status]}
                                             </button>
                                         )}
-                                        {r.status !== 'COMPLETED' && r.status !== 'CANCELLED' && (
+                                        {['PENDING', 'CONFIRMED'].includes(r.status) && (
                                             <button disabled={statusMut.isPending} onClick={() => statusMut.mutate({ id: r.id, status: 'CANCELLED' })} className="pos-danger-action">
                                                 Cancel
                                             </button>

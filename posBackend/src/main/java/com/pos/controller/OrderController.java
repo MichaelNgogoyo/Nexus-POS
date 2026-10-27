@@ -6,6 +6,7 @@ import com.pos.repository.ProductRepository;
 import com.pos.repository.RestaurantOrderRepository;
 import com.pos.repository.RestaurantTableRepository;
 import com.pos.repository.ModifierGroupRepository;
+import com.pos.repository.KitchenOrderRepository;
 import com.pos.model.Modifier;
 import com.pos.model.ModifierGroup;
 import com.pos.service.impl.AuditService;
@@ -18,6 +19,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 
@@ -38,6 +40,7 @@ public class OrderController {
     private final RestaurantTableRepository tableRepository;
     private final AuditService auditService;
     private final ModifierGroupRepository modifierGroupRepository;
+    private final KitchenOrderRepository kitchenOrderRepository;
 
     @Value("${pos.tax-rate:0}")
     private double taxRate;
@@ -65,9 +68,14 @@ public class OrderController {
 
     /** Prices, quantities, statuses and totals are server-owned; only item IDs/quantities and service notes are accepted. */
     @PostMapping
+    @Transactional
     public ResponseEntity<RestaurantOrder> createOrder(@RequestBody RestaurantOrder request, Authentication authentication) {
         if (request.getIdempotencyKey() == null || request.getIdempotencyKey().length() < 16 || request.getIdempotencyKey().length() > 64) {
             throw badRequest("An idempotency key between 16 and 64 characters is required");
+        }
+        if (request.getOrderType() == OrderType.ROOM_CHARGE) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "Room charges are unavailable until hotel folio validation and posting are connected");
         }
         RestaurantOrder previous = orderRepository.findByIdempotencyKey(request.getIdempotencyKey()).orElse(null);
         if (previous != null) return ResponseEntity.ok(previous);
@@ -94,6 +102,10 @@ public class OrderController {
     public ResponseEntity<RestaurantOrder> updateOrder(@PathVariable Long id, @RequestBody RestaurantOrder request, Authentication authentication) {
         RestaurantOrder order = orderRepository.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
         if (order.getStatus() != OrderStatus.OPEN) throw badRequest("Only open orders can be edited");
+        if (order.getOrderType() == OrderType.ROOM_CHARGE || request.getOrderType() == OrderType.ROOM_CHARGE) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "Room charges are unavailable until hotel folio validation and posting are connected");
+        }
         if (request.getOrderType() != null) order.setOrderType(request.getOrderType());
         if (request.getRoomNumber() != null) order.setRoomNumber(trimToNull(request.getRoomNumber()));
         if (request.getCustomerName() != null) order.setCustomerName(trimLimit(request.getCustomerName(), 120, "Guest name"));
@@ -108,32 +120,40 @@ public class OrderController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    @Transactional
     public ResponseEntity<RestaurantOrder> cancelOrder(@PathVariable Long id, Authentication authentication) {
         RestaurantOrder order = orderRepository.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
-        if (order.getStatus() == OrderStatus.PAID || order.getStatus() == OrderStatus.CANCELLED || order.getStatus() == OrderStatus.REFUNDED) {
+        if (order.getStatus() == OrderStatus.PAID || order.getStatus() == OrderStatus.CANCELLED
+                || order.getStatus() == OrderStatus.REFUNDED || order.getStatus() == OrderStatus.COMPLETED) {
             throw badRequest("This order cannot be cancelled");
         }
         OrderStatus before = order.getStatus();
         order.setStatus(OrderStatus.CANCELLED);
+        kitchenOrderRepository.findByOrder_Id(id).ifPresent(ticket -> {
+            if (ticket.getStatus() != KitchenStatus.SERVED) {
+                ticket.setStatus(KitchenStatus.CANCELLED);
+                if (order.getItems() != null) order.getItems().forEach(item -> item.setKitchenStatus(KitchenStatus.CANCELLED));
+                kitchenOrderRepository.save(ticket);
+            }
+        });
         RestaurantOrder saved = orderRepository.save(order);
         auditService.log(authentication.getName(), "ORDER_CANCELLED", "RestaurantOrder", id.toString(), before.name(), "CANCELLED");
         return ResponseEntity.ok(saved);
     }
 
     @PutMapping("/{id}/status")
+    @Transactional
     public ResponseEntity<RestaurantOrder> updateStatus(@PathVariable Long id, @Valid @RequestBody OrderStatusRequest request, Authentication authentication) {
         RestaurantOrder order = orderRepository.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
         OrderStatus next;
         try { next = OrderStatus.valueOf(request.getStatus()); }
         catch (RuntimeException exception) { throw badRequest("Unknown order status"); }
         OrderStatus before = order.getStatus();
-        boolean allowed = switch (before) {
-            case OPEN -> next == OrderStatus.KITCHEN;
-            case KITCHEN -> next == OrderStatus.READY;
-            case READY -> next == OrderStatus.COMPLETED;
-            default -> false;
-        };
+        boolean allowed = before == OrderStatus.OPEN && next == OrderStatus.KITCHEN;
         if (!allowed) throw badRequest("Invalid order status transition");
+        if (kitchenOrderRepository.findByOrder_Id(id).isEmpty()) {
+            kitchenOrderRepository.save(KitchenOrder.builder().order(order).status(KitchenStatus.PENDING).notes(order.getNotes()).build());
+        }
         order.setStatus(next);
         RestaurantOrder saved = orderRepository.save(order);
         auditService.log(authentication.getName(), "ORDER_STATUS_CHANGED", "RestaurantOrder", id.toString(), before.name(), next.name());
@@ -209,7 +229,10 @@ public class OrderController {
     }
 
     private void validateRoomOrTable(RestaurantOrder order) {
-        if (order.getOrderType() == OrderType.ROOM_CHARGE && (order.getRoomNumber() == null || order.getRoomNumber().isBlank())) throw badRequest("Room number is required for a room-charge order");
+        if (order.getOrderType() == OrderType.ROOM_CHARGE) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "Room charges are unavailable until hotel folio validation and posting are connected");
+        }
         if (order.getOrderType() == OrderType.DINE_IN && order.getTable() == null) throw badRequest("Select a table for dine-in orders");
     }
 

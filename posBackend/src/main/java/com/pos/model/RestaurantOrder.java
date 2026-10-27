@@ -7,6 +7,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Entity
 @Table(name = "restaurant_orders")
@@ -26,6 +27,9 @@ public class RestaurantOrder {
 
     @Column(name = "idempotency_key", unique = true, length = 64)
     private String idempotencyKey;
+
+    @Column(name = "sale_id", unique = true)
+    private Long saleId;
 
     @Enumerated(EnumType.STRING)
     @Builder.Default
@@ -71,7 +75,7 @@ public class RestaurantOrder {
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
         if (orderNumber == null) {
-            orderNumber = "ORD-" + String.format("%04d", (long) (Math.random() * 9999) + 1);
+            orderNumber = "ORD-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
         }
     }
 

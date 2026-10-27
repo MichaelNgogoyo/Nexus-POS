@@ -24,7 +24,7 @@ The cashier UI is the first user-facing priority. Design and implementation stay
 - **Checks:** Java compile/unit/security tests; frontend lint/build; verify documented DB test setup and no production fixtures.
 - **Stop:** report checkpoint files/commit, baseline outcomes, and unresolved tests.
 
-**Phase 2 status (2026-10-27):** The test foundation is updated and passes: 18 backend tests and 8 frontend unit tests; frontend lint/build pass. The current branch is already `feature/hotel-pos-rebuild`. The working tree remains broadly dirty, so no files were staged and no commit/checkpoint was created under the standing no-commit instruction. The `.env` diff was inspected in redacted form (variable names only). `JavaRefresherCourse2024/` remains untouched and untracked. The configured integration base (`staging` or another branch) has not been confirmed; no branch switch was made.
+**Phase 2 status (2026-10-27):** The test foundation passed before Phase 3/4 work. The current branch is `feature/hotel-pos-rebuild`. After explicit owner authorization, commit `55f517f` captured the POS source/docs/tests while excluding local `.env`, generated bundles, the package lockfile, and `JavaRefresherCourse2024/`. Those excluded local/generated/unrelated files remain uncommitted. The configured integration base (`staging` or another branch) has not been confirmed; no branch switch was made.
 
 ## Phase 3 — Authoritative order lifecycle and cashier vertical slice
 
@@ -33,6 +33,8 @@ The cashier UI is the first user-facing priority. Design and implementation stay
 - **Tests:** valid/invalid inputs, required modifier rules, table race, duplicate create, kitchen ticket linkage, note propagation, transition rules, persistence across requests, responsive/touch/accessibility checks.
 - **Acceptance:** a test order is traceable under one stable identity from creation to KDS/history. Do not claim until verified.
 
+**Phase 3 status (2026-10-27):** Cash checkout now creates a server-priced sale, linked restaurant order, and pending kitchen ticket in one service transaction. `Sales` and `RestaurantOrder` record each other's IDs/order number; kitchen transitions synchronize order state; order cancellation updates unsent tickets; kitchen actions are audited and cannot skip stages. Dine-in table checks use a database row lock in the cash-sale path. Unit tests cover these service/controller rules. The requested PostgreSQL persistence/concurrency trace is still unverified because no local database is running; mocked unit tests do not satisfy the full end-to-end acceptance.
+
 ## Phase 4 — Pricing, checkout, payments, receipt and register
 
 - Make server calculations authoritative; define discount policy/approval, tax/service snapshots, cash acceptance/change, payment state, receipt/history, and register reconciliation.
@@ -40,16 +42,22 @@ The cashier UI is the first user-facing priority. Design and implementation stay
 - **Tests:** total tampering, rounding, insufficient tender, cash success, provider pending/fail/success/unknown/callback, retries/duplicates, refunds if provider supports, receipt permission, shift variance.
 - **Acceptance:** state changes only after server/provider confirmation; reconciliation evidence for ambiguous outcomes.
 
+**Phase 4 status (2026-10-27):** Server-owned catalog prices, 2-decimal line/subtotal/tax/service rounding, cash tender validation/change, sale idempotency, receipt retrieval/printing, cashier receipt ownership, manager-only void/refund API paths, and expected cash/variance calculation at shift close are covered by implementation and unit tests. Card and M-Pesa remain disabled because no provider contract/sandbox is configured. Discounts and a ledger for non-sale cash movements are not implemented; expected drawer cash covers opening float plus completed cash sales only. Full register reconciliation and provider state/callback tests remain open.
+
 ## Phase 5 — Hotel guest and folio
 
 - First obtain/verify PMS API contract and sandbox; then validate active stay, guest-room match, authorization, posting, folio reference, reversal, checkout reconciliation.
 - **Tests:** active and inactive stay, wrong room/guest, unauthorized staff, provider errors/timeouts, duplicate requests, reconciliation.
 - **Gate:** if no PMS access exists, document this as blocked/deferred and keep room charge disabled; never simulate folio posting.
 
+**Phase 5 status (2026-10-27):** Deferred at the integration gate: no PMS contract, sandbox, or credentials are available. To prevent false folio records, room-charge selection is visibly disabled in cashier checkout and the order API rejects room-charge create/update requests with 503. No guest lookup or folio posting is simulated. Active stay validation, authorization rules, post/void references, and reconciliation remain unimplemented until the PMS is identified.
+
 ## Phase 6 — History, adjustments and staff workflow
 
 - Implement only required/verified void, cancellation, discount, refund, feedback, reservation, customer, inventory/purchasing, reports, audit, and role-specific controls; make all POS pages consistent with the accepted design.
 - **Tests:** reasons/approvals/audit, stock compensation, receipt/history scoping, feedback persistence if in scope, report totals against source transactions, and mobile/tablet UI states.
+
+**Phase 6 status (2026-10-27):** Partial. Existing POS pages retain their API-backed loading, empty, and error states. Reservation create/update now validates future dates, party size, and bounded text; creates start as PENDING; status changes follow the cashier UI lifecycle; terminal reservations cannot be edited or reopened; sensitive reservation changes are audited. Tests cover validation, transition rules, and audit behavior. The larger history/adjustment scope remains open where policy is not defined or backing models are absent, including discount approvals, complete cash-movement/refund history, and feedback persistence. Role/ownership coverage and cross-page UI review are not a complete release audit.
 
 ## Phase 7 — Security, integration and release readiness
 

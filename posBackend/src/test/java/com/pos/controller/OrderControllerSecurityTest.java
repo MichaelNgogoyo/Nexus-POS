@@ -5,6 +5,7 @@ import com.pos.repository.ProductRepository;
 import com.pos.repository.RestaurantOrderRepository;
 import com.pos.repository.RestaurantTableRepository;
 import com.pos.repository.ModifierGroupRepository;
+import com.pos.repository.KitchenOrderRepository;
 import com.pos.service.impl.AuditService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,11 +34,12 @@ class OrderControllerSecurityTest {
     @Mock private RestaurantTableRepository tableRepository;
     @Mock private AuditService auditService;
     @Mock private ModifierGroupRepository modifierGroupRepository;
+    @Mock private KitchenOrderRepository kitchenOrderRepository;
     private OrderController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new OrderController(orderRepository, productRepository, tableRepository, auditService, modifierGroupRepository);
+        controller = new OrderController(orderRepository, productRepository, tableRepository, auditService, modifierGroupRepository, kitchenOrderRepository);
         ReflectionTestUtils.setField(controller, "taxRate", 10.0);
         ReflectionTestUtils.setField(controller, "serviceChargeRate", 5.0);
         lenient().when(orderRepository.save(any(RestaurantOrder.class))).thenAnswer(call -> {
@@ -54,7 +56,7 @@ class OrderControllerSecurityTest {
         when(modifierGroupRepository.findByProductId(4L)).thenReturn(List.of());
         OrderItem clientLine = OrderItem.builder().productId(4L).quantity(2)
                 .unitPrice(new BigDecimal("0.01")).lineTotal(new BigDecimal("0.02")).build();
-        RestaurantOrder request = RestaurantOrder.builder().orderType(OrderType.ROOM_CHARGE).roomNumber("312")
+        RestaurantOrder request = RestaurantOrder.builder().orderType(OrderType.TAKEAWAY)
                 .status(OrderStatus.PAID).subtotal(new BigDecimal("0.02")).total(new BigDecimal("0.02"))
                 .idempotencyKey("room-charge-attempt-12345")
                 .items(List.of(clientLine)).build();
@@ -90,21 +92,21 @@ class OrderControllerSecurityTest {
     }
 
     @Test
-    void roomChargeOrderRequiresRoomNumber() {
+    void roomChargeOrderIsUnavailableWithoutHotelFolioIntegration() {
         RestaurantOrder request = RestaurantOrder.builder().orderType(OrderType.ROOM_CHARGE)
                 .idempotencyKey("room-charge-attempt-12345").items(List.of(OrderItem.builder().productId(4L).quantity(1).build())).build();
 
         assertThatThrownBy(() -> controller.createOrder(request,
                 new UsernamePasswordAuthenticationToken("cashier-4", "", List.of())))
                 .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
-                .hasMessageContaining("Room number is required");
+                .hasMessageContaining("Room charges are unavailable");
         verify(orderRepository, never()).save(any());
         verifyNoInteractions(productRepository);
     }
 
     @Test
     void createOrderRejectsClientQuantityOutsideAllowedBounds() {
-        RestaurantOrder request = RestaurantOrder.builder().orderType(OrderType.ROOM_CHARGE).roomNumber("312")
+        RestaurantOrder request = RestaurantOrder.builder().orderType(OrderType.TAKEAWAY)
                 .idempotencyKey("room-charge-attempt-12345")
                 .items(List.of(OrderItem.builder().productId(4L).quantity(0).build())).build();
 
@@ -120,7 +122,7 @@ class OrderControllerSecurityTest {
     void repeatedOrderIdempotencyKeyReturnsOriginalWithoutRepeatingWrites() {
         RestaurantOrder previous = RestaurantOrder.builder().id(25L).orderNumber("ORD-0025").build();
         when(orderRepository.findByIdempotencyKey("room-charge-attempt-12345")).thenReturn(Optional.of(previous));
-        RestaurantOrder request = RestaurantOrder.builder().orderType(OrderType.ROOM_CHARGE).roomNumber("312")
+        RestaurantOrder request = RestaurantOrder.builder().orderType(OrderType.TAKEAWAY)
                 .idempotencyKey("room-charge-attempt-12345").items(List.of(OrderItem.builder().productId(4L).quantity(1).build())).build();
 
         ResponseEntity<RestaurantOrder> response = controller.createOrder(request,

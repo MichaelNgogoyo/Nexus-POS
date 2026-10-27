@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useKeycloak } from '@react-keycloak/web';
-import { createSale, getTaxRate } from '../../services/api.js';
+import { createSale, getSaleReceipt, getTaxRate } from '../../services/api.js';
 import { useCart } from '../../context/CartContext.jsx';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
@@ -10,20 +10,22 @@ import ErrorOutlineRoundedIcon from '@mui/icons-material/ErrorOutlineRounded';
 
 const requestKey = () => globalThis.crypto?.randomUUID?.() ?? `pos-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const money = (amount) => `KSh ${Number(amount || 0).toLocaleString('en-KE', { maximumFractionDigits: 2 })}`;
+const roundMoney = (amount) => Math.round((Number(amount || 0) + Number.EPSILON) * 100) / 100;
 
 export default function PaymentModal({ orderType, tableId, guestName, orderNotes, onClose }) {
     const { keycloak } = useKeycloak();
     const { cart, clearCart } = useCart();
+    const queryClient = useQueryClient();
     const [amountTendered, setAmountTendered] = useState('');
     const [sale, setSale] = useState(null);
     const [idempotencyKey] = useState(requestKey);
     const taxQuery = useQuery({ queryKey: ['taxRate'], queryFn: () => getTaxRate().then(({ data }) => data), staleTime: 300_000 });
     const taxRate = Number(taxQuery.data?.taxRate ?? 0);
     const serviceRate = Number(taxQuery.data?.serviceChargeRate ?? 0);
-    const subtotal = cart.reduce((sum, item) => sum + (Number(item.price) + (item.modifiers || []).reduce((acc, modifier) => acc + Number(modifier.additionalPrice || 0), 0)) * item.quantity, 0);
-    const tax = subtotal * taxRate / 100;
-    const service = subtotal * serviceRate / 100;
-    const total = subtotal + tax + service;
+    const subtotal = roundMoney(cart.reduce((sum, item) => sum + roundMoney(roundMoney(Number(item.price) + (item.modifiers || []).reduce((acc, modifier) => acc + Number(modifier.additionalPrice || 0), 0)) * item.quantity), 0));
+    const tax = roundMoney(subtotal * taxRate / 100);
+    const service = roundMoney(subtotal * serviceRate / 100);
+    const total = roundMoney(subtotal + tax + service);
     const tendered = Number(amountTendered || 0);
     const paymentMutation = useMutation({
         mutationFn: async () => {
@@ -45,10 +47,19 @@ export default function PaymentModal({ orderType, tableId, guestName, orderNotes
             });
             return data;
         },
-        onSuccess: (result) => { setSale(result); clearCart(); },
+        onSuccess: (result) => {
+            setSale(result);
+            clearCart();
+            queryClient.invalidateQueries({ queryKey: ['orders'] });
+            queryClient.invalidateQueries({ queryKey: ['kitchen-orders'] });
+            queryClient.invalidateQueries({ queryKey: ['sales'] });
+            queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
+            queryClient.invalidateQueries({ queryKey: ['current-shift', keycloak?.tokenParsed?.sub || keycloak?.subject] });
+        },
     });
+    const receiptMutation = useMutation({ mutationFn: async () => (await getSaleReceipt(sale.id)).data });
 
-    if (sale) return <div className="pos-dialog-backdrop"><section className="pos-dialog payment-dialog" role="dialog" aria-modal="true" aria-labelledby="payment-success-title"><div className="payment-success-icon"><CheckCircleRoundedIcon /></div><h2 id="payment-success-title">Payment recorded</h2><p>Sale #{sale.id} · {money(sale.totalAmount)} received</p><button className="pos-primary-action" onClick={onClose}>Done</button></section></div>;
+    if (sale) return <div className="pos-dialog-backdrop"><section className="pos-dialog payment-dialog" role="dialog" aria-modal="true" aria-labelledby="payment-success-title"><div className="payment-success-icon"><CheckCircleRoundedIcon /></div><h2 id="payment-success-title">Payment recorded</h2><p>Sale #{sale.id} · {sale.orderNumber ? `Order ${sale.orderNumber} · ` : ''}{money(sale.totalAmount)} received</p>{receiptMutation.data && <pre className="receipt-print-area">{receiptMutation.data}</pre>}{receiptMutation.isError && <p className="hotel-error" role="alert">Receipt could not be loaded. {receiptMutation.error?.response?.data?.message || 'Try again.'}</p>}<footer className="payment-success-actions"><button className="pos-secondary-action" disabled={receiptMutation.isPending} onClick={() => receiptMutation.mutate()}>{receiptMutation.isPending ? 'Loading receipt…' : receiptMutation.data ? 'Reload receipt' : 'Load receipt'}</button>{receiptMutation.data && <button className="pos-secondary-action" onClick={() => window.print()}>Print receipt</button>}<button className="pos-primary-action" onClick={onClose}>Done</button></footer></section></div>;
 
     return (
         <div className="pos-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !paymentMutation.isPending) onClose(); }}>

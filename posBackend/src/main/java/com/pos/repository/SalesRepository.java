@@ -31,6 +31,9 @@ public interface SalesRepository extends JpaRepository<Sales, Long> {
     @Query("SELECT COUNT(s) FROM Sales s WHERE s.status = 'COMPLETED' AND s.createdAt >= :since")
     long countSalesSince(@Param("since") LocalDateTime since);
 
+    @Query("SELECT COALESCE(SUM(s.totalAmount), 0) FROM Sales s WHERE s.cashierId = :cashierId AND s.paymentMethod = 'CASH' AND s.status = 'COMPLETED' AND s.createdAt >= :since")
+    double sumCashSalesSince(@Param("cashierId") String cashierId, @Param("since") LocalDateTime since);
+
     /** Daily revenue grouped by day for chart data (last N days) */
     @Query("SELECT CAST(s.createdAt AS date) AS day, COALESCE(SUM(s.totalAmount), 0) AS revenue, COUNT(s) AS txCount " +
            "FROM Sales s WHERE s.status = 'COMPLETED' AND s.createdAt >= :since " +

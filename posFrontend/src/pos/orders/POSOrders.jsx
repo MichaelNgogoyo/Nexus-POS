@@ -7,8 +7,8 @@ import { getActiveOrders, updateOrderStatus } from '../../services/api.js';
 
 const COLUMNS = [
     { status: 'OPEN', title: 'Open', next: 'KITCHEN', action: 'Send to kitchen' },
-    { status: 'KITCHEN', title: 'In kitchen', next: 'READY', action: 'Mark ready' },
-    { status: 'READY', title: 'Ready', next: 'COMPLETED', action: 'Complete order' },
+    { status: 'KITCHEN', title: 'In kitchen' },
+    { status: 'READY', title: 'Ready' },
     { status: 'COMPLETED', title: 'Completed' },
 ];
 const money = (amount) => `KSh ${Number(amount || 0).toLocaleString('en-KE', { maximumFractionDigits: 2 })}`;

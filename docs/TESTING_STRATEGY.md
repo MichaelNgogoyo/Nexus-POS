@@ -5,7 +5,7 @@
 - Backend: JUnit 5/Spring Boot Test, Mockito, MockMvc. Current test classes include product controller, category/checkout services, order security, sale idempotency, and application context tests.
 - Frontend: ESLint, Vite production build, and Node's built-in test runner (`npm test`). Unit coverage currently includes menu search/category/popularity helpers and cart line add/remove behavior. No browser E2E runner is configured.
 - No PostgreSQL Testcontainers dependency or verified reusable isolated database integration environment was found in the inspected POM.
-- Phase 2 baseline: `cd posBackend && JAVA_HOME=/home/apperstar/.jdks/ms-21.0.11 PATH=/home/apperstar/.jdks/ms-21.0.11/bin:$PATH ./mvnw -Dfrontend.skip=true test` passed 18 backend tests, including four added order validation/idempotency cases. Frontend `npm test` passed 8 unit tests; lint passed with 0 errors and 14 warnings in existing components/reports; production build passed.
+- Phase 3–6 checks (2026-10-27): `cd posBackend && JAVA_HOME=/home/apperstar/.jdks/ms-21.0.11 PATH=/home/apperstar/.jdks/ms-21.0.11/bin:$PATH ./mvnw -Dfrontend.skip=true test` passed 31 tests covering catalog-authoritative cash totals, linked sale/order/kitchen creation, kitchen transitions, cashier-owned receipt access, reservation validation and transitions, unavailable room charges, insufficient or missing tender, and shift expected-cash variance. Frontend `npm test` passed 8 unit tests; lint passed with 0 errors and 14 existing warnings; production build passed. Database-backed persistence and browser E2E were not run: local PostgreSQL is not responding, and the production Compose file cannot resolve without its environment variables.
 
 ## Test layers to add using repository-compatible tools
 

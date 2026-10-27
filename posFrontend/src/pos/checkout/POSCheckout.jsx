@@ -1,8 +1,8 @@
 import { useMemo, useState, Suspense, lazy } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useKeycloak } from '@react-keycloak/web';
 import {
-  createOrder, getAllProducts, getAllTables, getDashboardSummary, getModifierGroups,
+  getAllProducts, getAllTables, getDashboardSummary, getModifierGroups,
   getTaxRate, listCategories, searchCustomers,
 } from '../../services/api.js';
 import { usePermissions } from '../../auth/permissions.js';
@@ -20,33 +20,30 @@ import LocalHotelRoundedIcon from '@mui/icons-material/LocalHotelRounded';
 import ShoppingBagOutlinedIcon from '@mui/icons-material/ShoppingBagOutlined';
 import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
-import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import {
   ALL_CATEGORIES, filterMenuProducts, getMenuCategories, popularMenuProducts,
 } from './menuUtils.js';
 
 const PaymentModal = lazy(() => import('./PaymentModal.jsx'));
 const money = (amount) => `KSh ${Number(amount || 0).toLocaleString('en-KE', { maximumFractionDigits: 2 })}`;
-const requestKey = () => globalThis.crypto?.randomUUID?.() ?? `pos-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+const roundMoney = (amount) => Math.round((Number(amount || 0) + Number.EPSILON) * 100) / 100;
 const modifierPrice = (modifier) => Number(modifier.additionalPrice || 0);
 const productCategory = (product) => typeof product?.category === 'string' ? product.category : product?.category?.name;
 
 const ORDER_TYPES = [
   { id: 'DINE_IN', label: 'Dine in', Icon: RestaurantRoundedIcon },
   { id: 'TAKEAWAY', label: 'Takeaway', Icon: TakeoutDiningRoundedIcon },
-  { id: 'ROOM_CHARGE', label: 'Room charge', Icon: LocalHotelRoundedIcon },
+  { id: 'ROOM_CHARGE', label: 'Room charge · unavailable', Icon: LocalHotelRoundedIcon, disabled: true },
 ];
 
 export default function POSCheckout() {
   const { keycloak } = useKeycloak();
   const { can } = usePermissions();
-  const { cart, addToCart, removeFromCart, clearCart } = useCart();
-  const queryClient = useQueryClient();
+  const { cart, addToCart, removeFromCart } = useCart();
   const [orderType, setOrderType] = useState('DINE_IN');
   const [category, setCategory] = useState(ALL_CATEGORIES);
   const [search, setSearch] = useState('');
   const [selectedTable, setSelectedTable] = useState('');
-  const [roomNumber, setRoomNumber] = useState('');
   const [guestQuery, setGuestQuery] = useState('');
   const [guest, setGuest] = useState(null);
   const [orderNote, setOrderNote] = useState('');
@@ -55,8 +52,6 @@ export default function POSCheckout() {
   const [pendingProduct, setPendingProduct] = useState(null);
   const [selectedModifiers, setSelectedModifiers] = useState([]);
   const [itemNote, setItemNote] = useState('');
-  const [roomSaved, setRoomSaved] = useState('');
-  const [roomIdempotencyKey, setRoomIdempotencyKey] = useState(requestKey);
   const [showAll, setShowAll] = useState(false);
 
   const productsQuery = useQuery({ queryKey: ['products'], queryFn: () => getAllProducts().then(({ data }) => data), staleTime: 60_000 });
@@ -109,34 +104,11 @@ export default function POSCheckout() {
   const selectedTableRecord = tables.find((table) => String(table.id) === selectedTable);
   const availableTables = tables.filter((table) => table.status === 'AVAILABLE' || String(table.id) === selectedTable);
   const groups = modifiersQuery.data ?? [];
-  const subtotal = cart.reduce((sum, item) => sum + (Number(item.price) + (item.modifiers || []).reduce((acc, modifier) => acc + modifierPrice(modifier), 0)) * item.quantity, 0);
-  const tax = subtotal * taxRate / 100;
-  const service = subtotal * serviceRate / 100;
-  const total = subtotal + tax + service;
+  const subtotal = roundMoney(cart.reduce((sum, item) => sum + roundMoney(roundMoney(Number(item.price) + (item.modifiers || []).reduce((acc, modifier) => acc + modifierPrice(modifier), 0)) * item.quantity), 0));
+  const tax = roundMoney(subtotal * taxRate / 100);
+  const service = roundMoney(subtotal * serviceRate / 100);
+  const total = roundMoney(subtotal + tax + service);
   const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-
-  const roomOrder = useMutation({
-    mutationFn: () => createOrder({
-      idempotencyKey: roomIdempotencyKey,
-      orderType: 'ROOM_CHARGE',
-      roomNumber: roomNumber.trim(),
-      customerName: guest?.name || null,
-      notes: orderNote.trim() || null,
-      items: cart.map((item) => ({
-        productId: Number(item.id), quantity: item.quantity, notes: item.notes || null,
-        modifiers: (item.modifiers || []).map((modifier) => ({ id: modifier.id })),
-      })),
-    }).then(({ data }) => data),
-    onSuccess: (order) => {
-      const orderLabel = order.orderNumber || `#${order.id}`;
-      setRoomSaved(orderLabel);
-      setRoomIdempotencyKey(requestKey());
-      clearCart();
-      setOrderNote('');
-      setCartOpen(false);
-      queryClient.invalidateQueries({ queryKey: ['orders'] });
-    },
-  });
 
   const beginAdd = (product) => {
     setPendingProduct(product);
@@ -190,7 +162,7 @@ export default function POSCheckout() {
         <div className="foodpos-order-type" role="group" aria-label="Order type">
           {ORDER_TYPES.map((item) => {
             const IconComponent = item.Icon;
-            return <button type="button" key={item.id} className={orderType === item.id ? 'selected' : ''} aria-pressed={orderType === item.id} onClick={() => { setOrderType(item.id); setSelectedTable(''); roomOrder.reset(); }}>
+            return <button type="button" key={item.id} disabled={item.disabled} title={item.disabled ? 'Connect a hotel PMS before using room charges' : undefined} className={`${orderType === item.id ? 'selected' : ''}${item.disabled ? ' unavailable' : ''}`} aria-pressed={orderType === item.id} onClick={() => { if (item.disabled) return; setOrderType(item.id); setSelectedTable(''); }}>
               <IconComponent aria-hidden="true" /><span>{item.label}</span>
             </button>;
           })}
@@ -211,7 +183,7 @@ export default function POSCheckout() {
           ))}
         </nav>
 
-        {roomSaved && <div className="foodpos-confirmation" role="status"><CheckCircleRoundedIcon /> Open order {roomSaved} saved. Folio posting is not connected.</div>}
+        <p className="foodpos-integration-note" role="status">Room charges are unavailable until the hotel system can validate stays and confirm folio postings.</p>
 
         {!showAll && <section className="foodpos-section">
           <header className="foodpos-section-heading">
@@ -268,10 +240,10 @@ export default function POSCheckout() {
         </button>
       </div>
 
-      {cartOpen && <div className="foodpos-drawer-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !roomOrder.isPending) setCartOpen(false); }}>
+      {cartOpen && <div className="foodpos-drawer-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setCartOpen(false); }}>
         <section className="foodpos-order-drawer" role="dialog" aria-modal="true" aria-labelledby="foodpos-cart-title">
           <header className="foodpos-drawer-heading">
-            <div><p className="foodpos-overline">CURRENT ORDER</p><h2 id="foodpos-cart-title">{selectedTableRecord?.name || (orderType === 'TAKEAWAY' ? 'Takeaway' : orderType === 'ROOM_CHARGE' ? 'Room charge' : 'New order')}</h2><span>{itemCount} {itemCount === 1 ? 'item' : 'items'}</span></div>
+            <div><p className="foodpos-overline">CURRENT ORDER</p><h2 id="foodpos-cart-title">{selectedTableRecord?.name || (orderType === 'TAKEAWAY' ? 'Takeaway' : 'New order')}</h2><span>{itemCount} {itemCount === 1 ? 'item' : 'items'}</span></div>
             <button type="button" className="foodpos-icon-button" onClick={() => setCartOpen(false)} aria-label="Close order"><CloseRoundedIcon /></button>
           </header>
 
@@ -280,8 +252,6 @@ export default function POSCheckout() {
               <div className="foodpos-subheading"><div><h3>Choose a table</h3><p>{selectedTableRecord?.name || 'Available tables'}</p></div><span>{availableTables.length} open</span></div>
               {tablesQuery.isLoading ? <div className="foodpos-state">Loading tables…</div> : tablesQuery.isError ? <div className="foodpos-inline-error" role="alert">Tables unavailable. <button type="button" onClick={() => tablesQuery.refetch()}><RefreshRoundedIcon /> Retry</button></div> : availableTables.length === 0 ? <div className="foodpos-inline-empty">No available tables. Select takeaway to continue.</div> : <div className="foodpos-table-list">{availableTables.map((table) => <button type="button" key={table.id} className={String(table.id) === selectedTable ? 'selected' : ''} aria-pressed={String(table.id) === selectedTable} onClick={() => setSelectedTable(String(table.id))}><RestaurantRoundedIcon /><span>{table.name}</span><small>{table.capacity ? `${table.capacity} seats` : 'Available'}</small></button>)}</div>}
             </section>}
-
-            {orderType === 'ROOM_CHARGE' && <label className="foodpos-field">Room number<input inputMode="numeric" value={roomNumber} onChange={(event) => setRoomNumber(event.target.value)} placeholder="Enter room number" /></label>}
 
             <section className="foodpos-context-section foodpos-guest-section">
               <label className="foodpos-field">Guest <span>Optional for restaurant orders</span>
@@ -313,18 +283,15 @@ export default function POSCheckout() {
               <div className="foodpos-total-row"><span>Service <small>{serviceRate}%</small></span><strong>{money(service)}</strong></div>
             </>}
             <div className="foodpos-total-row foodpos-total-due"><span>Total due</span><strong>{money(total)}</strong></div>
-            {orderType === 'ROOM_CHARGE' && <p className="foodpos-integration-note">Saves an open order only. Hotel folio posting is not connected.</p>}
-            {roomOrder.isError && <p className="foodpos-inline-error" role="alert">Could not save order. {roomOrder.error?.response?.data?.message || 'Check the connection and retry.'}</p>}
             <button
               type="button"
               className="foodpos-primary-action"
-              disabled={!cart.length || taxQuery.isLoading || taxQuery.isError || (orderType === 'DINE_IN' && !selectedTable) || (orderType === 'ROOM_CHARGE' && !roomNumber.trim()) || roomOrder.isPending}
+              disabled={!cart.length || taxQuery.isLoading || taxQuery.isError || (orderType === 'DINE_IN' && !selectedTable)}
               onClick={() => {
-                if (orderType === 'ROOM_CHARGE') roomOrder.mutate();
-                else { setCartOpen(false); setShowPayment(true); }
+                setCartOpen(false); setShowPayment(true);
               }}
             >
-              {roomOrder.isPending ? 'Saving order…' : orderType === 'ROOM_CHARGE' ? 'Save open order' : 'Continue to payment'}<span>{money(total)} <ArrowForwardRoundedIcon /></span>
+              Continue to payment<span>{money(total)} <ArrowForwardRoundedIcon /></span>
             </button>
           </footer>
         </section>

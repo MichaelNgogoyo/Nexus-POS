@@ -11,11 +11,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_sales_idempotency_key
     ON sales (idempotency_key)
     WHERE idempotency_key IS NOT NULL;
 
-ALTER TABLE restaurant_order ADD COLUMN IF NOT EXISTS room_number varchar(24);
-ALTER TABLE restaurant_order ADD COLUMN IF NOT EXISTS service_charge_amount numeric(19,2) NOT NULL DEFAULT 0;
-ALTER TABLE restaurant_order ADD COLUMN IF NOT EXISTS idempotency_key varchar(64);
+ALTER TABLE restaurant_orders ADD COLUMN IF NOT EXISTS room_number varchar(24);
+ALTER TABLE restaurant_orders ADD COLUMN IF NOT EXISTS service_charge_amount numeric(19,2) NOT NULL DEFAULT 0;
+ALTER TABLE restaurant_orders ADD COLUMN IF NOT EXISTS idempotency_key varchar(64);
 CREATE UNIQUE INDEX IF NOT EXISTS ux_restaurant_order_idempotency_key
-    ON restaurant_order (idempotency_key)
+    ON restaurant_orders (idempotency_key)
     WHERE idempotency_key IS NOT NULL;
 
 ALTER TABLE sale_item ADD COLUMN IF NOT EXISTS notes varchar(250);

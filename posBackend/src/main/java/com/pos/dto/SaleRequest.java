@@ -15,13 +15,17 @@ public record SaleRequest(
         String paymentMethod,
 
         @NotEmpty(message = "Sale must contain at least one item")
+        @Size(max = 100, message = "Sale cannot contain more than 100 items")
         @Valid
         List<SaleItemRequest> items,
 
-        /** Amount tendered by customer (e.g. cash handed over). Optional for card payments. */
+        /** Cash tendered by the customer. Required for the currently supported cash flow. */
+        @NotNull(message = "Cash amount tendered is required")
         @DecimalMin(value = "0.0", message = "Amount tendered cannot be negative")
+        @DecimalMax(value = "1000000000.00", message = "Amount tendered is too large")
         Double amountTendered,
 
+        @NotNull(message = "Order type is required")
         OrderType orderType,
 
         @Positive(message = "Table ID must be positive")

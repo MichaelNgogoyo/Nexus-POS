@@ -27,6 +27,7 @@ public class Sales {
 
     private String cashierId;
     private double totalAmount;
+    private double subtotalAmount;
     private double taxAmount;          // tax portion of totalAmount
     private double amountTendered;     // cash handed by customer
     private double changeGiven;        // change returned
@@ -38,6 +39,12 @@ public class Sales {
 
     @Column(name = "idempotency_key", unique = true, length = 64)
     private String idempotencyKey;
+
+    @Column(name = "restaurant_order_id")
+    private Long restaurantOrderId;
+
+    @Column(name = "order_number", length = 32)
+    private String orderNumber;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "order_type", length = 32)

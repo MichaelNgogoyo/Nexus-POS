@@ -15,6 +15,8 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping({"/api/sale", "/sale"})
@@ -52,13 +54,20 @@ public class SalesController {
 
     @GetMapping("/{id}/receipt")
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER','CASHIER')")
-    public ResponseEntity<String> getSaleReceipt(@PathVariable Long id) {
+    public ResponseEntity<String> getSaleReceipt(@PathVariable Long id, Authentication authentication) {
         Sales sale = service.viewSale(id);
+        boolean manager = authentication.getAuthorities().stream().map(GrantedAuthority::getAuthority)
+                .anyMatch(role -> role.equals("ROLE_ADMIN") || role.equals("ROLE_MANAGER"));
+        String actor = authentication.getPrincipal() instanceof Jwt jwt ? jwt.getSubject() : authentication.getName();
+        if (!manager && !actor.equals(sale.getCashierId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Cashiers may only access their own receipts");
+        }
         StringBuilder sb = new StringBuilder();
         sb.append("========================================\n");
         sb.append("           POINT OF SALE RECEIPT        \n");
         sb.append("========================================\n");
         sb.append(String.format("Receipt #:   %d%n", sale.getId()));
+        if (sale.getOrderNumber() != null) sb.append(String.format("Order #:     %s%n", sale.getOrderNumber()));
         sb.append(String.format("Date:        %s%n", sale.getCreatedAt()));
         sb.append(String.format("Cashier:     %s%n", sale.getCashierId()));
         sb.append(String.format("Payment:     %s%n", sale.getPaymentMethod()));
@@ -72,7 +81,7 @@ public class SalesController {
             sb.append(String.format("%-24s %5d %8.2f%n", name, item.getQuantity(), lineTotal));
         }
         sb.append("----------------------------------------\n");
-        double subtotal = sale.getSaleItems().stream().mapToDouble(item -> item.getPrice() * item.getQuantity()).sum();
+        double subtotal = sale.getSubtotalAmount();
         sb.append(String.format("%-29s %8.2f%n", "Subtotal:", subtotal));
         sb.append(String.format("%-29s %8.2f%n", "Tax:", sale.getTaxAmount()));
         sb.append(String.format("%-29s %8.2f%n", "Service charge:", sale.getServiceChargeAmount()));

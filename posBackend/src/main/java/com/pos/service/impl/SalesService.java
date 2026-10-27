@@ -10,9 +10,16 @@ import com.pos.model.StockMovement;
 import com.pos.model.OrderType;
 import com.pos.model.RestaurantTable;
 import com.pos.model.TableStatus;
+import com.pos.model.RestaurantOrder;
+import com.pos.model.OrderItem;
+import com.pos.model.OrderStatus;
+import com.pos.model.KitchenOrder;
+import com.pos.model.KitchenStatus;
 import com.pos.repository.RestaurantTableRepository;
 import com.pos.repository.ProductRepository;
 import com.pos.repository.SalesRepository;
+import com.pos.repository.RestaurantOrderRepository;
+import com.pos.repository.KitchenOrderRepository;
 import com.pos.repository.ModifierGroupRepository;
 import com.pos.model.Modifier;
 import com.pos.model.ModifierGroup;
@@ -47,6 +54,8 @@ public class SalesService {
     private final AuditService auditService;
     private final RestaurantTableRepository tableRepository;
     private final ModifierGroupRepository modifierGroupRepository;
+    private final RestaurantOrderRepository orderRepository;
+    private final KitchenOrderRepository kitchenOrderRepository;
 
     /** Tax rate as a percentage, e.g. 16 for 16% VAT. Configurable via pos.tax-rate property. */
     @Value("${pos.tax-rate:0}")
@@ -71,12 +80,24 @@ public class SalesService {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "Only cash checkout is enabled until the configured payment provider is connected");
         }
+        if (request.amountTendered() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cash amount tendered is required");
+        }
         if (request.orderType() == OrderType.ROOM_CHARGE) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "Room folio posting is unavailable until the hotel property system is connected");
         }
+        if (request.orderType() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order type is required");
+        }
         if (request.orderType() == OrderType.DINE_IN && request.tableId() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Select a table for dine-in checkout");
+        }
+        if (request.orderType() != OrderType.DINE_IN && request.tableId() != null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only dine-in orders may select a table");
+        }
+        if (request.items() == null || request.items().isEmpty() || request.items().size() > 100) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Sale must contain 1–100 items");
         }
         RestaurantTable selectedTable = null;
         if (request.tableId() != null) {
@@ -138,25 +159,22 @@ public class SalesService {
             BigDecimal modifierTotal = selectedModifiers.stream()
                     .map(modifier -> modifier.getAdditionalPrice() == null ? BigDecimal.ZERO : modifier.getAdditionalPrice())
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
-            BigDecimal unitPrice = BigDecimal.valueOf(product.getPrice()).add(modifierTotal);
+            BigDecimal unitPrice = BigDecimal.valueOf(product.getPrice()).add(modifierTotal).setScale(2, RoundingMode.HALF_UP);
             saleItem.setPrice(unitPrice.doubleValue());
             saleItem.setModifiers(selectedModifiers);
             saleItem.setNotes(trimLimit(itemReq.notes(), 250, "Item notes"));
             saleItem.setSales(sales);
             saleItems.add(saleItem);
 
-            subtotal = subtotal.add(unitPrice.multiply(BigDecimal.valueOf(itemReq.quantity())));
+            subtotal = subtotal.add(unitPrice.multiply(BigDecimal.valueOf(itemReq.quantity())).setScale(2, RoundingMode.HALF_UP));
         }
-
-        // Batch-save all stock changes in two queries instead of 2N
-        productRepository.saveAll(productMap.values());
-        stockMovementRepository.saveAll(movements);
 
         BigDecimal taxAmount = subtotal.multiply(BigDecimal.valueOf(taxRatePercent / 100.0)).setScale(2, RoundingMode.HALF_UP);
         BigDecimal serviceChargeAmount = subtotal.multiply(BigDecimal.valueOf(serviceChargeRatePercent / 100.0)).setScale(2, RoundingMode.HALF_UP);
+        subtotal = subtotal.setScale(2, RoundingMode.HALF_UP);
         BigDecimal total = subtotal.add(taxAmount).add(serviceChargeAmount).setScale(2, RoundingMode.HALF_UP);
 
-        BigDecimal amountTendered = request.amountTendered() != null ? BigDecimal.valueOf(request.amountTendered()) : total;
+        BigDecimal amountTendered = BigDecimal.valueOf(request.amountTendered()).setScale(2, RoundingMode.HALF_UP);
         BigDecimal changeGiven = amountTendered.subtract(total).max(BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
 
         if (amountTendered.compareTo(total) < 0) {
@@ -164,7 +182,12 @@ public class SalesService {
                     "Amount tendered (" + amountTendered + ") is less than total (" + total + ")");
         }
 
+        // Persist inventory movements only after the cash tender is confirmed sufficient.
+        productRepository.saveAll(productMap.values());
+        stockMovementRepository.saveAll(movements);
+
         sales.setTaxAmount(taxAmount.doubleValue());
+        sales.setSubtotalAmount(subtotal.doubleValue());
         sales.setServiceChargeAmount(serviceChargeAmount.doubleValue());
         sales.setTotalAmount(total.doubleValue());
         sales.setAmountTendered(amountTendered.doubleValue());
@@ -176,7 +199,47 @@ public class SalesService {
         sales.setRoomNumber(request.roomNumber());
         sales.setGuestName(request.guestName());
         sales.setNotes(request.notes());
+
+        RestaurantOrder restaurantOrder = RestaurantOrder.builder()
+                .orderType(request.orderType())
+                .status(OrderStatus.KITCHEN)
+                .table(selectedTable)
+                .cashierId(actor)
+                .customerName(trimLimit(request.guestName(), 120, "Guest name"))
+                .notes(trimLimit(request.notes(), 500, "Order notes"))
+                .items(new ArrayList<>())
+                .subtotal(subtotal)
+                .discountAmount(BigDecimal.ZERO)
+                .taxAmount(taxAmount)
+                .serviceChargeAmount(serviceChargeAmount)
+                .total(total)
+                .build();
+        for (SaleItem saleItem : saleItems) {
+            BigDecimal itemPrice = BigDecimal.valueOf(saleItem.getPrice()).setScale(2, RoundingMode.HALF_UP);
+            restaurantOrder.getItems().add(OrderItem.builder()
+                    .order(restaurantOrder)
+                    .productId(saleItem.getProduct().getId())
+                    .productName(saleItem.getProduct().getName())
+                    .unitPrice(itemPrice)
+                    .quantity(saleItem.getQuantity())
+                    .lineTotal(itemPrice.multiply(BigDecimal.valueOf(saleItem.getQuantity())).setScale(2, RoundingMode.HALF_UP))
+                    .notes(saleItem.getNotes())
+                    .modifiers(new ArrayList<>(saleItem.getModifiers()))
+                    .kitchenStatus(KitchenStatus.PENDING)
+                    .build());
+        }
+        RestaurantOrder savedOrder = orderRepository.save(restaurantOrder);
+        sales.setRestaurantOrderId(savedOrder.getId());
+        sales.setOrderNumber(savedOrder.getOrderNumber());
+
         Sales saved = repository.save(sales);
+        savedOrder.setSaleId(saved.getId());
+        orderRepository.save(savedOrder);
+        kitchenOrderRepository.save(KitchenOrder.builder()
+                .order(savedOrder)
+                .status(KitchenStatus.PENDING)
+                .notes(savedOrder.getNotes())
+                .build());
         if (selectedTable != null) {
             selectedTable.setStatus(TableStatus.OCCUPIED);
             selectedTable.setOccupiedAt(LocalDateTime.now());
@@ -217,7 +280,9 @@ public class SalesService {
         }
         sale.setStatus(SaleStatus.VOIDED);
         repository.save(sale);
-        auditService.log(actor, "SALE_VOIDED", "Sale", id.toString(), "COMPLETED", "VOIDED");
+        markLinkedOrderAdjustment(sale, OrderStatus.CANCELLED, actor, "SALE_VOIDED");
+        auditService.log(actor, "SALE_VOIDED", "Sale", id.toString(), "COMPLETED",
+                "VOIDED amount=" + sale.getTotalAmount() + "; payment=" + sale.getPaymentMethod());
     }
 
     @Transactional
@@ -262,8 +327,29 @@ public class SalesService {
 
         sale.setStatus(SaleStatus.RETURNED);
         Sales saved = repository.save(sale);
-        auditService.log(actor, "SALE_RETURNED", "Sale", saleId.toString(), "COMPLETED", "RETURNED: " + reason);
+        markLinkedOrderAdjustment(sale, OrderStatus.REFUNDED, actor, "SALE_RETURNED");
+        auditService.log(actor, "SALE_RETURNED", "Sale", saleId.toString(), "COMPLETED",
+                "RETURNED amount=" + sale.getTotalAmount() + "; payment=" + sale.getPaymentMethod() + "; reason=" + reason);
         return saved;
+    }
+
+    private void markLinkedOrderAdjustment(Sales sale, OrderStatus status, String actor, String action) {
+        if (sale.getRestaurantOrderId() == null) return;
+        orderRepository.findById(sale.getRestaurantOrderId()).ifPresent(order -> {
+            boolean completedVoid = status == OrderStatus.CANCELLED && order.getStatus() == OrderStatus.COMPLETED;
+            if (!completedVoid) {
+                order.setStatus(status);
+                orderRepository.save(order);
+            }
+            kitchenOrderRepository.findByOrder_Id(order.getId()).ifPresent(ticket -> {
+                if (ticket.getStatus() != KitchenStatus.SERVED) {
+                    ticket.setStatus(KitchenStatus.CANCELLED);
+                    if (order.getItems() != null) order.getItems().forEach(item -> item.setKitchenStatus(KitchenStatus.CANCELLED));
+                    kitchenOrderRepository.save(ticket);
+                }
+            });
+            auditService.log(actor, action + "_ORDER", "RestaurantOrder", order.getId().toString(), null, status.name());
+        });
     }
 
     private StockMovement buildStockMovement(Product product, int delta, String reason) {

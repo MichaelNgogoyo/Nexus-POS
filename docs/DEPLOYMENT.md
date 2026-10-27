@@ -6,7 +6,7 @@
 
 The repository contains backend and frontend Dockerfiles, `docker-compose.production.yml`, Nginx configuration, runtime frontend configuration, and `.github/workflows/deploy.yml`. The workflow inventory found a deployment workflow but no separate pull-request CI workflow. The backend POM targets Java 17 and invokes a frontend Maven plugin configured for Node 22.16.0/npm 10.9.2; the frontend lockfile/package scripts are also present.
 
-Production application configuration uses Hibernate schema validation. The design audit found a SQL migration file but no Flyway/Liquibase Maven dependency; therefore migration application/rollback must be explicitly designed and tested. Do not assume the SQL runs automatically.
+Production application configuration uses Hibernate schema validation. The repository has SQL files `V20261027_01__hotel_pos_sale_fields.sql` and `V20261027_02__link_cash_sales_to_kitchen_orders.sql`, but no Flyway/Liquibase Maven dependency; migration application/rollback must be explicitly performed and tested. Do not assume the SQL runs automatically. Production must apply both migrations in order before deploying this schema version.
 
 ## Environments
 

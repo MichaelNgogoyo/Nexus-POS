@@ -87,6 +87,7 @@
 .foodpos-order-type button { display: inline-flex; min-height: 39px; align-items: center; justify-content: center; gap: 7px; padding: 0 12px; border: 1px solid #e9e8e3; border-radius: 10px; background: #fff; color: #55544e; font-size: 12px; font-weight: 650; transition: background .15s, color .15s, border-color .15s; }
 .foodpos-order-type button svg { font-size: 17px; }
 .foodpos-order-type button.selected { border-color: #181818; background: #181818; color: #fff; }
+.foodpos-order-type button:disabled { cursor: not-allowed; opacity: .55; }
 
 .foodpos-categories { display: flex; gap: 9px; overflow-x: auto; margin: 1px 0 22px; padding: 0 0 5px; scrollbar-width: thin; }
 .foodpos-categories button { display: inline-flex; min-height: 43px; flex: 0 0 auto; align-items: center; gap: 7px; padding: 0 13px; border: 1px solid transparent; border-radius: 11px; color: #35342f; font-size: 12px; font-weight: 700; transition: transform .15s, background .15s, color .15s; }
@@ -343,4 +344,14 @@
   .food-product-add { width: 29px; height: 29px; }
   .food-product-card-featured .food-product-info { padding: 7px; }
   .foodpos-cart-summary { padding-right: 12px; padding-left: 12px; }
+}
+
+.payment-success-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 24px; }
+.payment-success-actions > button { flex: 1 1 auto; min-height: 48px; }
+.receipt-print-area { max-height: 38vh; overflow: auto; padding: 14px; border: 1px dashed #d1d5db; border-radius: 10px; background: #fafaf9; color: #111827; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
+
+@media print {
+  body * { visibility: hidden !important; }
+  .receipt-print-area, .receipt-print-area * { visibility: visible !important; }
+  .receipt-print-area { position: fixed; inset: 0 auto auto 0; width: 72mm; max-height: none; overflow: visible; border: 0; padding: 0; background: #fff; color: #000; }
 }

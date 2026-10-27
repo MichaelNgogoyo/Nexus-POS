@@ -77,6 +77,8 @@ export const viewSale = (saleId) => {
     return apiClient.get(`/api/sale/${saleId}`);
 };
 
+export const getSaleReceipt = (saleId) => apiClient.get(`/api/sale/${saleId}/receipt`, { responseType: 'text' });
+
 /**
  * Deletes a sale by its ID.
  * @param {number} saleId - The ID of the sale to delete.
