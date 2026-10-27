@@ -37,7 +37,7 @@ env:
   VPS_USER: ${{ secrets.VPS_USER }} # Example: michael
   VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }} # Contents of ~/.ssh/id_ed25519 (private key)
   VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }} # Optional fallback when password-based SSH is enabled
-  APP_DOMAIN: ${{ secrets.APP_DOMAIN || 'nexuspos.apperstar.dev' }} # Example: nexuspos.apperstar.dev
+  APP_DOMAIN: nexuspos.apperstar.com
   IMAGE_NAME_FRONTEND: nexus-pos-frontend
   IMAGE_NAME_BACKEND: nexus-pos-backend
   IMAGE_NAME_MINIO: nexus-pos-minio
@@ -205,20 +205,14 @@ jobs:
               echo "APP_DOMAIN is required. Set APP_DOMAIN secret (e.g. nexuspos.apperstar.dev)."
               exit 1
             fi
-            export DB_URL="${{ secrets.DB_URL || 'jdbc:postgresql://postgres:5432/pos_db' }}"
+            export DB_URL="jdbc:postgresql://pos-app-db:5432/pos_db"
             export DB_USERNAME="${{ secrets.DB_USERNAME || 'pos_user' }}"
             export DB_PASSWORD="${{ secrets.DB_PASSWORD || 'CHANGE_ME_IN_PRODUCTION' }}"
             export KEYCLOAK_REALM="${{ secrets.KEYCLOAK_REALM || 'pos' }}"
-            export KEYCLOAK_ISSUER_URI="${{ secrets.KEYCLOAK_ISSUER_URI || '' }}"
-            if [ -z "$KEYCLOAK_ISSUER_URI" ]; then
-              export KEYCLOAK_ISSUER_URI="https://${APP_DOMAIN}/auth/realms/${KEYCLOAK_REALM}"
-            fi
+            export KEYCLOAK_ISSUER_URI="https://${APP_DOMAIN}/auth/realms/${KEYCLOAK_REALM}"
             export KEYCLOAK_CLIENT_ID="${{ secrets.KEYCLOAK_CLIENT_ID || 'pos-client' }}"
             export KEYCLOAK_CLIENT_SECRET="${{ secrets.KEYCLOAK_CLIENT_SECRET || 'CHANGE_ME_FROM_KEYCLOAK_ADMIN' }}"
-            export KEYCLOAK_REDIRECT_URI="${{ secrets.KEYCLOAK_REDIRECT_URI || '' }}"
-            if [ -z "$KEYCLOAK_REDIRECT_URI" ]; then
-              export KEYCLOAK_REDIRECT_URI="https://${APP_DOMAIN}"
-            fi
+            export KEYCLOAK_REDIRECT_URI="https://${APP_DOMAIN}"
             export MINIO_ENDPOINT="${{ secrets.MINIO_ENDPOINT || 'http://minio:9000' }}"
             export MINIO_ACCESS_KEY="${{ secrets.MINIO_ACCESS_KEY || 'minioadmin' }}"
             export MINIO_SECRET_KEY="${{ secrets.MINIO_SECRET_KEY || 'CHANGE_ME_IN_PRODUCTION' }}"
@@ -236,39 +230,12 @@ jobs:
             export DOCKERHUB_TOKEN="${{ secrets.DOCKERHUB_TOKEN || '' }}"
             export MINIO_GHCR_IMAGE="ghcr.io/${OWNER_LC}/${{ env.IMAGE_NAME_MINIO }}:${{ github.sha }}"
             export DEPLOY_MINIO="${{ env.DEPLOY_MINIO }}"
-            export FRONTEND_PORT=$(python3 - <<'PY'
-            import socket
-            for start in (3000, 3001, 3002, 3100, 3200, 4000):
-                s = socket.socket()
-                try:
-                    s.bind(("127.0.0.1", start))
-                    print(start)
-                    break
-                except OSError:
-                    continue
-                finally:
-                    s.close()
-            else:
-                print(3000)
-            PY
-            )
-            export BACKEND_PORT=$(python3 - <<'PY'
-            import socket
-            for start in (8081, 8082, 8083, 9000, 10000):
-                s = socket.socket()
-                try:
-                    s.bind(("127.0.0.1", start))
-                    print(start)
-                    break
-                except OSError:
-                    continue
-                finally:
-                    s.close()
-            else:
-                print(8081)
-            PY
-            )
+            export FRONTEND_PORT=3000
+            export BACKEND_PORT=8081
             docker network inspect pos-shared >/dev/null 2>&1 || docker network create pos-shared
+            if ! docker inspect -f '{{json .NetworkSettings.Networks}}' pos-postgres-1 | grep -q '"pos-shared"'; then
+              docker network connect --alias pos-app-db pos-shared pos-postgres-1
+            fi
 
             MINIO_IMAGE="${MINIO_IMAGE_OVERRIDE:-$MINIO_GHCR_IMAGE}"
             if [ "$DEPLOY_MINIO" = "true" ]; then
