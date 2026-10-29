@@ -2,9 +2,14 @@ package com.pos.service.impl;
 
 import com.pos.dto.SaleItemRequest;
 import com.pos.dto.SaleRequest;
+import com.pos.dto.OrderPaymentRequest;
 import com.pos.model.OrderType;
 import com.pos.model.SaleItem;
 import com.pos.model.Sales;
+import com.pos.model.RestaurantOrder;
+import com.pos.model.OrderItem;
+import com.pos.model.OrderStatus;
+import java.math.BigDecimal;
 import com.pos.model.Product;
 import com.pos.repository.ProductRepository;
 import com.pos.repository.RestaurantTableRepository;
@@ -65,6 +70,94 @@ class SalesServiceIdempotencyTest {
         verifyNoInteractions(productRepository, stockMovementRepository, auditService, tableRepository);
         verifyNoInteractions(orderRepository, kitchenOrderRepository);
         verify(salesRepository, never()).save(any());
+    }
+
+    @Test
+    void cashSettlementUsesSavedOrderTotalsAndDoesNotDecrementStockAgain() {
+        Product product = Product.builder().id(4L).name("Breakfast plate").price(120.0).active(true).quantity(8).build();
+        OrderItem item = OrderItem.builder().productId(4L).productName("Breakfast plate")
+                .unitPrice(new BigDecimal("100.00")).quantity(1).lineTotal(new BigDecimal("100.00")).build();
+        RestaurantOrder order = RestaurantOrder.builder().id(25L).orderNumber("ORD-25").orderType(OrderType.TAKEAWAY)
+                .status(OrderStatus.READY).cashierId("waiter").items(new java.util.ArrayList<>(List.of(item)))
+                .subtotal(new BigDecimal("100.00")).taxAmount(new BigDecimal("10.00"))
+                .serviceChargeAmount(new BigDecimal("5.00")).discountAmount(BigDecimal.ZERO)
+                .total(new BigDecimal("115.00")).build();
+        when(salesRepository.findByIdempotencyKey("payment-request-123456")).thenReturn(Optional.empty());
+        when(orderRepository.findByIdForUpdate(25L)).thenReturn(Optional.of(order));
+        when(salesRepository.findByRestaurantOrderId(25L)).thenReturn(Optional.empty());
+        when(productRepository.findAllById(List.of(4L))).thenReturn(List.of(product));
+        when(salesRepository.saveAndFlush(any(Sales.class))).thenAnswer(invocation -> {
+            Sales saved = invocation.getArgument(0);
+            saved.setId(88L);
+            return saved;
+        });
+
+        Sales sale = service.settleOrderCash(25L,
+                new OrderPaymentRequest(new BigDecimal("120.00"), "payment-request-123456"), "cashier");
+
+        assertThat(sale.getId()).isEqualTo(88L);
+        assertThat(sale.getRestaurantOrderId()).isEqualTo(25L);
+        assertThat(sale.getSubtotalAmount()).isEqualTo(100.0);
+        assertThat(sale.getTaxAmount()).isEqualTo(10.0);
+        assertThat(sale.getServiceChargeAmount()).isEqualTo(5.0);
+        assertThat(sale.getTotalAmount()).isEqualTo(115.0);
+        assertThat(sale.getAmountTendered()).isEqualTo(120.0);
+        assertThat(sale.getChangeGiven()).isEqualTo(5.0);
+        assertThat(sale.getSaleItems()).hasSize(1);
+        assertThat(sale.getSaleItems().get(0).getPrice()).isEqualTo(100.0);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+        assertThat(order.getSaleId()).isEqualTo(88L);
+        verify(productRepository, never()).saveAll(any());
+        verifyNoInteractions(stockMovementRepository);
+        verify(auditService).log("cashier", "ORDER_PAYMENT_RECORDED", "RestaurantOrder", "25",
+                "READY", "PAID sale=88; amount=115.00; method=CASH");
+    }
+
+    @Test
+    void cashSettlementRejectsInsufficientTenderBeforeSaving() {
+        OrderItem item = OrderItem.builder().productId(4L).unitPrice(new BigDecimal("100.00"))
+                .quantity(1).lineTotal(new BigDecimal("100.00")).build();
+        RestaurantOrder order = RestaurantOrder.builder().id(25L).status(OrderStatus.KITCHEN)
+                .items(new java.util.ArrayList<>(List.of(item))).subtotal(new BigDecimal("100.00"))
+                .taxAmount(BigDecimal.ZERO).serviceChargeAmount(BigDecimal.ZERO).discountAmount(BigDecimal.ZERO)
+                .total(new BigDecimal("100.00")).build();
+        when(salesRepository.findByIdempotencyKey("payment-request-123456")).thenReturn(Optional.empty());
+        when(orderRepository.findByIdForUpdate(25L)).thenReturn(Optional.of(order));
+        when(salesRepository.findByRestaurantOrderId(25L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.settleOrderCash(25L,
+                new OrderPaymentRequest(new BigDecimal("99.99"), "payment-request-123456"), "cashier"))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("less than the amount due");
+        verify(salesRepository, never()).save(any());
+        verify(productRepository, never()).findAllById(any());
+    }
+
+    @Test
+    void cashSettlementReplaysOnlyForTheSameCashierOrderAndAmount() {
+        Sales previous = Sales.builder().id(88L).cashierId("cashier").restaurantOrderId(25L)
+                .paymentMethod("CASH").amountTendered(120.0).totalAmount(115.0).build();
+        when(salesRepository.findByIdempotencyKey("payment-request-123456")).thenReturn(Optional.of(previous));
+
+        Sales replay = service.settleOrderCash(25L,
+                new OrderPaymentRequest(new BigDecimal("120.00"), "payment-request-123456"), "cashier");
+
+        assertThat(replay).isSameAs(previous);
+        verify(orderRepository, never()).findByIdForUpdate(any());
+        verify(salesRepository, never()).save(any());
+    }
+
+    @Test
+    void cashSettlementReplayCannotExposeAnotherCashiersSale() {
+        Sales previous = Sales.builder().id(88L).cashierId("cashier-2").restaurantOrderId(25L)
+                .paymentMethod("CASH").amountTendered(120.0).totalAmount(115.0).build();
+        when(salesRepository.findByIdempotencyKey("payment-request-123456")).thenReturn(Optional.of(previous));
+
+        assertThatThrownBy(() -> service.settleOrderCash(25L,
+                new OrderPaymentRequest(new BigDecimal("120.00"), "payment-request-123456"), "cashier"))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("different operation");
+        verify(orderRepository, never()).findByIdForUpdate(any());
     }
 
     @Test

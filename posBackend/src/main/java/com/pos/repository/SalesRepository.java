@@ -16,6 +16,8 @@ public interface SalesRepository extends JpaRepository<Sales, Long> {
 
     Optional<Sales> findByIdempotencyKey(String idempotencyKey);
 
+    Optional<Sales> findByRestaurantOrderId(Long restaurantOrderId);
+
     /** Lightweight paginated list — no collection fetch, safe pagination */
     @Query("SELECT s FROM Sales s ORDER BY s.createdAt DESC")
     Page<Sales> findAllPaged(Pageable pageable);

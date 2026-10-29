@@ -8,6 +8,7 @@ import com.pos.repository.RestaurantOrderRepository;
 import com.pos.repository.RestaurantTableRepository;
 import com.pos.repository.ModifierGroupRepository;
 import com.pos.repository.KitchenOrderRepository;
+import com.pos.repository.StockMovementRepository;
 import com.pos.service.impl.AuditService;
 import com.pos.service.RestaurantOrderService;
 import com.pos.service.RestaurantOrderMapper;
@@ -37,12 +38,13 @@ class OrderControllerSecurityTest {
     @Mock private AuditService auditService;
     @Mock private ModifierGroupRepository modifierGroupRepository;
     @Mock private KitchenOrderRepository kitchenOrderRepository;
+    @Mock private StockMovementRepository stockMovementRepository;
     private RestaurantOrderService orderService;
 
     @BeforeEach
     void setUp() {
         orderService = new RestaurantOrderService(orderRepository, productRepository, tableRepository, auditService,
-                modifierGroupRepository, kitchenOrderRepository, new RestaurantOrderMapper());
+                modifierGroupRepository, kitchenOrderRepository, stockMovementRepository, new RestaurantOrderMapper());
         ReflectionTestUtils.setField(orderService, "taxRate", 10.0);
         ReflectionTestUtils.setField(orderService, "serviceChargeRate", 5.0);
         lenient().when(orderRepository.save(any(RestaurantOrder.class))).thenAnswer(call -> {
@@ -74,6 +76,62 @@ class OrderControllerSecurityTest {
         assertThat(saved.items().get(0).unitPrice()).isEqualByComparingTo("100.00");
         assertThat(OrderController.class.getAnnotation(PreAuthorize.class).value())
                 .contains("ADMIN", "MANAGER", "CASHIER");
+    }
+
+    @Test
+    void submittingOrderToKitchenConsumesStockOnceAndCreatesMovement() {
+        Product product = Product.builder().id(4L).name("Breakfast plate").price(100.0).active(true).quantity(5).build();
+        RestaurantOrder order = RestaurantOrder.builder().id(25L).orderNumber("ORD-25").status(OrderStatus.OPEN)
+                .items(new java.util.ArrayList<>(List.of(OrderItem.builder().productId(4L).quantity(2).build()))).build();
+        when(orderRepository.findByIdForUpdate(25L)).thenReturn(Optional.of(order));
+        when(productRepository.findAllByIdForUpdate(List.of(4L))).thenReturn(List.of(product));
+        when(kitchenOrderRepository.findByOrder_Id(25L)).thenReturn(Optional.empty());
+        when(orderRepository.save(any(RestaurantOrder.class))).thenAnswer(call -> call.getArgument(0));
+
+        var result = orderService.submitToKitchen(25L, "KITCHEN", "cashier-4");
+
+        assertThat(result.status()).isEqualTo(OrderStatus.KITCHEN);
+        assertThat(product.getQuantity()).isEqualTo(3);
+        verify(productRepository).saveAll(List.of(product));
+        verify(stockMovementRepository).saveAll(argThat(movements -> {
+            var iterator = movements.iterator();
+            if (!iterator.hasNext()) return false;
+            var movement = iterator.next();
+            return !iterator.hasNext() && movement.getDelta() == -2 && movement.getBalanceAfter() == 3;
+        }));
+        verify(kitchenOrderRepository).save(any(KitchenOrder.class));
+    }
+
+    @Test
+    void submittingOrderRejectsInsufficientStockWithoutKitchenTicket() {
+        Product product = Product.builder().id(4L).name("Breakfast plate").price(100.0).active(true).quantity(1).build();
+        RestaurantOrder order = RestaurantOrder.builder().id(25L).status(OrderStatus.OPEN)
+                .items(new java.util.ArrayList<>(List.of(OrderItem.builder().productId(4L).quantity(2).build()))).build();
+        when(orderRepository.findByIdForUpdate(25L)).thenReturn(Optional.of(order));
+        when(productRepository.findAllByIdForUpdate(List.of(4L))).thenReturn(List.of(product));
+
+        assertThatThrownBy(() -> orderService.submitToKitchen(25L, "KITCHEN", "cashier-4"))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("Insufficient stock");
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.OPEN);
+        verify(kitchenOrderRepository, never()).save(any());
+        verifyNoInteractions(stockMovementRepository);
+    }
+
+    @Test
+    void retryingAlreadySubmittedOrderDoesNotConsumeStockTwice() {
+        RestaurantOrder previous = RestaurantOrder.builder().id(25L).orderNumber("ORD-25").cashierId("cashier-4")
+                .orderType(OrderType.TAKEAWAY).status(OrderStatus.KITCHEN)
+                .items(List.of(OrderItem.builder().productId(4L).quantity(2).modifiers(List.of()).build())).build();
+        when(orderRepository.findByIdempotencyKey("takeaway-order-request-1234")).thenReturn(Optional.of(previous));
+        RestaurantOrderRequest request = new RestaurantOrderRequest(OrderType.TAKEAWAY, "takeaway-order-request-1234",
+                null, null, null, null, List.of(new RestaurantOrderItemRequest(4L, 2, null, List.of())));
+
+        RestaurantOrderService.CreateResult result = orderService.createAndSubmitOrder(request, "cashier-4");
+
+        assertThat(result.created()).isFalse();
+        assertThat(result.order().status()).isEqualTo(OrderStatus.KITCHEN);
+        verifyNoInteractions(productRepository, stockMovementRepository, kitchenOrderRepository);
     }
 
     @Test

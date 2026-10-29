@@ -2,6 +2,7 @@ package com.pos.service.impl;
 
 import com.pos.dto.SaleRequest;
 import com.pos.dto.SaleReturnRequest;
+import com.pos.dto.OrderPaymentRequest;
 import com.pos.model.Product;
 import com.pos.model.SaleItem;
 import com.pos.model.SaleStatus;
@@ -30,6 +31,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -258,6 +260,136 @@ public class SalesService {
                 "total=" + total + "; payment=" + request.paymentMethod());
         log.info("Sale #{} created — subtotal={} tax={} service={} total={} change={}", saved.getId(), subtotal, taxAmount, serviceChargeAmount, total, changeGiven);
         return saved;
+    }
+
+    /** Records cash payment against an existing server-priced restaurant order. */
+    @Transactional
+    public Sales settleOrderCash(Long orderId, OrderPaymentRequest request, String actor) {
+        if (request == null || request.amountTendered() == null || request.idempotencyKey() == null
+                || request.idempotencyKey().length() < 16 || request.idempotencyKey().length() > 64) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A valid cash amount and idempotency key are required");
+        }
+        BigDecimal tendered = request.amountTendered();
+        if (tendered.signum() < 0 || tendered.compareTo(new BigDecimal("1000000000.00")) > 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Amount tendered is outside the allowed range");
+        }
+        try {
+            tendered = tendered.setScale(2, RoundingMode.UNNECESSARY);
+        } catch (ArithmeticException invalidPrecision) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Amount tendered may have at most two decimal places");
+        }
+
+        Sales prior = repository.findByIdempotencyKey(request.idempotencyKey()).orElse(null);
+        if (prior != null) return replayOrderPayment(prior, orderId, tendered, actor);
+
+        RestaurantOrder order = orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
+        // A competing request may have committed while this request waited for the order lock.
+        prior = repository.findByIdempotencyKey(request.idempotencyKey()).orElse(null);
+        if (prior != null) return replayOrderPayment(prior, orderId, tendered, actor);
+        if (order.getSaleId() != null || order.getStatus() == OrderStatus.PAID
+                || repository.findByRestaurantOrderId(orderId).isPresent()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Payment has already been recorded for this order");
+        }
+        if (order.getStatus() != OrderStatus.KITCHEN && order.getStatus() != OrderStatus.READY
+                && order.getStatus() != OrderStatus.COMPLETED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Submit this order to the kitchen before recording payment");
+        }
+        if (order.getItems() == null || order.getItems().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Order has no items to settle");
+        }
+
+        BigDecimal subtotal = BigDecimal.ZERO;
+        for (OrderItem item : order.getItems()) {
+            if (item == null || item.getProductId() == null || item.getQuantity() == null || item.getQuantity() < 1
+                    || item.getUnitPrice() == null || item.getLineTotal() == null || item.getUnitPrice().signum() < 0) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Saved order items are invalid; manager review is required");
+            }
+            BigDecimal lineTotal = item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity())).setScale(2, RoundingMode.HALF_UP);
+            if (lineTotal.compareTo(item.getLineTotal().setScale(2, RoundingMode.HALF_UP)) != 0) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Saved order item totals are inconsistent; manager review is required");
+            }
+            subtotal = subtotal.add(lineTotal);
+        }
+        subtotal = subtotal.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal storedSubtotal = order.getSubtotal() == null ? BigDecimal.ZERO : order.getSubtotal().setScale(2, RoundingMode.HALF_UP);
+        BigDecimal tax = order.getTaxAmount() == null ? BigDecimal.ZERO : order.getTaxAmount().setScale(2, RoundingMode.HALF_UP);
+        BigDecimal service = order.getServiceChargeAmount() == null ? BigDecimal.ZERO : order.getServiceChargeAmount().setScale(2, RoundingMode.HALF_UP);
+        BigDecimal discount = order.getDiscountAmount() == null ? BigDecimal.ZERO : order.getDiscountAmount().setScale(2, RoundingMode.HALF_UP);
+        BigDecimal total = order.getTotal() == null ? BigDecimal.ZERO : order.getTotal().setScale(2, RoundingMode.HALF_UP);
+        BigDecimal calculatedTotal = subtotal.add(tax).add(service).subtract(discount).setScale(2, RoundingMode.HALF_UP);
+        if (subtotal.compareTo(storedSubtotal) != 0 || calculatedTotal.compareTo(total) != 0 || total.signum() < 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Saved order totals are inconsistent; manager review is required");
+        }
+        if (tendered.compareTo(total) < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cash tendered is less than the amount due");
+        }
+
+        List<Long> productIds = order.getItems().stream().map(OrderItem::getProductId).distinct().sorted().toList();
+        Map<Long, Product> products = productRepository.findAllById(productIds).stream()
+                .collect(Collectors.toMap(Product::getId, product -> product));
+        if (productIds.size() != products.size() || order.getItems().stream().anyMatch(item -> !products.containsKey(item.getProductId()))) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "An ordered product is no longer available for the receipt");
+        }
+
+        Sales sale = Sales.builder()
+                .cashierId(actor)
+                .paymentMethod("CASH")
+                .status(SaleStatus.COMPLETED)
+                .orderType(order.getOrderType())
+                .tableId(order.getTable() == null ? null : order.getTable().getId())
+                .roomNumber(order.getRoomNumber())
+                .guestName(order.getCustomerName())
+                .notes(order.getNotes())
+                .restaurantOrderId(order.getId())
+                .orderNumber(order.getOrderNumber())
+                .subtotalAmount(subtotal.doubleValue())
+                .taxAmount(tax.doubleValue())
+                .serviceChargeAmount(service.doubleValue())
+                .totalAmount(total.doubleValue())
+                .amountTendered(tendered.doubleValue())
+                .changeGiven(tendered.subtract(total).setScale(2, RoundingMode.HALF_UP).doubleValue())
+                .idempotencyKey(request.idempotencyKey())
+                .saleItems(new ArrayList<>())
+                .build();
+        for (OrderItem item : order.getItems()) {
+            BigDecimal unitPrice = item.getUnitPrice() == null ? BigDecimal.ZERO : item.getUnitPrice().setScale(2, RoundingMode.HALF_UP);
+            sale.getSaleItems().add(SaleItem.builder()
+                    .product(products.get(item.getProductId()))
+                    .quantity(item.getQuantity())
+                    .price(unitPrice.doubleValue())
+                    .notes(item.getNotes())
+                    .modifiers(item.getModifiers() == null ? new ArrayList<>() : new ArrayList<>(item.getModifiers()))
+                    .sales(sale)
+                    .build());
+        }
+
+        OrderStatus previousStatus = order.getStatus();
+        Sales saved;
+        try {
+            saved = repository.saveAndFlush(sale);
+        } catch (DataIntegrityViolationException duplicate) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Payment request conflicts with an existing sale; refresh the order before retrying");
+        }
+        order.setSaleId(saved.getId());
+        order.setStatus(OrderStatus.PAID);
+        orderRepository.save(order);
+        auditService.log(actor, "ORDER_PAYMENT_RECORDED", "RestaurantOrder", orderId.toString(),
+                previousStatus.name(), "PAID sale=" + saved.getId() + "; amount=" + total + "; method=CASH");
+        log.info("Cash payment recorded for order {} as sale {} total={}", order.getOrderNumber(), saved.getId(), total);
+        return saved;
+    }
+
+    private Sales replayOrderPayment(Sales prior, Long orderId, BigDecimal tendered, String actor) {
+        if (!java.util.Objects.equals(prior.getCashierId(), actor)
+                || !java.util.Objects.equals(prior.getRestaurantOrderId(), orderId)
+                || !"CASH".equals(prior.getPaymentMethod())
+                || BigDecimal.valueOf(prior.getAmountTendered()).compareTo(tendered) != 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Idempotency key is already associated with a different operation");
+        }
+        return prior;
     }
 
     private boolean matchesRequest(Sales prior, SaleRequest request) {

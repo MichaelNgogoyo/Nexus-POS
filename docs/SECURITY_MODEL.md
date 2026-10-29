@@ -7,6 +7,8 @@
 - Spring validates JWT signatures, expiry, issuer, and at least one configured API audience using the configured Keycloak issuer.
 - Backend authority mapping accepts realm roles and roles from the configured `pos-client` resource only; roles from unrelated Keycloak clients are ignored.
 - Sale and open-order idempotency replays are scoped to the cashier identity and original request data. A different identity or changed payload receives HTTP 409 instead of the stored record.
+- Deferred cash settlement locks the saved order, calculates the due from persisted server-priced items and charges, rejects duplicate/conflicting payments, and returns a replay only to the same cashier for the same order and tender amount. Payment and order state are written in one service transaction and an audit event records the transition.
+- Order submission locks product rows and records one stock movement per product before creating the kitchen ticket; order and kitchen writes roll back together on failure.
 - The `/api/tables/{id}/status` operation validates the status value, updates the occupancy timestamp consistently, and writes an audit event.
 - Receipt access checks that a cashier owns the receipt; managers and admins can access receipts across cashiers.
 - Shift operations enforce cashier ownership, while manager/admin paths can operate across cashiers.
@@ -18,6 +20,7 @@ These checks have unit-level regression coverage. They do not establish full end
 - Keycloak must issue access tokens with the API audience. The backend defaults to `pos-client`; override with `POS_SECURITY_JWT_REQUIRED_AUDIENCES`/`pos.security.jwt.required-audiences` when the API audience differs. Configure and verify the Keycloak audience mapper before staff sign-in testing.
 - The data model has no restaurant or branch ownership boundaries. The current authorization model is single-property and cannot enforce cross-branch isolation.
 - Authorization primarily uses broad role checks (`ADMIN`, `MANAGER`, `CASHIER`, and module roles), not the complete permission model below. Several endpoints still need object-level authorization and API-level authorization tests.
+- Order list and payment access remain property-wide for configured cashier roles because the current schema has no branch ownership. Add branch/restaurant scope before multi-property deployment.
 - Some controllers still bind persistence entities directly, and some administrative mutations do not yet produce audit events.
 - CSRF is disabled for the stateless bearer-token API. This is safe only while authentication uses explicit bearer headers and never ambient cookies.
 - Production CORS must use exact HTTPS origins. Do not configure wildcard origins with credentialed requests.

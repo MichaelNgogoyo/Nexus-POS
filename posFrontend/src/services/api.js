@@ -238,7 +238,9 @@ export const updateTableStatus = (id, status) => apiClient.put(`/api/tables/${id
 export const getActiveOrders = () => apiClient.get('/api/orders');
 export const getOrderById = (id) => apiClient.get(`/api/orders/${id}`);
 export const createOrder = (data) => apiClient.post('/api/orders', data);
+export const submitOrderToKitchen = (data) => apiClient.post('/api/orders/submit', data);
 export const updateOrderStatus = (id, status) => apiClient.put(`/api/orders/${id}/status`, { status });
+export const recordOrderCashPayment = (id, data) => apiClient.post(`/api/orders/${id}/payment`, data);
 export const addOrderItem = (orderId, item) => apiClient.post(`/api/orders/${orderId}/items`, item);
 
 // ========================================

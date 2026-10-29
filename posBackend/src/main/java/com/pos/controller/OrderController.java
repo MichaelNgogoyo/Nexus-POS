@@ -1,10 +1,12 @@
 package com.pos.controller;
 
 import com.pos.dto.OrderStatusRequest;
+import com.pos.dto.OrderPaymentRequest;
 import com.pos.dto.RestaurantOrderItemRequest;
 import com.pos.dto.RestaurantOrderRequest;
 import com.pos.dto.RestaurantOrderResponse;
 import com.pos.service.RestaurantOrderService;
+import com.pos.service.impl.SalesService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -22,6 +24,7 @@ import java.util.List;
 public class OrderController {
 
     private final RestaurantOrderService orderService;
+    private final SalesService salesService;
 
     @GetMapping
     public List<RestaurantOrderResponse> getActiveOrders() {
@@ -38,6 +41,14 @@ public class OrderController {
     @PostMapping
     public ResponseEntity<RestaurantOrderResponse> createOrder(@Valid @RequestBody RestaurantOrderRequest request, Authentication authentication) {
         RestaurantOrderService.CreateResult result = orderService.createOrder(request, authentication.getName());
+        return result.created()
+                ? ResponseEntity.status(HttpStatus.CREATED).body(result.order())
+                : ResponseEntity.ok(result.order());
+    }
+
+    @PostMapping("/submit")
+    public ResponseEntity<RestaurantOrderResponse> createAndSubmitOrder(@Valid @RequestBody RestaurantOrderRequest request, Authentication authentication) {
+        RestaurantOrderService.CreateResult result = orderService.createAndSubmitOrder(request, authentication.getName());
         return result.created()
                 ? ResponseEntity.status(HttpStatus.CREATED).body(result.order())
                 : ResponseEntity.ok(result.order());
@@ -62,5 +73,13 @@ public class OrderController {
     @PostMapping("/{id}/items")
     public ResponseEntity<RestaurantOrderResponse> addItem(@PathVariable Long id, @Valid @RequestBody RestaurantOrderItemRequest request, Authentication authentication) {
         return ResponseEntity.ok(orderService.addItem(id, request, authentication.getName()));
+    }
+
+    @PostMapping("/{id}/payment")
+    public ResponseEntity<com.pos.model.Sales> recordCashPayment(@PathVariable Long id,
+            @Valid @RequestBody OrderPaymentRequest request, Authentication authentication) {
+        String actor = authentication.getPrincipal() instanceof org.springframework.security.oauth2.jwt.Jwt jwt
+                ? jwt.getSubject() : authentication.getName();
+        return ResponseEntity.ok(salesService.settleOrderCash(id, request, actor));
     }
 }

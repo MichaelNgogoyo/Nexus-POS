@@ -149,3 +149,26 @@ The migration audit remains a blocker: the repository has two SQL migration file
 Phase Two is **partially implemented, not signed off**. Audience validation now fails closed in code, but a real Keycloak token with the configured audience has not been exercised. The complete permission matrix, role-specific API tests, and restaurant/branch-level data isolation remain unfinished. There is no restaurant or branch ownership model in the current entities.
 
 Phase Three has started with two data-integrity fixes: a dine-in table is now locked and occupied atomically with open-order creation, and a competing order receives HTTP 409; JPA now models the sale/order links as foreign keys. The schema update was verified in a disposable PostgreSQL 16 container by importing a schema-only copy, removing those two constraints in the disposable database, starting Spring Boot with `ddl-auto:update`, and confirming Hibernate restored them. The test container was removed. A unit test confirms the service uses the pessimistic-lock repository method, but real concurrent requests against PostgreSQL have not been tested. Migration automation, a repeatable isolated PostgreSQL test suite, monetary type conversion, and multi-restaurant/branch schema work remain open. No production database was accessed or changed; the local development database gained only the two Hibernate-managed foreign-key constraints described above.
+
+## Deferred cashier payment implementation (2026-10-29)
+
+The core cashier journey now has a deferred-payment path in the working tree:
+
+- The checkout offers **Send to kitchen · pay later** as the primary action and retains the existing immediate cash checkout as a secondary option.
+- `POST /api/orders/submit` creates a priced order and submits it to the kitchen in one transaction. Replaying the same order key returns the existing order rather than consuming stock or creating another kitchen ticket.
+- Submitting the order locks its product rows, validates current availability and stock, decrements stock once, and records stock movements. Settlement does not decrement stock again. Cancellation after kitchen submission currently leaves that stock consumption in place; it treats the product as committed to preparation, and needs a waste/return policy before broader inventory rollout.
+- The Orders board exposes **Record cash payment** for unpaid orders after kitchen submission. `POST /api/orders/{id}/payment` locks the order, verifies persisted item/tax/service/discount totals, accepts only sufficient cash tender, writes a linked sale using saved order prices, updates the order to `PAID`, and audits the change.
+- Payment requests use an idempotency key. Replays are limited to the same cashier, order, method and tender amount; conflicting keys or already-paid orders return HTTP 409. The existing sale receipt endpoint is reused after settlement.
+- The UI shows payment errors and change, provides quick cash amounts, and offers receipt loading/printing after payment. Non-cash payment, split tender, refunds, and hotel room posting remain unimplemented.
+
+Verification after this change:
+
+| Command | Result |
+|---|---|
+| `./mvnw -B -Dfrontend.skip=true test` in `posBackend/` using Java 21 | Passed: 50 tests, 0 failures/errors; compiles to Java 17 |
+| `npm test` in `posFrontend/` | Passed: 8 tests, 0 failures |
+| `npm run lint` in `posFrontend/` | Passed: 0 errors, 14 existing warnings |
+| `npm run build` in `posFrontend/` | Passed: Vite production build |
+| `git diff --check` | Passed |
+
+These tests do not exercise authenticated browser-to-PostgreSQL behavior or concurrent HTTP requests. The new repository lock/query behavior, transaction rollback, Keycloak roles, and receipt printing still require an isolated PostgreSQL/Keycloak-backed integration or staging check. The local development database was not started, migrated, or changed during this implementation. Production was not accessed. This closes the missing deferred-cash code path at unit/build level; it does **not** certify the complete POS or production readiness.

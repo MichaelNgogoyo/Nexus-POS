@@ -1,9 +1,11 @@
-import { useMemo, useState, Suspense, lazy } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMemo, useRef, useState, Suspense, lazy } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { useKeycloak } from '@react-keycloak/web';
 import {
   getAllProducts, getAllTables, getDashboardSummary, getModifierGroups,
   getTaxRate, listCategories, searchCustomers,
+  submitOrderToKitchen,
 } from '../../services/api.js';
 import { usePermissions } from '../../auth/permissions.js';
 import { useCart } from '../../context/CartContext.jsx';
@@ -39,7 +41,9 @@ const ORDER_TYPES = [
 export default function POSCheckout() {
   const { keycloak } = useKeycloak();
   const { can } = usePermissions();
-  const { cart, addToCart, removeFromCart } = useCart();
+  const { cart, addToCart, removeFromCart, clearCart } = useCart();
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [orderType, setOrderType] = useState('DINE_IN');
   const [category, setCategory] = useState(ALL_CATEGORIES);
   const [search, setSearch] = useState('');
@@ -53,6 +57,8 @@ export default function POSCheckout() {
   const [selectedModifiers, setSelectedModifiers] = useState([]);
   const [itemNote, setItemNote] = useState('');
   const [showAll, setShowAll] = useState(false);
+  const [submittedOrder, setSubmittedOrder] = useState(null);
+  const submitKeyRef = useRef({ signature: null, key: null });
 
   const productsQuery = useQuery({ queryKey: ['products'], queryFn: () => getAllProducts().then(({ data }) => data), staleTime: 60_000 });
   const categoriesQuery = useQuery({ queryKey: ['categories'], queryFn: () => listCategories().then(({ data }) => data), staleTime: 60_000 });
@@ -74,6 +80,23 @@ export default function POSCheckout() {
     queryKey: ['modifier-groups', pendingProduct?.id],
     queryFn: () => getModifierGroups(pendingProduct.id).then(({ data }) => data),
     enabled: Boolean(pendingProduct),
+  });
+  const submitOrderMutation = useMutation({
+    mutationFn: (payload) => submitOrderToKitchen(payload).then(({ data }) => data),
+    onSuccess: (order) => {
+      clearCart();
+      setCartOpen(false);
+      setSelectedTable('');
+      setGuest(null);
+      setGuestQuery('');
+      setOrderNote('');
+      setSubmittedOrder(order);
+      submitKeyRef.current = { signature: null, key: null };
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['tables'] });
+      queryClient.invalidateQueries({ queryKey: ['kitchen-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+    },
   });
 
   const products = useMemo(() => Array.isArray(productsQuery.data) ? productsQuery.data : [], [productsQuery.data]);
@@ -141,6 +164,28 @@ export default function POSCheckout() {
     setCartOpen(true);
   };
 
+  const sendToKitchen = () => {
+    const payload = {
+      orderType,
+      table: orderType === 'DINE_IN' ? { id: Number(selectedTable) } : null,
+      roomNumber: null,
+      customerName: guest?.name || null,
+      notes: orderNote.trim() || null,
+      items: cart.map((item) => ({
+        productId: Number(item.id),
+        quantity: item.quantity,
+        notes: item.notes || null,
+        modifiers: (item.modifiers || []).map((modifier) => ({ id: Number(modifier.id) })),
+      })),
+    };
+    const signature = JSON.stringify(payload);
+    if (submitKeyRef.current.signature !== signature) {
+      submitKeyRef.current = { signature, key: globalThis.crypto?.randomUUID?.() ?? `pos-${Date.now()}-${Math.random().toString(36).slice(2)}` };
+    }
+    setSubmittedOrder(null);
+    submitOrderMutation.mutate({ ...payload, idempotencyKey: submitKeyRef.current.key });
+  };
+
   return (
     <div className="foodpos-checkout">
       <div className="foodpos-scroll-area">
@@ -158,6 +203,11 @@ export default function POSCheckout() {
           </div>
           <div className="foodpos-staff-badge"><span className="foodpos-staff-avatar">{staffName.slice(0, 1).toUpperCase()}</span><span>{staffName}</span></div>
         </header>
+
+        {submittedOrder && <div className="foodpos-order-submitted" role="status">
+          <div><strong>{submittedOrder.orderNumber || `Order #${submittedOrder.id}`} sent to kitchen.</strong><span>Payment is due later. Record cash and load the receipt from Orders when the guest is ready.</span></div>
+          <button type="button" onClick={() => navigate('/pos/orders')}>Open orders <ArrowForwardRoundedIcon /></button>
+        </div>}
 
         <div className="foodpos-order-type" role="group" aria-label="Order type">
           {ORDER_TYPES.map((item) => {
@@ -283,15 +333,17 @@ export default function POSCheckout() {
               <div className="foodpos-total-row"><span>Service <small>{serviceRate}%</small></span><strong>{money(service)}</strong></div>
             </>}
             <div className="foodpos-total-row foodpos-total-due"><span>Total due</span><strong>{money(total)}</strong></div>
-            <button
-              type="button"
-              className="foodpos-primary-action"
-              disabled={!cart.length || taxQuery.isLoading || taxQuery.isError || (orderType === 'DINE_IN' && !selectedTable)}
-              onClick={() => {
-                setCartOpen(false); setShowPayment(true);
-              }}
-            >
-              Continue to payment<span>{money(total)} <ArrowForwardRoundedIcon /></span>
+            {submitOrderMutation.isError && <div className="foodpos-inline-error" role="alert">Order could not be sent. {submitOrderMutation.error?.response?.data?.message || 'Check the connection and retry.'}</div>}
+            <button type="button" className="foodpos-deferred-action"
+              disabled={!cart.length || taxQuery.isLoading || taxQuery.isError || submitOrderMutation.isPending || (orderType === 'DINE_IN' && !selectedTable)}
+              onClick={sendToKitchen}>
+              <span>{submitOrderMutation.isPending ? 'Sending order…' : 'Send to kitchen · pay later'}</span>
+              {!submitOrderMutation.isPending && <span>{money(total)} <ArrowForwardRoundedIcon /></span>}
+            </button>
+            <button type="button" className="foodpos-pay-now-action"
+              disabled={!cart.length || taxQuery.isLoading || taxQuery.isError || submitOrderMutation.isPending || (orderType === 'DINE_IN' && !selectedTable)}
+              onClick={() => { setCartOpen(false); setShowPayment(true); }}>
+              Pay now · {money(total)}
             </button>
           </footer>
         </section>

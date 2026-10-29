@@ -9,6 +9,7 @@ import com.pos.repository.ModifierGroupRepository;
 import com.pos.repository.ProductRepository;
 import com.pos.repository.RestaurantOrderRepository;
 import com.pos.repository.RestaurantTableRepository;
+import com.pos.repository.StockMovementRepository;
 import com.pos.service.impl.AuditService;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -41,6 +42,7 @@ public class RestaurantOrderService {
     private final AuditService auditService;
     private final ModifierGroupRepository modifierGroupRepository;
     private final KitchenOrderRepository kitchenOrderRepository;
+    private final StockMovementRepository stockMovementRepository;
     private final RestaurantOrderMapper orderMapper;
 
     @Value("${pos.tax-rate:0}")
@@ -106,6 +108,20 @@ public class RestaurantOrderService {
         occupyTable(table, actor);
         auditService.log(actor, "ORDER_CREATED", "RestaurantOrder", saved.getId().toString(), null, "OPEN");
         return new CreateResult(orderMapper.toResponse(saved), true);
+    }
+
+    /** Creates and submits in one transaction so a failed kitchen submission cannot leave a half-created order. */
+    @Transactional
+    public CreateResult createAndSubmitOrder(RestaurantOrderRequest request, String actor) {
+        CreateResult created = createOrder(request, actor);
+        OrderStatus status = created.order().status();
+        if (status == OrderStatus.OPEN) {
+            return new CreateResult(submitToKitchen(created.order().id(), OrderStatus.KITCHEN.name(), actor), created.created());
+        }
+        if (status == OrderStatus.KITCHEN || status == OrderStatus.READY || status == OrderStatus.COMPLETED || status == OrderStatus.PAID) {
+            return created;
+        }
+        throw badRequest("This order cannot be submitted to the kitchen");
     }
 
     private boolean matchesRequest(RestaurantOrder previous, RestaurantOrderRequest request) {
@@ -203,7 +219,8 @@ public class RestaurantOrderService {
 
     @Transactional
     public RestaurantOrderResponse submitToKitchen(Long id, String requestedStatus, String actor) {
-        RestaurantOrder order = findOrder(id);
+        RestaurantOrder order = orderRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
         OrderStatus next;
         try {
             next = OrderStatus.valueOf(requestedStatus);
@@ -212,6 +229,7 @@ public class RestaurantOrderService {
         }
         OrderStatus before = order.getStatus();
         if (before != OrderStatus.OPEN || next != OrderStatus.KITCHEN) throw badRequest("Invalid order status transition");
+        consumeCatalogStock(order);
         if (kitchenOrderRepository.findByOrder_Id(id).isEmpty()) {
             kitchenOrderRepository.save(KitchenOrder.builder().order(order).status(KitchenStatus.PENDING).notes(order.getNotes()).build());
         }
@@ -219,6 +237,31 @@ public class RestaurantOrderService {
         RestaurantOrder saved = orderRepository.save(order);
         auditService.log(actor, "ORDER_STATUS_CHANGED", "RestaurantOrder", id.toString(), before.name(), next.name());
         return orderMapper.toResponse(saved);
+    }
+
+    private void consumeCatalogStock(RestaurantOrder order) {
+        Map<Long, Integer> quantities = order.getItems().stream()
+                .collect(Collectors.groupingBy(OrderItem::getProductId, Collectors.summingInt(OrderItem::getQuantity)));
+        if (quantities.isEmpty() || quantities.containsKey(null)) throw badRequest("Order items are invalid");
+        List<Product> products = productRepository.findAllByIdForUpdate(quantities.keySet().stream().sorted().toList());
+        Map<Long, Product> byId = products.stream().collect(Collectors.toMap(Product::getId, product -> product));
+        if (byId.size() != quantities.size()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "One or more ordered products are no longer available");
+        }
+
+        List<StockMovement> movements = new ArrayList<>();
+        for (Map.Entry<Long, Integer> entry : quantities.entrySet()) {
+            Product product = byId.get(entry.getKey());
+            if (!product.isActive()) throw badRequest("Product is unavailable: " + product.getName());
+            if (product.getQuantity() < entry.getValue()) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Insufficient stock for product: " + product.getName());
+            }
+            product.setQuantity(product.getQuantity() - entry.getValue());
+            movements.add(StockMovement.builder().product(product).delta(-entry.getValue())
+                    .balanceAfter(product.getQuantity()).reason("Order submitted " + order.getOrderNumber()).build());
+        }
+        productRepository.saveAll(products);
+        stockMovementRepository.saveAll(movements);
     }
 
     @Transactional
