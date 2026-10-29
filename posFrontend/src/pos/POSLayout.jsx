@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useKeycloak } from '@react-keycloak/web';
 import { ROUTES } from '../routes.js';
+import { usePermissions } from '../auth/permissions.js';
 import PointOfSaleRoundedIcon from '@mui/icons-material/PointOfSaleRounded';
 import TableRestaurantRoundedIcon from '@mui/icons-material/TableRestaurantRounded';
 import ReceiptLongRoundedIcon from '@mui/icons-material/ReceiptLongRounded';
@@ -15,18 +16,21 @@ import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
 import './checkout/hotel-pos.css';
 
 const NAV_ITEMS = [
-  { to: ROUTES.POS_TABLES, Icon: TableRestaurantRoundedIcon, label: 'Floor plan', mobile: true },
-  { to: ROUTES.POS_CHECKOUT, Icon: PointOfSaleRoundedIcon, label: 'Dishes', mobile: true },
-  { to: ROUTES.POS_ORDERS, Icon: ReceiptLongRoundedIcon, label: 'Orders', mobile: true },
-  { to: ROUTES.POS_KITCHEN, Icon: LocalDiningRoundedIcon, label: 'Kitchen', mobile: true },
-  { to: ROUTES.POS_RESERVATIONS, Icon: BookOnlineRoundedIcon, label: 'Bookings' },
-  { to: ROUTES.POS_CUSTOMERS, Icon: GroupsRoundedIcon, label: 'Guests' },
-  { to: ROUTES.POS_SHIFT, Icon: AccessAlarmRoundedIcon, label: 'Shift' },
+  { to: ROUTES.POS_TABLES, Icon: TableRestaurantRoundedIcon, label: 'Floor plan', permission: 'view_tables', mobile: true },
+  { to: ROUTES.POS_CHECKOUT, Icon: PointOfSaleRoundedIcon, label: 'Dishes', permission: 'view_sales', mobile: true },
+  { to: ROUTES.POS_ORDERS, Icon: ReceiptLongRoundedIcon, label: 'Orders', permission: 'view_orders', mobile: true },
+  { to: ROUTES.POS_KITCHEN, Icon: LocalDiningRoundedIcon, label: 'Kitchen', permission: 'view_kitchen', mobile: true },
+  { to: ROUTES.POS_RESERVATIONS, Icon: BookOnlineRoundedIcon, label: 'Bookings', permission: 'view_reservations' },
+  { to: ROUTES.POS_CUSTOMERS, Icon: GroupsRoundedIcon, label: 'Guests', permission: 'view_customers' },
+  { to: ROUTES.POS_SHIFT, Icon: AccessAlarmRoundedIcon, label: 'Shift', permission: 'view_shift' },
 ];
 
 export default function POSLayout() {
   const { keycloak } = useKeycloak();
+  const { can } = usePermissions();
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  const visibleNavItems = NAV_ITEMS.filter((item) => can(item.permission));
+  const primaryRoute = can('view_sales') ? ROUTES.POS_CHECKOUT : ROUTES.POS_KITCHEN;
   const staffName = keycloak?.tokenParsed?.name
     || keycloak?.tokenParsed?.preferred_username
     || 'Staff member';
@@ -35,14 +39,14 @@ export default function POSLayout() {
   return (
     <div className="foodpos-shell">
       <aside className="foodpos-sidebar" aria-label="Restaurant navigation">
-        <NavLink to={ROUTES.POS_CHECKOUT} className="foodpos-brand" aria-label="FoodPOS home">
+        <NavLink to={primaryRoute} className="foodpos-brand" aria-label="FoodPOS home">
           <span className="foodpos-brand-mark">F</span>
           <span className="foodpos-brand-name">FoodPOS</span>
         </NavLink>
 
         <nav className="foodpos-nav" aria-label="POS pages">
           <p className="foodpos-nav-label">Restaurant</p>
-          {NAV_ITEMS.map((item) => {
+          {visibleNavItems.map((item) => {
             const IconComponent = item.Icon;
             return (
               <NavLink
@@ -62,9 +66,9 @@ export default function POSLayout() {
         </nav>
 
         <div className="foodpos-sidebar-bottom">
-          <NavLink to={ROUTES.DASHBOARD} className="foodpos-nav-link foodpos-admin-link">
+          {can('view_dashboard') && <NavLink to={ROUTES.DASHBOARD} className="foodpos-nav-link foodpos-admin-link">
             <DashboardRoundedIcon aria-hidden="true" /><span>Manager dashboard</span>
-          </NavLink>
+          </NavLink>}
           <div className="foodpos-profile">
             <span className="foodpos-profile-avatar" aria-hidden="true">{initials || 'S'}</span>
             <span className="foodpos-profile-copy"><strong>{staffName}</strong><small>Signed in</small></span>
@@ -78,7 +82,7 @@ export default function POSLayout() {
       <main className="foodpos-page"><Outlet /></main>
 
       <nav className="foodpos-mobile-nav" aria-label="Quick navigation">
-        {NAV_ITEMS.filter((item) => item.mobile).map((item) => {
+        {visibleNavItems.filter((item) => item.mobile).map((item) => {
           const IconComponent = item.Icon;
           return <NavLink key={item.to} to={item.to} end aria-label={item.label} className={({ isActive }) => isActive ? 'active' : ''}>
             <IconComponent aria-hidden="true" /><span>{item.label}</span>
@@ -89,15 +93,15 @@ export default function POSLayout() {
         </button>
         {mobileMoreOpen && (
           <div className="foodpos-more-menu">
-            {NAV_ITEMS.filter((item) => !item.mobile).map((item) => {
+            {visibleNavItems.filter((item) => !item.mobile).map((item) => {
               const IconComponent = item.Icon;
               return <NavLink key={item.to} to={item.to} onClick={() => setMobileMoreOpen(false)}>
                 <IconComponent aria-hidden="true" /><span>{item.label}</span>
               </NavLink>;
             })}
-            <NavLink to={ROUTES.DASHBOARD} onClick={() => setMobileMoreOpen(false)}>
+            {can('view_dashboard') && <NavLink to={ROUTES.DASHBOARD} onClick={() => setMobileMoreOpen(false)}>
               <DashboardRoundedIcon aria-hidden="true" /><span>Manager dashboard</span>
-            </NavLink>
+            </NavLink>}
             <button type="button" onClick={() => keycloak?.logout()}>
               <LogoutRoundedIcon aria-hidden="true" /><span>Sign out</span>
             </button>

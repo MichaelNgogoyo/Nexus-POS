@@ -11,6 +11,7 @@ import LocalShippingRoundedIcon from '@mui/icons-material/LocalShippingRounded';
 import HistoryRoundedIcon from '@mui/icons-material/HistoryRounded';
 import WarehouseRoundedIcon from '@mui/icons-material/WarehouseRounded';
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
+import { usePermissions } from '../auth/permissions.js';
 
 function SectionLabel({ label }) {
   return (
@@ -36,6 +37,10 @@ function SideLink({ to, icon, children, iconClass = 'text-brand-primary' }) {
 }
 
 export default function AdminLayout() {
+  const { can } = usePermissions();
+  const showCatalog = can('view_products') || can('view_inventory') || can('manage_categories');
+  const showFinance = can('view_finance') || can('view_procurement');
+
   return (
     <div className="admin-layout min-h-screen bg-bg-primary">
       <NavBar />
@@ -51,28 +56,28 @@ export default function AdminLayout() {
 
           <nav className="flex flex-col flex-grow p-4">
             <div className="flex flex-col space-y-1 flex-grow">
-              <SideLink to={ROUTES.DASHBOARD} icon={DashboardRoundedIcon}>Dashboard</SideLink>
+              {can('view_dashboard') && <SideLink to={ROUTES.DASHBOARD} icon={DashboardRoundedIcon}>Dashboard</SideLink>}
 
-              <SectionLabel label="Catalogue" />
-              <SideLink to={ROUTES.PRODUCTS} icon={InventoryRoundedIcon}>Products</SideLink>
-              <SideLink to={ROUTES.INVENTORY} icon={WarehouseRoundedIcon} iconClass="text-accent-success">Inventory</SideLink>
-              <SideLink to={ROUTES.CATEGORIES} icon={AssessmentRoundedIcon} iconClass="text-accent-warning">Categories</SideLink>
+              {showCatalog && <SectionLabel label="Catalogue" />}
+              {can('view_products') && <SideLink to={ROUTES.PRODUCTS} icon={InventoryRoundedIcon}>Products</SideLink>}
+              {can('view_inventory') && <SideLink to={ROUTES.INVENTORY} icon={WarehouseRoundedIcon} iconClass="text-accent-success">Inventory</SideLink>}
+              {can('manage_categories') && <SideLink to={ROUTES.CATEGORIES} icon={AssessmentRoundedIcon} iconClass="text-accent-warning">Categories</SideLink>}
 
-              <SectionLabel label="Finance" />
-              <SideLink to={ROUTES.FINANCE_EXPENSES} icon={AttachMoneyRoundedIcon} iconClass="text-red-400">Expenses</SideLink>
-              <SideLink to={ROUTES.FINANCE_PURCHASES} icon={ShoppingCartRoundedIcon} iconClass="text-blue-400">Purchases</SideLink>
-              <SideLink to={ROUTES.FINANCE_SUPPLIERS} icon={LocalShippingRoundedIcon} iconClass="text-violet-400">Suppliers</SideLink>
+              {showFinance && <SectionLabel label="Finance" />}
+              {can('view_finance') && <SideLink to={ROUTES.FINANCE_EXPENSES} icon={AttachMoneyRoundedIcon} iconClass="text-red-400">Expenses</SideLink>}
+              {can('view_procurement') && <SideLink to={ROUTES.FINANCE_PURCHASES} icon={ShoppingCartRoundedIcon} iconClass="text-blue-400">Purchases</SideLink>}
+              {can('view_suppliers') && <SideLink to={ROUTES.FINANCE_SUPPLIERS} icon={LocalShippingRoundedIcon} iconClass="text-violet-400">Suppliers</SideLink>}
 
-              <SectionLabel label="People" />
-              <SideLink to={ROUTES.USERS} icon={PeopleAltRoundedIcon} iconClass="text-accent-warning">Users</SideLink>
+              {can('manage_users') && <SectionLabel label="People" />}
+              {can('manage_users') && <SideLink to={ROUTES.USERS} icon={PeopleAltRoundedIcon} iconClass="text-accent-warning">Users</SideLink>}
 
-              <SectionLabel label="Admin" />
-              <SideLink to={ROUTES.ADMIN_AUDIT} icon={HistoryRoundedIcon} iconClass="text-text-muted">Audit Log</SideLink>
+              {can('view_audit') && <SectionLabel label="Admin" />}
+              {can('view_audit') && <SideLink to={ROUTES.ADMIN_AUDIT} icon={HistoryRoundedIcon} iconClass="text-text-muted">Audit Log</SideLink>}
             </div>
 
-            <div className="mt-auto pt-4 border-t border-border-primary space-y-1">
+            {can('manage_settings') && <div className="mt-auto pt-4 border-t border-border-primary space-y-1">
               <SideLink to={ROUTES.SETTINGS} icon={SettingsRoundedIcon} iconClass="text-text-muted">Settings</SideLink>
-            </div>
+            </div>}
           </nav>
         </aside>
 

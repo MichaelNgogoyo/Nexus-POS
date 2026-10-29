@@ -4,8 +4,8 @@ import {emitToast} from "../components/toastBus";
 import { runtimeConfig } from "../config/runtimeConfig";
 
 const API_BASE_URL = runtimeConfig.apiBaseUrl;
-const AUTH_RETRY_KEY = "kc-login-retry-ts";
-const AUTH_RETRY_COOLDOWN_MS = 10_000;
+const AUTH_NOTICE_COOLDOWN_MS = 10_000;
+let lastAuthNoticeAt = 0;
 
 const apiClient = axios.create({
     baseURL: API_BASE_URL,
@@ -29,17 +29,16 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
     (response) => response,
     (error) => {
-        if (error?.response?.status === 401 && keycloak?.authenticated) {
+        const status = error?.response?.status;
+        if (status === 401 && keycloak?.authenticated) {
             const now = Date.now();
-            const lastRetry = Number(sessionStorage.getItem(AUTH_RETRY_KEY) || 0);
-
-            if (now - lastRetry > AUTH_RETRY_COOLDOWN_MS) {
-                sessionStorage.setItem(AUTH_RETRY_KEY, String(now));
-                keycloak.login({redirectUri: window.location.href});
+            if (now - lastAuthNoticeAt > AUTH_NOTICE_COOLDOWN_MS) {
+                lastAuthNoticeAt = now;
+                emitToast("The POS could not validate your sign-in. Sign out and back in; contact an administrator if it continues.", "error");
             }
+            return Promise.reject(error);
         }
 
-        const status = error?.response?.status;
         const message = error?.response?.data?.message || error?.message || "Request failed";
         if (status === 403) {
             emitToast("You are not allowed to perform this action.", "error");
