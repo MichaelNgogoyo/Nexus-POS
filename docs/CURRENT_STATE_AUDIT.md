@@ -2,7 +2,7 @@
 
 **Audit date:** 2026-10-29
 **Repository:** Nexus-POS
-**Branch / HEAD:** `feature/hotel-pos-rebuild` / `557366e` (`feat: complete POS cashier and reservation workflows`)
+**Branch / HEAD:** `feature/hotel-pos-rebuild` / `ce60e16` (`fix: enforce sale and order foreign keys`)
 **Scope:** Source, checked-in configuration, tests, deployment files, and current local changes. This is a code and test audit; it is not a staging or production certification.
 
 ## Executive summary
@@ -129,3 +129,23 @@ These are unit/build results only. No PostgreSQL, Keycloak, MinIO, payment sandb
 ## Phase Zero conclusion
 
 The audit confirms that the repository has a substantial working foundation and that the immediate cash-sale-to-kitchen link already exists. The critical next implementation is **deferred payment for an existing server-priced restaurant order**, alongside touch-first cashier controls and database-backed tests. This audit does not certify production readiness. No production system or existing business data was modified.
+
+## Follow-up implementation and database audit (2026-10-29)
+
+Since the Phase Zero snapshot, five implementation commits have been added on this branch:
+
+- `8d5e39b` moved restaurant order rules out of the controller into an application service and introduced request/response DTOs.
+- `b98bd6b` limits Keycloak client-role extraction to the configured POS client, protects idempotency replays from cross-cashier access and changed payloads, and validates/audits table status changes.
+- `2ffa4bc` adds issuer, expiration, signature, and API-audience validation to JWT decoding. The default required audience is `pos-client`; Keycloak must be configured to issue it.
+- `54ac60d` uses the existing pessimistic table-row lock when creating or transferring an open dine-in order, refuses an occupied table, marks its table occupied in the same transaction, and audits table-state changes.
+- `ce60e16` models both sides of the sale/order link as JPA associations with explicit foreign keys, preventing orphaned links when Hibernate manages the schema.
+
+The backend suite now passes **43 tests** with `./mvnw -B -Dfrontend.skip=true test` on Java 21 (the project compiles for Java 17). The table-order test was rerun after the final audit-log adjustment: `./mvnw -B -Dfrontend.skip=true -Dtest=OrderControllerSecurityTest test` passed 9 tests. These are unit/MVC tests, not a complete authenticated browser-to-database journey. Frontend checks from Phase Zero were not rerun because these follow-up changes are backend-only.
+
+I inspected the running local Docker PostgreSQL database. It is `pos_db` / `public`, and it contains both POS tables and Keycloak tables such as `user_entity`, `client`, and `realm`; this is evidence about the local container only, not production. The observed `sales.subtotal_amount` column exists there. Order money columns use PostgreSQL `numeric`, while `product.price`, `sale_item.price`, and sale totals/tender fields use `double precision`. The initial read-only schema check found no foreign keys for `sales.restaurant_order_id` or `restaurant_orders.sale_id`, although the checked-in SQL migration intends to add them. Read-only checks found zero orphan references and zero reciprocal-link mismatches. After the JPA associations were added, the already-running development backend hot-reloaded and Hibernate `ddl-auto:update` added those two foreign keys to local `pos_db`; no SQL was run directly against that database and no rows changed. The API health check returned HTTP 200 afterward. Production was not inspected or changed.
+
+The migration audit remains a blocker: the repository has two SQL migration files but no Flyway or Liquibase runtime dependency in `pom.xml`, so Spring Boot does not automatically execute them. The local working configuration currently sets Hibernate `ddl-auto: update` in development and production; those config files already had unrelated local changes and were preserved. The local POS and Keycloak tables sharing the `public` schema also means a naive Flyway `baseline-on-migrate` setup could mark an empty POS schema as already baselined. Before enabling a migration runner, separate POS schema detection from Keycloak objects and provide a complete baseline migration for fresh installations.
+
+Phase Two is **partially implemented, not signed off**. Audience validation now fails closed in code, but a real Keycloak token with the configured audience has not been exercised. The complete permission matrix, role-specific API tests, and restaurant/branch-level data isolation remain unfinished. There is no restaurant or branch ownership model in the current entities.
+
+Phase Three has started with two data-integrity fixes: a dine-in table is now locked and occupied atomically with open-order creation, and a competing order receives HTTP 409; JPA now models the sale/order links as foreign keys. The schema update was verified in a disposable PostgreSQL 16 container by importing a schema-only copy, removing those two constraints in the disposable database, starting Spring Boot with `ddl-auto:update`, and confirming Hibernate restored them. The test container was removed. A unit test confirms the service uses the pessimistic-lock repository method, but real concurrent requests against PostgreSQL have not been tested. Migration automation, a repeatable isolated PostgreSQL test suite, monetary type conversion, and multi-restaurant/branch schema work remain open. No production database was accessed or changed; the local development database gained only the two Hibernate-managed foreign-key constraints described above.
