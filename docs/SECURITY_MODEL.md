@@ -11,6 +11,7 @@
 - Order submission locks product rows and records one stock movement per product before creating the kitchen ticket; order and kitchen writes roll back together on failure.
 - An isolated PostgreSQL 16 integration test verifies concurrent identical cash-settlement requests create one sale, preserve one stock movement, link the paid order to the sale, and return receipt items with Open EntityManager in View disabled. This verifies service/database behavior; the test mocks `JwtDecoder` and does not verify live Keycloak authentication or the HTTP security filter chain.
 - Low-stock alerts and stock-movement history are restricted to `ADMIN`, `MANAGER`, and `STOCK_CLERK`. MockMvc tests verify cashiers are denied and stock clerks are allowed through the actual configured Spring Security filter chain and method security.
+- Purchase-order creation and sending are limited to admins, managers, and procurement officers; receipt is limited to admins, managers, and stock clerks. DTOs prevent clients from assigning purchase-order status, line names, or totals. Receipt updates lock the order/products, write stock movement and audit records transactionally, and reject duplicate/concurrent receives.
 - The `/api/tables/{id}/status` operation validates the status value, updates the occupancy timestamp consistently, and writes an audit event.
 - Receipt access checks that a cashier owns the receipt; managers and admins can access receipts across cashiers.
 - Shift operations enforce cashier ownership, while manager/admin paths can operate across cashiers.

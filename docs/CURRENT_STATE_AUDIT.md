@@ -116,7 +116,7 @@ These are unit/build results only. No PostgreSQL, Keycloak, MinIO, payment sandb
 
 ## Prioritized implementation backlog
 
-1. **P0 — Complete cashier flow:** unpaid order creation and kitchen submission; retrieve the same order later; take cash against it exactly once; update order/payment/table state atomically; issue final paid receipt; preserve the touch-first UI and honest loading/error states.
+1. **P0 — Finish cashier acceptance:** the dine-in/takeaway deferred cash path is implemented and service/PostgreSQL-tested; still verify it through Keycloak and the browser, and complete remaining table lifecycle, receipt printing, and waiter workflows.
 2. **P0 — Extend PostgreSQL workflow verification:** the deferred cash order/payment slice, ticket linkage, and duplicate-settlement handling now run against isolated PostgreSQL; still verify table lifecycle, authenticated HTTP behavior, and migration compatibility.
 3. **P0 — Authorization review:** sensitive low-stock and stock-movement reads now have cashier-denial/stock-clerk-allowance HTTP tests; continue mapping actual Keycloak roles to all operations, restrict object ownership, and cover kitchen, manager, and administrator paths.
 4. **P1 — Migration safety:** add a repeatable migration mechanism/process, remove production `ddl-auto=update`, test an upgrade against an isolated database, and document backup/rollback or forward recovery.
@@ -202,3 +202,24 @@ Verification on 2026-10-29:
 | `JAVA_HOME=/home/apperstar/.jdks/ms-21.0.11 PATH=/home/apperstar/.jdks/ms-21.0.11/bin:$PATH ./mvnw -B -Dfrontend.skip=true test` in `posBackend/` | Passed: 55 tests, 0 failures/errors/skips; includes isolated PostgreSQL order/payment integration |
 
 This narrows access to these two endpoints only. It does not complete the API-wide permission review, verify real Keycloak-issued tokens, establish branch/property scoping, or certify production security.
+
+## Purchase order and inventory receiving follow-up (2026-10-29)
+
+The purchase-order endpoints previously accepted JPA entities directly, trusted client-supplied totals, allowed arbitrary status changes, and added stock again on every receive request. The UI also accepted free-text product names without catalog links, so the receive operation could not reliably update inventory.
+
+- Purchase-order create/update/receive now use request and response DTOs. The backend resolves product names from catalog IDs and calculates line and order totals from validated quantities and unit costs.
+- Status transitions are locked and constrained. Only `DRAFT` can become `SENT` or `CANCELLED`; `SENT` can be cancelled; `RECEIVED` is reachable only through receiving.
+- Receiving requires `SENT`, locks the purchase order and catalog products, adds the ordered quantity once, writes stock movements with the resulting balance, updates received quantities/state, and records an audit event in one transaction. Concurrent duplicate receipt attempts result in one successful receipt and one HTTP 409.
+- Procurement roles can create/send orders. Stock clerks can receive but cannot create/send. Managers and admins can perform both. The UI now selects active catalog products and shows server errors.
+
+Verification on 2026-10-29:
+
+| Command | Result |
+|---|---|
+| `JAVA_HOME=/home/apperstar/.jdks/ms-21.0.11 PATH=/home/apperstar/.jdks/ms-21.0.11/bin:$PATH ./mvnw -B -Dfrontend.skip=true test` in `posBackend/` | Passed: 64 tests, 0 failures/errors/skips, including PostgreSQL 16 concurrent receiving and role tests |
+| `npm test` in `posFrontend/` | Passed: 8 tests |
+| `npm run lint` in `posFrontend/` | Passed: 0 errors, 14 existing warnings |
+| `npm run build -- --outDir /tmp/nexus-pos-procurement-build --emptyOutDir` in `posFrontend/` | Passed: Vite production build |
+| `git diff --check` | Passed |
+
+The receive button currently records the entire ordered quantity; partial delivery is not implemented. Legacy purchase-order lines without a linked catalog product are rejected rather than silently adding no stock; cancel and recreate those orders with linked products. This workflow was tested against a disposable PostgreSQL 16 container, not the live development or production database.
