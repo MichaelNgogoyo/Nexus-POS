@@ -1,23 +1,25 @@
 package com.pos.controller;
 
 import com.pos.model.*;
+import com.pos.dto.RestaurantOrderItemRequest;
+import com.pos.dto.RestaurantOrderRequest;
 import com.pos.repository.ProductRepository;
 import com.pos.repository.RestaurantOrderRepository;
 import com.pos.repository.RestaurantTableRepository;
 import com.pos.repository.ModifierGroupRepository;
 import com.pos.repository.KitchenOrderRepository;
 import com.pos.service.impl.AuditService;
+import com.pos.service.RestaurantOrderService;
+import com.pos.service.RestaurantOrderMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
@@ -35,13 +37,14 @@ class OrderControllerSecurityTest {
     @Mock private AuditService auditService;
     @Mock private ModifierGroupRepository modifierGroupRepository;
     @Mock private KitchenOrderRepository kitchenOrderRepository;
-    private OrderController controller;
+    private RestaurantOrderService orderService;
 
     @BeforeEach
     void setUp() {
-        controller = new OrderController(orderRepository, productRepository, tableRepository, auditService, modifierGroupRepository, kitchenOrderRepository);
-        ReflectionTestUtils.setField(controller, "taxRate", 10.0);
-        ReflectionTestUtils.setField(controller, "serviceChargeRate", 5.0);
+        orderService = new RestaurantOrderService(orderRepository, productRepository, tableRepository, auditService,
+                modifierGroupRepository, kitchenOrderRepository, new RestaurantOrderMapper());
+        ReflectionTestUtils.setField(orderService, "taxRate", 10.0);
+        ReflectionTestUtils.setField(orderService, "serviceChargeRate", 5.0);
         lenient().when(orderRepository.save(any(RestaurantOrder.class))).thenAnswer(call -> {
             RestaurantOrder saved = call.getArgument(0);
             if (saved.getId() == null) saved.setId(25L);
@@ -54,37 +57,31 @@ class OrderControllerSecurityTest {
         Product product = Product.builder().id(4L).name("Breakfast plate").price(100.0).active(true).quantity(25).build();
         when(productRepository.findById(4L)).thenReturn(Optional.of(product));
         when(modifierGroupRepository.findByProductId(4L)).thenReturn(List.of());
-        OrderItem clientLine = OrderItem.builder().productId(4L).quantity(2)
-                .unitPrice(new BigDecimal("0.01")).lineTotal(new BigDecimal("0.02")).build();
-        RestaurantOrder request = RestaurantOrder.builder().orderType(OrderType.TAKEAWAY)
-                .status(OrderStatus.PAID).subtotal(new BigDecimal("0.02")).total(new BigDecimal("0.02"))
-                .idempotencyKey("room-charge-attempt-12345")
-                .items(List.of(clientLine)).build();
+        RestaurantOrderRequest request = new RestaurantOrderRequest(OrderType.TAKEAWAY, "room-charge-attempt-12345",
+                null, null, null, null, List.of(new RestaurantOrderItemRequest(4L, 2, null, List.of())));
         var cashier = new UsernamePasswordAuthenticationToken("cashier-4", "", List.of());
 
-        ResponseEntity<RestaurantOrder> response = controller.createOrder(request, cashier);
+        RestaurantOrderService.CreateResult result = orderService.createOrder(request, cashier.getName());
 
-        RestaurantOrder saved = response.getBody();
-        assertThat(response.getStatusCode().value()).isEqualTo(201);
-        assertThat(saved).isNotNull();
-        assertThat(saved.getStatus()).isEqualTo(OrderStatus.OPEN);
-        assertThat(saved.getCashierId()).isEqualTo("cashier-4");
-        assertThat(saved.getSubtotal()).isEqualByComparingTo("200.00");
-        assertThat(saved.getTaxAmount()).isEqualByComparingTo("20.00");
-        assertThat(saved.getServiceChargeAmount()).isEqualByComparingTo("10.00");
-        assertThat(saved.getTotal()).isEqualByComparingTo("230.00");
-        assertThat(saved.getItems().get(0).getUnitPrice()).isEqualByComparingTo("100.00");
+        var saved = result.order();
+        assertThat(result.created()).isTrue();
+        assertThat(saved.status()).isEqualTo(OrderStatus.OPEN);
+        assertThat(saved.cashierId()).isEqualTo("cashier-4");
+        assertThat(saved.subtotal()).isEqualByComparingTo("200.00");
+        assertThat(saved.taxAmount()).isEqualByComparingTo("20.00");
+        assertThat(saved.serviceChargeAmount()).isEqualByComparingTo("10.00");
+        assertThat(saved.total()).isEqualByComparingTo("230.00");
+        assertThat(saved.items().get(0).unitPrice()).isEqualByComparingTo("100.00");
         assertThat(OrderController.class.getAnnotation(PreAuthorize.class).value())
                 .contains("ADMIN", "MANAGER", "CASHIER");
     }
 
     @Test
     void dineInOrderRequiresARealTable() {
-        RestaurantOrder request = RestaurantOrder.builder().orderType(OrderType.DINE_IN)
-                .idempotencyKey("dine-in-attempt-12345").items(List.of(OrderItem.builder().productId(4L).quantity(1).build())).build();
+        RestaurantOrderRequest request = new RestaurantOrderRequest(OrderType.DINE_IN, "dine-in-attempt-12345",
+                null, null, null, null, List.of(new RestaurantOrderItemRequest(4L, 1, null, List.of())));
 
-        assertThatThrownBy(() -> controller.createOrder(request,
-                new UsernamePasswordAuthenticationToken("cashier-4", "", List.of())))
+        assertThatThrownBy(() -> orderService.createOrder(request, "cashier-4"))
                 .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
                 .hasMessageContaining("Select a table");
         verify(orderRepository, never()).save(any());
@@ -93,11 +90,10 @@ class OrderControllerSecurityTest {
 
     @Test
     void roomChargeOrderIsUnavailableWithoutHotelFolioIntegration() {
-        RestaurantOrder request = RestaurantOrder.builder().orderType(OrderType.ROOM_CHARGE)
-                .idempotencyKey("room-charge-attempt-12345").items(List.of(OrderItem.builder().productId(4L).quantity(1).build())).build();
+        RestaurantOrderRequest request = new RestaurantOrderRequest(OrderType.ROOM_CHARGE, "room-charge-attempt-12345",
+                null, "101", null, null, List.of(new RestaurantOrderItemRequest(4L, 1, null, List.of())));
 
-        assertThatThrownBy(() -> controller.createOrder(request,
-                new UsernamePasswordAuthenticationToken("cashier-4", "", List.of())))
+        assertThatThrownBy(() -> orderService.createOrder(request, "cashier-4"))
                 .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
                 .hasMessageContaining("Room charges are unavailable");
         verify(orderRepository, never()).save(any());
@@ -106,12 +102,10 @@ class OrderControllerSecurityTest {
 
     @Test
     void createOrderRejectsClientQuantityOutsideAllowedBounds() {
-        RestaurantOrder request = RestaurantOrder.builder().orderType(OrderType.TAKEAWAY)
-                .idempotencyKey("room-charge-attempt-12345")
-                .items(List.of(OrderItem.builder().productId(4L).quantity(0).build())).build();
+        RestaurantOrderRequest request = new RestaurantOrderRequest(OrderType.TAKEAWAY, "room-charge-attempt-12345",
+                null, null, null, null, List.of(new RestaurantOrderItemRequest(4L, 0, null, List.of())));
 
-        assertThatThrownBy(() -> controller.createOrder(request,
-                new UsernamePasswordAuthenticationToken("cashier-4", "", List.of())))
+        assertThatThrownBy(() -> orderService.createOrder(request, "cashier-4"))
                 .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
                 .hasMessageContaining("quantity between 1 and 999");
         verify(orderRepository, never()).save(any());
@@ -122,13 +116,13 @@ class OrderControllerSecurityTest {
     void repeatedOrderIdempotencyKeyReturnsOriginalWithoutRepeatingWrites() {
         RestaurantOrder previous = RestaurantOrder.builder().id(25L).orderNumber("ORD-0025").build();
         when(orderRepository.findByIdempotencyKey("room-charge-attempt-12345")).thenReturn(Optional.of(previous));
-        RestaurantOrder request = RestaurantOrder.builder().orderType(OrderType.TAKEAWAY)
-                .idempotencyKey("room-charge-attempt-12345").items(List.of(OrderItem.builder().productId(4L).quantity(1).build())).build();
+        RestaurantOrderRequest request = new RestaurantOrderRequest(OrderType.TAKEAWAY, "room-charge-attempt-12345",
+                null, null, null, null, List.of(new RestaurantOrderItemRequest(4L, 1, null, List.of())));
 
-        ResponseEntity<RestaurantOrder> response = controller.createOrder(request,
-                new UsernamePasswordAuthenticationToken("cashier-4", "", List.of()));
+        RestaurantOrderService.CreateResult result = orderService.createOrder(request, "cashier-4");
 
-        assertThat(response.getBody()).isSameAs(previous);
+        assertThat(result.order().id()).isEqualTo(previous.getId());
+        assertThat(result.created()).isFalse();
         verify(orderRepository, never()).save(any());
         verifyNoInteractions(productRepository, auditService);
     }
