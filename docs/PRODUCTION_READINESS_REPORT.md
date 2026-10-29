@@ -5,6 +5,8 @@
 **Repository:** Nexus-POS
 
 **Branch:** `feature/hotel-pos-rebuild`
+
+**Application revision assessed:** `a23f3e4`
 **Decision:** **NO-GO for production**
 
 This report records the evidence gathered during the current implementation pass. It distinguishes code and automated-test evidence from live application behavior. A passing build does not certify production readiness.
@@ -36,7 +38,7 @@ The project is **not production-ready**. The authenticated cashier journey has n
 | API contracts and errors | **Partially implemented** | Springdoc/OpenAPI and common API patterns exist. Endpoint-by-endpoint auth/validation/pagination documentation and compatibility review remain incomplete. |
 | Responsive POS UI | **Implemented, not end-to-end verified** | React production build passes and the cashier UI was observed rendering. API requests previously returned 401, so a real signed-in order cannot yet be certified. |
 | Automated frontend tests | **Verified** | 8 frontend tests passed; lint passed with 14 existing warnings; production build passed. |
-| Automated backend tests | **Verified locally and in GitHub CI** | `CORS_ALLOWED_ORIGINS=http://127.0.0.1:5173 JAVA_HOME=... ./mvnw -B -Dfrontend.skip=true verify` passed: 84 tests, 0 failures/errors/skips, including disposable PostgreSQL integration tests. GitHub run `40954617597` passed the backend and frontend jobs; its image-build job was queued at report time. |
+| Automated backend tests | **Verified locally and in GitHub CI** | `CORS_ALLOWED_ORIGINS=http://127.0.0.1:5173 JAVA_HOME=/home/apperstar/.jdks/ms-21.0.11 PATH=/home/apperstar/.jdks/ms-21.0.11/bin:$PATH ./mvnw -B -Dfrontend.skip=true verify` passed: 84 tests, 0 failures/errors/skips, including disposable PostgreSQL integration tests. GitHub run `40954617597` passed backend verification, frontend checks, and both container builds. |
 | Dependency audit | **Verified for current frontend lockfile** | `npm audit --audit-level=high` reports 0 vulnerabilities after updating the lockfile. The previous pushed lockfile had 17 high and 7 lower-severity advisories; it has been replaced. Backend dependency and container CVE scans remain to be added. |
 | Docker image builds | **Verified locally** | Frontend and backend images built successfully. The backend image compile emitted existing Lombok builder warnings. Images were not deployed or run as a production stack. |
 | Production Compose configuration | **Partially verified** | Compose syntax was parsed with placeholder environment values. Actual hostnames, credentials, TLS, volumes, and service readiness are not verified. |
