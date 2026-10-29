@@ -117,7 +117,7 @@ These are unit/build results only. No PostgreSQL, Keycloak, MinIO, payment sandb
 ## Prioritized implementation backlog
 
 1. **P0 — Complete cashier flow:** unpaid order creation and kitchen submission; retrieve the same order later; take cash against it exactly once; update order/payment/table state atomically; issue final paid receipt; preserve the touch-first UI and honest loading/error states.
-2. **P0 — Test the vertical slice with PostgreSQL:** persistence, idempotency under retries/concurrency, ticket linkage, duplicate-payment protection, receipt totals, and table lifecycle.
+2. **P0 — Extend PostgreSQL workflow verification:** the deferred cash order/payment slice, ticket linkage, and duplicate-settlement handling now run against isolated PostgreSQL; still verify table lifecycle, authenticated HTTP behavior, and migration compatibility.
 3. **P0 — Authorization review:** map actual Keycloak roles to operations, restrict object ownership, and add positive/negative API tests for cashier, kitchen, manager, and administrator.
 4. **P1 — Migration safety:** add a repeatable migration mechanism/process, remove production `ddl-auto=update`, test an upgrade against an isolated database, and document backup/rollback or forward recovery.
 5. **P1 — Financial integrity:** converge on `BigDecimal`/decimal database columns, persist payment states/attempts, define refund/void approvals and cash movement reconciliation.
@@ -172,3 +172,20 @@ Verification after this change:
 | `git diff --check` | Passed |
 
 These tests do not exercise authenticated browser-to-PostgreSQL behavior or concurrent HTTP requests. The new repository lock/query behavior, transaction rollback, Keycloak roles, and receipt printing still require an isolated PostgreSQL/Keycloak-backed integration or staging check. The local development database was not started, migrated, or changed during this implementation. Production was not accessed. This closes the missing deferred-cash code path at unit/build level; it does **not** certify the complete POS or production readiness.
+
+## Deferred cashier PostgreSQL verification follow-up (2026-10-29)
+
+The deferred-payment service workflow is now exercised against a disposable PostgreSQL 16 Testcontainers instance. The test uses a fresh `create-drop` schema and test-only configuration; it does not connect to or modify the running development `pos-postgres` container.
+
+- Submitting an unpaid takeaway order persists the server-calculated total, creates the kitchen ticket, reduces product stock once, and records one stock movement.
+- Two simultaneous cash settlement calls with the same idempotency key return the same sale. PostgreSQL contains one sale, the order is `PAID` and linked to that sale, and stock is not deducted a second time.
+- A replay returns the existing sale, and a different key cannot settle the already-paid order.
+- The integration test also caught a lazy-loading defect in the API response path. `SalesRepository.findByIdempotencyKey` now fetches the receipt item graph, and the settlement service reloads the saved sale graph before returning it. The test runs with `spring.jpa.open-in-view=false` and verifies the receipt line is available after settlement.
+
+Verification on 2026-10-29:
+
+| Command | Result |
+|---|---|
+| `JAVA_HOME=/home/apperstar/.jdks/ms-21.0.11 PATH=/home/apperstar/.jdks/ms-21.0.11/bin:$PATH ./mvnw -B -Dfrontend.skip=true test` in `posBackend/` | Passed: 51 tests, 0 failures/errors/skips, including the PostgreSQL 16 Testcontainers integration test |
+
+The database integration test invokes application services directly and mocks `JwtDecoder`; it does not verify a real Keycloak token, authenticated HTTP request/response, browser printing, provider payment, or deployment. It is skipped when Docker is unavailable. Table concurrency, migration automation, production schema safety, and full frontend-to-backend acceptance remain open. This evidence verifies one cashier order/payment slice and does **not** certify the complete POS or production readiness.

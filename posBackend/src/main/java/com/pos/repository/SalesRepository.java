@@ -14,6 +14,7 @@ import java.util.Optional;
 
 public interface SalesRepository extends JpaRepository<Sales, Long> {
 
+    @EntityGraph("Sales.withItems")
     Optional<Sales> findByIdempotencyKey(String idempotencyKey);
 
     Optional<Sales> findByRestaurantOrderId(Long restaurantOrderId);

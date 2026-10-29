@@ -378,7 +378,8 @@ public class SalesService {
         auditService.log(actor, "ORDER_PAYMENT_RECORDED", "RestaurantOrder", orderId.toString(),
                 previousStatus.name(), "PAID sale=" + saved.getId() + "; amount=" + total + "; method=CASH");
         log.info("Cash payment recorded for order {} as sale {} total={}", order.getOrderNumber(), saved.getId(), total);
-        return saved;
+        // Controllers return the sale entity; load the receipt graph before the transaction closes.
+        return repository.findById(saved.getId()).orElse(saved);
     }
 
     private Sales replayOrderPayment(Sales prior, Long orderId, BigDecimal tendered, String actor) {
