@@ -15,6 +15,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 @Slf4j
 @Service
@@ -33,9 +35,9 @@ public class ReportService {
         LocalDateTime thirtyDaysAgo = LocalDateTime.now().minusDays(30);
 
         // KPI counters
-        double todayRevenue = salesRepository.sumRevenueSince(startOfToday);
+        BigDecimal todayRevenue = money(salesRepository.sumRevenueSince(startOfToday));
         long todayCount = salesRepository.countSalesSince(startOfToday);
-        double monthRevenue = salesRepository.sumRevenueSince(startOfMonth);
+        BigDecimal monthRevenue = money(salesRepository.sumRevenueSince(startOfMonth));
         long monthCount = salesRepository.countSalesSince(startOfMonth);
         long totalProducts = productRepository.countByActiveTrue();
         long lowStockCount = productRepository.findLowStockProducts().size();
@@ -44,7 +46,7 @@ public class ReportService {
         List<DailyStat> dailyStats = salesRepository.dailyRevenue(thirtyDaysAgo).stream()
                 .map(row -> new DailyStat(
                         row[0] != null ? row[0].toString() : "",
-                        row[1] != null ? ((Number) row[1]).doubleValue() : 0.0,
+                        money(row[1]),
                         row[2] != null ? ((Number) row[2]).longValue() : 0L
                 ))
                 .toList();
@@ -54,7 +56,7 @@ public class ReportService {
                 .map(sale -> new RecentSale(
                         sale.getId(),
                         sale.getCashierId(),
-                        sale.getTotalAmount(),
+                        money(sale.getTotalAmount()),
                         sale.getPaymentMethod(),
                         sale.getStatus() != null ? sale.getStatus().name() : "UNKNOWN",
                         sale.getCreatedAt() != null ? sale.getCreatedAt().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME) : "",
@@ -62,7 +64,7 @@ public class ReportService {
                                 .map(item -> new SaleLineItem(
                                         item.getProduct() != null ? item.getProduct().getName() : "Unknown",
                                         item.getQuantity(),
-                                        item.getPrice()
+                                        money(item.getPrice())
                                 ))
                                 .toList()
                 ))
@@ -74,7 +76,7 @@ public class ReportService {
                         row[0] != null ? ((Number) row[0]).longValue() : 0L,
                         row[1] != null ? row[1].toString() : "Unknown",
                         row[2] != null ? ((Number) row[2]).longValue() : 0L,
-                        row[3] != null ? ((Number) row[3]).doubleValue() : 0.0
+                        money(row[3])
                 ))
                 .toList();
 
@@ -89,5 +91,11 @@ public class ReportService {
     @Transactional(readOnly = true)
     public List<Product> getLowStockProducts() {
         return productRepository.findLowStockProducts();
+    }
+
+    private BigDecimal money(Object value) {
+        if (value == null) return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal amount = value instanceof BigDecimal decimal ? decimal : new BigDecimal(value.toString());
+        return amount.setScale(2, RoundingMode.HALF_UP);
     }
 }

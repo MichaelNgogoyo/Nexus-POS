@@ -75,3 +75,13 @@ This matrix is a target policy, not an assertion that every permission is enforc
 ## Security acceptance tests
 
 Unauthenticated requests fail; each role has allowed and denied cases; object/branch scoping is enforced; expired/wrong issuer/audience tokens fail; invalid callback signature/replay/amount mismatch is rejected; idempotent duplicate events do not duplicate payment/folio/refund effects; guest data and secrets are absent from logs and errors.
+
+## Step 1–3 follow-up review (2026-10-29)
+
+The local browser reaches `/pos/checkout`, but the backend currently returns HTTP 401 to the cashier page's menu, category, and summary requests. No order or payment was submitted. The browser account shows a signed-in cashier identity, but the API does not accept the requests; this is not proof that Keycloak-to-API authentication works. A real cash order, kitchen update, deferred payment, and receipt still need to be run after the API token/audience configuration is corrected.
+
+Order authorization now scopes a cashier's active-order list, detail, update, kitchen submission, item addition, cancellation service call, and cash settlement to that order's cashier identity. Managers/admins can operate across cashiers where the endpoint role policy permits it. Non-owner reads and mutation attempts return not found to avoid disclosing another cashier's order. Service mutations use row locks before changing an existing order. Cash payments and newly created orders now store the Keycloak subject consistently with shift reconciliation; both the subject and preferred username are accepted as aliases when resolving ownership for existing orders created before this correction. Receipt access also accepts either identity representation for legacy sales.
+
+The table status endpoint is now manager/admin-only, and the generic table update no longer accepts client-provided occupancy status or timestamps. Supplier deletion is manager/admin-only. The API role review also confirmed that branch and restaurant ownership fields are absent from the model. This remains a deployment blocker for multi-branch or multi-tenant operation: current access scopes are within one shared property database, not across branches.
+
+The implemented API review is still partial rather than a full permission-model sign-off. Reservations and kitchen reads remain property-wide for their configured roles; supplier and reservation controllers still expose persistence entities; some manager mutations lack reason-bearing approval workflows; broad `ADMIN`/`MANAGER`/`CASHIER` checks remain instead of the full granular permission catalog. Review these before multi-property or least-privilege production rollout.

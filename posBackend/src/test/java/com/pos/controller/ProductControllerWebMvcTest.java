@@ -18,6 +18,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.util.List;
 import java.util.Map;
+import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -85,7 +86,7 @@ class ProductControllerWebMvcTest {
         Product product = Product.builder()
                 .id(11L)
                 .name("Bread")
-            .price(8.50)
+                .price(new BigDecimal("8.50"))
                 .quantity(20)
                 .active(true)
                 .build();

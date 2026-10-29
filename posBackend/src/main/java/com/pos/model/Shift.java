@@ -27,10 +27,14 @@ public class Shift {
     private ShiftStatus status = ShiftStatus.OPEN;
 
     @Builder.Default
+    @Column(name = "opening_balance", nullable = false, precision = 19, scale = 2)
     private BigDecimal openingBalance = BigDecimal.ZERO;
 
+    @Column(name = "closing_balance", precision = 19, scale = 2)
     private BigDecimal closingBalance;
+    @Column(name = "expected_balance", precision = 19, scale = 2)
     private BigDecimal expectedBalance;
+    @Column(precision = 19, scale = 2)
     private BigDecimal variance;
 
     private LocalDateTime openedAt;

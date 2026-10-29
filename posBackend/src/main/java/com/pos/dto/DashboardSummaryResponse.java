@@ -1,6 +1,7 @@
 package com.pos.dto;
 
 import java.util.List;
+import java.math.BigDecimal;
 
 /**
  * Aggregated dashboard data returned by GET /api/report/summary.
@@ -9,13 +10,13 @@ import java.util.List;
 public record DashboardSummaryResponse(
 
         /** Total revenue from completed sales today */
-        double todayRevenue,
+        BigDecimal todayRevenue,
 
         /** Number of completed sales today */
         long todaySalesCount,
 
         /** Total revenue from completed sales this month */
-        double monthRevenue,
+        BigDecimal monthRevenue,
 
         /** Number of completed sales this month */
         long monthSalesCount,
@@ -36,13 +37,13 @@ public record DashboardSummaryResponse(
         List<TopProduct> topProducts
 ) {
 
-    public record DailyStat(String day, double revenue, long salesCount) {}
+    public record DailyStat(String day, BigDecimal revenue, long salesCount) {}
 
-    public record RecentSale(Long id, String cashierId, double totalAmount,
+    public record RecentSale(Long id, String cashierId, BigDecimal totalAmount,
                              String paymentMethod, String status, String createdAt,
                              List<SaleLineItem> items) {}
 
-    public record SaleLineItem(String productName, int quantity, double price) {}
+    public record SaleLineItem(String productName, int quantity, BigDecimal price) {}
 
-    public record TopProduct(Long productId, String productName, long totalQty, double totalRevenue) {}
+    public record TopProduct(Long productId, String productName, long totalQty, BigDecimal totalRevenue) {}
 }

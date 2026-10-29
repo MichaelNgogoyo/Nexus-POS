@@ -32,6 +32,7 @@ public class PurchaseOrder {
     @Builder.Default
     private List<PurchaseOrderItem> items = new ArrayList<>();
 
+    @Column(name = "total_amount", nullable = false, precision = 19, scale = 2)
     private BigDecimal totalAmount = BigDecimal.ZERO;
     private String notes;
     private String createdBy;

@@ -17,6 +17,7 @@ public class Modifier {
     private Long id;
 
     private String name;
+    @Column(name = "additional_price", nullable = false, precision = 19, scale = 2)
     private BigDecimal additionalPrice = BigDecimal.ZERO;
     private Boolean available = true;
 

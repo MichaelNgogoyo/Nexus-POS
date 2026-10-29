@@ -50,16 +50,16 @@ class SalesServiceIdempotencyTest {
     @BeforeEach
     void setUp() {
         service = new SalesService(salesRepository, productRepository, stockMovementRepository, auditService, tableRepository, modifierGroupRepository, orderRepository, kitchenOrderRepository);
-        ReflectionTestUtils.setField(service, "taxRatePercent", 16.0);
-        ReflectionTestUtils.setField(service, "serviceChargeRatePercent", 5.0);
+        ReflectionTestUtils.setField(service, "taxRatePercent", new BigDecimal("16.00"));
+        ReflectionTestUtils.setField(service, "serviceChargeRatePercent", new BigDecimal("5.00"));
     }
 
     @Test
     void repeatingAnIdempotencyKeyReturnsOriginalSaleWithoutRepeatingSideEffects() {
-        SaleRequest request = new SaleRequest("cashier", "CASH", List.of(new SaleItemRequest(3L, 1, null, null)), 121.0,
+        SaleRequest request = new SaleRequest("cashier", "CASH", List.of(new SaleItemRequest(3L, 1, null, null)), new BigDecimal("121.00"),
                 OrderType.TAKEAWAY, null, null, null, null, "checkout-attempt-12345");
         Sales original = Sales.builder().id(91L).cashierId("cashier").paymentMethod("CASH")
-                .orderType(OrderType.TAKEAWAY).amountTendered(121.0).totalAmount(121.0)
+                .orderType(OrderType.TAKEAWAY).amountTendered(new BigDecimal("121.00")).totalAmount(new BigDecimal("121.00"))
                 .saleItems(List.of(SaleItem.builder().product(Product.builder().id(3L).build()).quantity(1)
                         .modifiers(List.of()).build())).build();
         when(salesRepository.findByIdempotencyKey(request.idempotencyKey())).thenReturn(Optional.of(original));
@@ -74,11 +74,11 @@ class SalesServiceIdempotencyTest {
 
     @Test
     void cashSettlementUsesSavedOrderTotalsAndDoesNotDecrementStockAgain() {
-        Product product = Product.builder().id(4L).name("Breakfast plate").price(120.0).active(true).quantity(8).build();
+        Product product = Product.builder().id(4L).name("Breakfast plate").price(new BigDecimal("120.00")).active(true).quantity(8).build();
         OrderItem item = OrderItem.builder().productId(4L).productName("Breakfast plate")
                 .unitPrice(new BigDecimal("100.00")).quantity(1).lineTotal(new BigDecimal("100.00")).build();
         RestaurantOrder order = RestaurantOrder.builder().id(25L).orderNumber("ORD-25").orderType(OrderType.TAKEAWAY)
-                .status(OrderStatus.READY).cashierId("waiter").items(new java.util.ArrayList<>(List.of(item)))
+                .status(OrderStatus.READY).cashierId("cashier").items(new java.util.ArrayList<>(List.of(item)))
                 .subtotal(new BigDecimal("100.00")).taxAmount(new BigDecimal("10.00"))
                 .serviceChargeAmount(new BigDecimal("5.00")).discountAmount(BigDecimal.ZERO)
                 .total(new BigDecimal("115.00")).build();
@@ -97,14 +97,14 @@ class SalesServiceIdempotencyTest {
 
         assertThat(sale.getId()).isEqualTo(88L);
         assertThat(sale.getRestaurantOrderId()).isEqualTo(25L);
-        assertThat(sale.getSubtotalAmount()).isEqualTo(100.0);
-        assertThat(sale.getTaxAmount()).isEqualTo(10.0);
-        assertThat(sale.getServiceChargeAmount()).isEqualTo(5.0);
-        assertThat(sale.getTotalAmount()).isEqualTo(115.0);
-        assertThat(sale.getAmountTendered()).isEqualTo(120.0);
-        assertThat(sale.getChangeGiven()).isEqualTo(5.0);
+        assertThat(sale.getSubtotalAmount()).isEqualByComparingTo("100.00");
+        assertThat(sale.getTaxAmount()).isEqualByComparingTo("10.00");
+        assertThat(sale.getServiceChargeAmount()).isEqualByComparingTo("5.00");
+        assertThat(sale.getTotalAmount()).isEqualByComparingTo("115.00");
+        assertThat(sale.getAmountTendered()).isEqualByComparingTo("120.00");
+        assertThat(sale.getChangeGiven()).isEqualByComparingTo("5.00");
         assertThat(sale.getSaleItems()).hasSize(1);
-        assertThat(sale.getSaleItems().get(0).getPrice()).isEqualTo(100.0);
+        assertThat(sale.getSaleItems().get(0).getPrice()).isEqualByComparingTo("100.00");
         assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
         assertThat(order.getSaleId()).isEqualTo(88L);
         verify(productRepository, never()).saveAll(any());
@@ -118,7 +118,7 @@ class SalesServiceIdempotencyTest {
         OrderItem item = OrderItem.builder().productId(4L).unitPrice(new BigDecimal("100.00"))
                 .quantity(1).lineTotal(new BigDecimal("100.00")).build();
         RestaurantOrder order = RestaurantOrder.builder().id(25L).status(OrderStatus.KITCHEN)
-                .items(new java.util.ArrayList<>(List.of(item))).subtotal(new BigDecimal("100.00"))
+                .cashierId("cashier").items(new java.util.ArrayList<>(List.of(item))).subtotal(new BigDecimal("100.00"))
                 .taxAmount(BigDecimal.ZERO).serviceChargeAmount(BigDecimal.ZERO).discountAmount(BigDecimal.ZERO)
                 .total(new BigDecimal("100.00")).build();
         when(salesRepository.findByIdempotencyKey("payment-request-123456")).thenReturn(Optional.empty());
@@ -136,7 +136,7 @@ class SalesServiceIdempotencyTest {
     @Test
     void cashSettlementReplaysOnlyForTheSameCashierOrderAndAmount() {
         Sales previous = Sales.builder().id(88L).cashierId("cashier").restaurantOrderId(25L)
-                .paymentMethod("CASH").amountTendered(120.0).totalAmount(115.0).build();
+                .paymentMethod("CASH").amountTendered(new BigDecimal("120.00")).totalAmount(new BigDecimal("115.00")).build();
         when(salesRepository.findByIdempotencyKey("payment-request-123456")).thenReturn(Optional.of(previous));
 
         Sales replay = service.settleOrderCash(25L,
@@ -150,7 +150,7 @@ class SalesServiceIdempotencyTest {
     @Test
     void cashSettlementReplayCannotExposeAnotherCashiersSale() {
         Sales previous = Sales.builder().id(88L).cashierId("cashier-2").restaurantOrderId(25L)
-                .paymentMethod("CASH").amountTendered(120.0).totalAmount(115.0).build();
+                .paymentMethod("CASH").amountTendered(new BigDecimal("120.00")).totalAmount(new BigDecimal("115.00")).build();
         when(salesRepository.findByIdempotencyKey("payment-request-123456")).thenReturn(Optional.of(previous));
 
         assertThatThrownBy(() -> service.settleOrderCash(25L,
@@ -161,10 +161,30 @@ class SalesServiceIdempotencyTest {
     }
 
     @Test
+    void cashSettlementCannotPayAnotherCashiersOrder() {
+        RestaurantOrder order = RestaurantOrder.builder().id(25L).cashierId("cashier-2")
+                .status(OrderStatus.READY).items(new java.util.ArrayList<>(List.of(
+                        OrderItem.builder().productId(4L).quantity(1).unitPrice(new BigDecimal("100.00"))
+                                .lineTotal(new BigDecimal("100.00")).build())))
+                .subtotal(new BigDecimal("100.00")).taxAmount(BigDecimal.ZERO).serviceChargeAmount(BigDecimal.ZERO)
+                .discountAmount(BigDecimal.ZERO).total(new BigDecimal("100.00")).build();
+        when(salesRepository.findByIdempotencyKey("payment-request-123456")).thenReturn(Optional.empty());
+        when(orderRepository.findByIdForUpdate(25L)).thenReturn(Optional.of(order));
+        when(salesRepository.findByIdempotencyKey("payment-request-123456")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.settleOrderCash(25L,
+                new OrderPaymentRequest(new BigDecimal("100.00"), "payment-request-123456"), "cashier"))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("Order not found");
+        verify(salesRepository, never()).saveAndFlush(any());
+        verify(productRepository, never()).findAllById(any());
+    }
+
+    @Test
     void idempotencyReplayCannotExposeAnotherCashiersSale() {
-        SaleRequest request = new SaleRequest("cashier", "CASH", List.of(new SaleItemRequest(3L, 1, null, null)), 121.0,
+        SaleRequest request = new SaleRequest("cashier", "CASH", List.of(new SaleItemRequest(3L, 1, null, null)), new BigDecimal("121.00"),
                 OrderType.TAKEAWAY, null, null, null, null, "checkout-attempt-12345");
-        Sales original = Sales.builder().id(91L).cashierId("different-cashier").totalAmount(121.0).build();
+        Sales original = Sales.builder().id(91L).cashierId("different-cashier").totalAmount(new BigDecimal("121.00")).build();
         when(salesRepository.findByIdempotencyKey(request.idempotencyKey())).thenReturn(Optional.of(original));
 
         assertThatThrownBy(() -> service.createSales(request, "cashier"))
@@ -177,14 +197,14 @@ class SalesServiceIdempotencyTest {
 
     @Test
     void idempotencyReplayRejectsDifferentPayloadFromTheSameCashier() {
-        SaleRequest originalRequest = new SaleRequest("cashier", "CASH", List.of(new SaleItemRequest(3L, 1, null, null)), 121.0,
+        SaleRequest originalRequest = new SaleRequest("cashier", "CASH", List.of(new SaleItemRequest(3L, 1, null, null)), new BigDecimal("121.00"),
                 OrderType.TAKEAWAY, null, null, null, null, "checkout-attempt-12345");
         Sales original = Sales.builder().id(91L).cashierId("cashier").paymentMethod("CASH")
-                .orderType(OrderType.TAKEAWAY).amountTendered(121.0).totalAmount(121.0)
+                .orderType(OrderType.TAKEAWAY).amountTendered(new BigDecimal("121.00")).totalAmount(new BigDecimal("121.00"))
                 .saleItems(List.of(SaleItem.builder().product(Product.builder().id(3L).build()).quantity(1)
                         .modifiers(List.of()).build())).build();
         when(salesRepository.findByIdempotencyKey(originalRequest.idempotencyKey())).thenReturn(Optional.of(original));
-        SaleRequest differentPayload = new SaleRequest("cashier", "CASH", List.of(new SaleItemRequest(3L, 2, null, null)), 121.0,
+        SaleRequest differentPayload = new SaleRequest("cashier", "CASH", List.of(new SaleItemRequest(3L, 2, null, null)), new BigDecimal("121.00"),
                 OrderType.TAKEAWAY, null, null, null, null, originalRequest.idempotencyKey());
 
         assertThatThrownBy(() -> service.createSales(differentPayload, "cashier"))
@@ -197,8 +217,8 @@ class SalesServiceIdempotencyTest {
 
     @Test
     void successfulCashSaleCreatesLinkedOrderAndKitchenTicketWithServerPrices() {
-        Product product = Product.builder().id(3L).name("Soup").price(55.55).quantity(5).active(true).build();
-        SaleRequest request = new SaleRequest("cashier", "CASH", List.of(new SaleItemRequest(3L, 2, null, "No cream")), 200.0,
+        Product product = Product.builder().id(3L).name("Soup").price(new BigDecimal("55.55")).quantity(5).active(true).build();
+        SaleRequest request = new SaleRequest("cashier", "CASH", List.of(new SaleItemRequest(3L, 2, null, "No cream")), new BigDecimal("200.00"),
                 OrderType.TAKEAWAY, null, null, null, "Table takeaway", "cashier-attempt-12345");
         when(salesRepository.findByIdempotencyKey(request.idempotencyKey())).thenReturn(Optional.empty());
         when(productRepository.findAllByIdForUpdate(List.of(3L))).thenReturn(List.of(product));
@@ -217,8 +237,8 @@ class SalesServiceIdempotencyTest {
 
         Sales saved = service.createSales(request, "cashier-subject");
 
-        assertThat(saved.getSubtotalAmount()).isEqualTo(111.10);
-        assertThat(saved.getTotalAmount()).isEqualTo(134.44);
+        assertThat(saved.getSubtotalAmount()).isEqualByComparingTo("111.10");
+        assertThat(saved.getTotalAmount()).isEqualByComparingTo("134.44");
         assertThat(saved.getRestaurantOrderId()).isEqualTo(501L);
         assertThat(saved.getOrderNumber()).isEqualTo("ORD-0501");
         ArgumentCaptor<com.pos.model.RestaurantOrder> orderCaptor = ArgumentCaptor.forClass(com.pos.model.RestaurantOrder.class);
@@ -234,8 +254,8 @@ class SalesServiceIdempotencyTest {
 
     @Test
     void insufficientCashDoesNotPersistStockOrderOrSale() {
-        Product product = Product.builder().id(3L).name("Soup").price(55.55).quantity(5).active(true).build();
-        SaleRequest request = new SaleRequest("cashier", "CASH", List.of(new SaleItemRequest(3L, 2, null, null)), 100.0,
+        Product product = Product.builder().id(3L).name("Soup").price(new BigDecimal("55.55")).quantity(5).active(true).build();
+        SaleRequest request = new SaleRequest("cashier", "CASH", List.of(new SaleItemRequest(3L, 2, null, null)), new BigDecimal("100.00"),
                 OrderType.TAKEAWAY, null, null, null, null, "cashier-attempt-12345");
         when(salesRepository.findByIdempotencyKey(request.idempotencyKey())).thenReturn(Optional.empty());
         when(productRepository.findAllByIdForUpdate(List.of(3L))).thenReturn(List.of(product));

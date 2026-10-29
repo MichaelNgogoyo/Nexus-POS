@@ -30,6 +30,7 @@ public class Customer {
     private Integer loyaltyPoints = 0;
 
     @Builder.Default
+    @Column(name = "total_spent", nullable = false, precision = 19, scale = 2)
     private BigDecimal totalSpent = BigDecimal.ZERO;
 
     private LocalDateTime createdAt;

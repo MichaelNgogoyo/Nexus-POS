@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /** Owns restaurant-order validation, pricing, transitions, and related persistence effects. */
@@ -46,15 +47,16 @@ public class RestaurantOrderService {
     private final RestaurantOrderMapper orderMapper;
 
     @Value("${pos.tax-rate:0}")
-    private double taxRate;
+    private BigDecimal taxRate;
 
     @Value("${pos.service-charge-rate:0}")
-    private double serviceChargeRate;
+    private BigDecimal serviceChargeRate;
 
     @PostConstruct
     void validateRates() {
-        if (!Double.isFinite(taxRate) || taxRate < 0 || taxRate > 100
-                || !Double.isFinite(serviceChargeRate) || serviceChargeRate < 0 || serviceChargeRate > 100) {
+        if (taxRate == null || taxRate.signum() < 0 || taxRate.compareTo(BigDecimal.valueOf(100)) > 0
+                || serviceChargeRate == null || serviceChargeRate.signum() < 0
+                || serviceChargeRate.compareTo(BigDecimal.valueOf(100)) > 0) {
             throw new IllegalStateException("POS tax and service charge rates must be between 0 and 100");
         }
     }
@@ -64,12 +66,33 @@ public class RestaurantOrderService {
                 .stream().map(orderMapper::toResponse).toList();
     }
 
+    public List<RestaurantOrderResponse> getActiveOrders(Set<String> actorIdentities, boolean manager) {
+        PageRequest page = PageRequest.of(0, 200, Sort.by(Sort.Direction.DESC, "createdAt"));
+        if (!manager && (actorIdentities == null || actorIdentities.isEmpty())) return List.of();
+        List<RestaurantOrder> orders = manager
+                ? orderRepository.findAll(page).getContent()
+                : orderRepository.findByCashierIdIn(actorIdentities, page).getContent();
+        return orders.stream()
+                .map(orderMapper::toResponse).toList();
+    }
+
     public Optional<RestaurantOrderResponse> getOrder(Long id) {
         return orderRepository.findById(id).map(orderMapper::toResponse);
     }
 
+    public Optional<RestaurantOrderResponse> getOrder(Long id, Set<String> actorIdentities, boolean manager) {
+        return orderRepository.findById(id)
+                .filter(order -> manager || belongsTo(order, actorIdentities))
+                .map(orderMapper::toResponse);
+    }
+
     @Transactional
     public CreateResult createOrder(RestaurantOrderRequest request, String actor) {
+        return createOrder(request, actor, Set.of(actor));
+    }
+
+    @Transactional
+    public CreateResult createOrder(RestaurantOrderRequest request, String actor, Set<String> actorIdentities) {
         if (request.idempotencyKey() == null || request.idempotencyKey().length() < 16 || request.idempotencyKey().length() > 64) {
             throw badRequest("An idempotency key between 16 and 64 characters is required");
         }
@@ -82,7 +105,7 @@ public class RestaurantOrderService {
         if (request.orderType() != OrderType.DINE_IN && request.table() != null) throw badRequest("Only dine-in orders may select a table");
         RestaurantOrder previous = orderRepository.findByIdempotencyKey(request.idempotencyKey()).orElse(null);
         if (previous != null) {
-            if (!Objects.equals(previous.getCashierId(), actor) || !matchesRequest(previous, request)) {
+            if (actorIdentities == null || !actorIdentities.contains(previous.getCashierId()) || !matchesRequest(previous, request)) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
                         "Idempotency key is already associated with a different operation");
             }
@@ -113,10 +136,16 @@ public class RestaurantOrderService {
     /** Creates and submits in one transaction so a failed kitchen submission cannot leave a half-created order. */
     @Transactional
     public CreateResult createAndSubmitOrder(RestaurantOrderRequest request, String actor) {
-        CreateResult created = createOrder(request, actor);
+        return createAndSubmitOrder(request, actor, Set.of(actor));
+    }
+
+    @Transactional
+    public CreateResult createAndSubmitOrder(RestaurantOrderRequest request, String actor, Set<String> actorIdentities) {
+        CreateResult created = createOrder(request, actor, actorIdentities);
         OrderStatus status = created.order().status();
         if (status == OrderStatus.OPEN) {
-            return new CreateResult(submitToKitchen(created.order().id(), OrderStatus.KITCHEN.name(), actor), created.created());
+            return new CreateResult(submitToKitchen(created.order().id(), OrderStatus.KITCHEN.name(), actor,
+                    actorIdentities, false), created.created());
         }
         if (status == OrderStatus.KITCHEN || status == OrderStatus.READY || status == OrderStatus.COMPLETED || status == OrderStatus.PAID) {
             return created;
@@ -161,7 +190,14 @@ public class RestaurantOrderService {
 
     @Transactional
     public RestaurantOrderResponse updateOrder(Long id, RestaurantOrderRequest request, String actor) {
-        RestaurantOrder order = findOrder(id);
+        return updateOrder(id, request, actor, Set.of(actor), false);
+    }
+
+    @Transactional
+    public RestaurantOrderResponse updateOrder(Long id, RestaurantOrderRequest request, String actor,
+                                               Set<String> actorIdentities, boolean manager) {
+        RestaurantOrder order = findOrderForUpdate(id);
+        requireOwner(order, actorIdentities, manager);
         if (order.getStatus() != OrderStatus.OPEN) throw badRequest("Only open orders can be edited");
         if (order.getOrderType() == OrderType.ROOM_CHARGE || request.orderType() == OrderType.ROOM_CHARGE) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
@@ -198,7 +234,13 @@ public class RestaurantOrderService {
 
     @Transactional
     public RestaurantOrderResponse cancelOrder(Long id, String actor) {
-        RestaurantOrder order = findOrder(id);
+        return cancelOrder(id, actor, Set.of(actor), false);
+    }
+
+    @Transactional
+    public RestaurantOrderResponse cancelOrder(Long id, String actor, Set<String> actorIdentities, boolean manager) {
+        RestaurantOrder order = findOrderForUpdate(id);
+        requireOwner(order, actorIdentities, manager);
         if (order.getStatus() == OrderStatus.PAID || order.getStatus() == OrderStatus.CANCELLED
                 || order.getStatus() == OrderStatus.REFUNDED || order.getStatus() == OrderStatus.COMPLETED) {
             throw badRequest("This order cannot be cancelled");
@@ -219,8 +261,15 @@ public class RestaurantOrderService {
 
     @Transactional
     public RestaurantOrderResponse submitToKitchen(Long id, String requestedStatus, String actor) {
+        return submitToKitchen(id, requestedStatus, actor, Set.of(actor), false);
+    }
+
+    @Transactional
+    public RestaurantOrderResponse submitToKitchen(Long id, String requestedStatus, String actor,
+                                                   Set<String> actorIdentities, boolean manager) {
         RestaurantOrder order = orderRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
+        requireOwner(order, actorIdentities, manager);
         OrderStatus next;
         try {
             next = OrderStatus.valueOf(requestedStatus);
@@ -266,7 +315,14 @@ public class RestaurantOrderService {
 
     @Transactional
     public RestaurantOrderResponse addItem(Long id, RestaurantOrderItemRequest request, String actor) {
-        RestaurantOrder order = findOrder(id);
+        return addItem(id, request, actor, Set.of(actor), false);
+    }
+
+    @Transactional
+    public RestaurantOrderResponse addItem(Long id, RestaurantOrderItemRequest request, String actor,
+                                            Set<String> actorIdentities, boolean manager) {
+        RestaurantOrder order = findOrderForUpdate(id);
+        requireOwner(order, actorIdentities, manager);
         if (order.getStatus() != OrderStatus.OPEN) throw badRequest("Only open orders can be edited");
         List<RestaurantOrderItemRequest> items = new ArrayList<>(order.getItems().stream().map(item ->
                 new RestaurantOrderItemRequest(item.getProductId(), item.getQuantity(), item.getNotes(),
@@ -280,8 +336,20 @@ public class RestaurantOrderService {
         return orderMapper.toResponse(saved);
     }
 
-    private RestaurantOrder findOrder(Long id) {
-        return orderRepository.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
+    private RestaurantOrder findOrderForUpdate(Long id) {
+        return orderRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
+    }
+
+    private boolean belongsTo(RestaurantOrder order, Set<String> actorIdentities) {
+        return order.getCashierId() != null && actorIdentities != null && actorIdentities.contains(order.getCashierId());
+    }
+
+    private void requireOwner(RestaurantOrder order, Set<String> actorIdentities, boolean manager) {
+        // Hide another cashier's order existence from staff who cannot manage it.
+        if (!manager && !belongsTo(order, actorIdentities)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found");
+        }
     }
 
     private void priceOrder(RestaurantOrder order, List<RestaurantOrderItemRequest> requestedItems) {
@@ -299,7 +367,10 @@ public class RestaurantOrderService {
             List<Modifier> modifiers = resolveModifiers(product.getId(), modifierIds);
             BigDecimal modifierTotal = modifiers.stream().map(modifier -> modifier.getAdditionalPrice() == null ? BigDecimal.ZERO : modifier.getAdditionalPrice())
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
-            BigDecimal price = BigDecimal.valueOf(product.getPrice()).add(modifierTotal).setScale(2, RoundingMode.HALF_UP);
+            if (product.getPrice() == null || product.getPrice().signum() < 0) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Product price is not configured: " + product.getName());
+            }
+            BigDecimal price = product.getPrice().add(modifierTotal).setScale(2, RoundingMode.HALF_UP);
             BigDecimal lineTotal = price.multiply(BigDecimal.valueOf(requested.quantity())).setScale(2, RoundingMode.HALF_UP);
             OrderItem item = OrderItem.builder().order(order).productId(product.getId()).productName(product.getName())
                     .unitPrice(price).quantity(requested.quantity()).lineTotal(lineTotal)
@@ -308,8 +379,8 @@ public class RestaurantOrderService {
             subtotal = subtotal.add(lineTotal);
         }
         subtotal = subtotal.setScale(2, RoundingMode.HALF_UP);
-        BigDecimal tax = subtotal.multiply(BigDecimal.valueOf(taxRate / 100)).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal service = subtotal.multiply(BigDecimal.valueOf(serviceChargeRate / 100)).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal tax = subtotal.multiply(taxRate).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+        BigDecimal service = subtotal.multiply(serviceChargeRate).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
         order.getItems().clear();
         order.getItems().addAll(pricedItems);
         order.setSubtotal(subtotal);

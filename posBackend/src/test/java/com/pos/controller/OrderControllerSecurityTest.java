@@ -20,9 +20,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 import java.util.Optional;
+import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -45,8 +48,8 @@ class OrderControllerSecurityTest {
     void setUp() {
         orderService = new RestaurantOrderService(orderRepository, productRepository, tableRepository, auditService,
                 modifierGroupRepository, kitchenOrderRepository, stockMovementRepository, new RestaurantOrderMapper());
-        ReflectionTestUtils.setField(orderService, "taxRate", 10.0);
-        ReflectionTestUtils.setField(orderService, "serviceChargeRate", 5.0);
+        ReflectionTestUtils.setField(orderService, "taxRate", new BigDecimal("10.00"));
+        ReflectionTestUtils.setField(orderService, "serviceChargeRate", new BigDecimal("5.00"));
         lenient().when(orderRepository.save(any(RestaurantOrder.class))).thenAnswer(call -> {
             RestaurantOrder saved = call.getArgument(0);
             if (saved.getId() == null) saved.setId(25L);
@@ -56,7 +59,7 @@ class OrderControllerSecurityTest {
 
     @Test
     void createOrderUsesCatalogPricesAndServerCalculatedTotals() {
-        Product product = Product.builder().id(4L).name("Breakfast plate").price(100.0).active(true).quantity(25).build();
+        Product product = Product.builder().id(4L).name("Breakfast plate").price(new BigDecimal("100.00")).active(true).quantity(25).build();
         when(productRepository.findById(4L)).thenReturn(Optional.of(product));
         when(modifierGroupRepository.findByProductId(4L)).thenReturn(List.of());
         RestaurantOrderRequest request = new RestaurantOrderRequest(OrderType.TAKEAWAY, "room-charge-attempt-12345",
@@ -79,9 +82,20 @@ class OrderControllerSecurityTest {
     }
 
     @Test
+    void cashierActiveOrdersAreFilteredByIdentityInTheRepositoryQuery() {
+        when(orderRepository.findByCashierIdIn(eq(java.util.Set.of("cashier-4", "kc-subject-4")), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        assertThat(orderService.getActiveOrders(java.util.Set.of("cashier-4", "kc-subject-4"), false)).isEmpty();
+
+        verify(orderRepository).findByCashierIdIn(eq(java.util.Set.of("cashier-4", "kc-subject-4")), any(Pageable.class));
+        verify(orderRepository, never()).findAll(any(Pageable.class));
+    }
+
+    @Test
     void submittingOrderToKitchenConsumesStockOnceAndCreatesMovement() {
-        Product product = Product.builder().id(4L).name("Breakfast plate").price(100.0).active(true).quantity(5).build();
-        RestaurantOrder order = RestaurantOrder.builder().id(25L).orderNumber("ORD-25").status(OrderStatus.OPEN)
+        Product product = Product.builder().id(4L).name("Breakfast plate").price(new BigDecimal("100.00")).active(true).quantity(5).build();
+        RestaurantOrder order = RestaurantOrder.builder().id(25L).orderNumber("ORD-25").cashierId("cashier-4").status(OrderStatus.OPEN)
                 .items(new java.util.ArrayList<>(List.of(OrderItem.builder().productId(4L).quantity(2).build()))).build();
         when(orderRepository.findByIdForUpdate(25L)).thenReturn(Optional.of(order));
         when(productRepository.findAllByIdForUpdate(List.of(4L))).thenReturn(List.of(product));
@@ -104,8 +118,8 @@ class OrderControllerSecurityTest {
 
     @Test
     void submittingOrderRejectsInsufficientStockWithoutKitchenTicket() {
-        Product product = Product.builder().id(4L).name("Breakfast plate").price(100.0).active(true).quantity(1).build();
-        RestaurantOrder order = RestaurantOrder.builder().id(25L).status(OrderStatus.OPEN)
+        Product product = Product.builder().id(4L).name("Breakfast plate").price(new BigDecimal("100.00")).active(true).quantity(1).build();
+        RestaurantOrder order = RestaurantOrder.builder().id(25L).cashierId("cashier-4").status(OrderStatus.OPEN)
                 .items(new java.util.ArrayList<>(List.of(OrderItem.builder().productId(4L).quantity(2).build()))).build();
         when(orderRepository.findByIdForUpdate(25L)).thenReturn(Optional.of(order));
         when(productRepository.findAllByIdForUpdate(List.of(4L))).thenReturn(List.of(product));
@@ -149,7 +163,7 @@ class OrderControllerSecurityTest {
     @Test
     void dineInOrderLocksAndOccupiesTheSelectedTable() {
         RestaurantTable table = RestaurantTable.builder().id(44L).name("T44").status(TableStatus.AVAILABLE).build();
-        Product product = Product.builder().id(4L).name("Breakfast plate").price(100.0).active(true).build();
+        Product product = Product.builder().id(4L).name("Breakfast plate").price(new BigDecimal("100.00")).active(true).build();
         when(tableRepository.findByIdForUpdate(44L)).thenReturn(Optional.of(table));
         when(productRepository.findById(4L)).thenReturn(Optional.of(product));
         when(modifierGroupRepository.findByProductId(4L)).thenReturn(List.of());
@@ -253,5 +267,19 @@ class OrderControllerSecurityTest {
                 .hasMessageContaining("different operation");
         verify(orderRepository, never()).save(any());
         verifyNoInteractions(productRepository, auditService);
+    }
+
+    @Test
+    void cashierCannotSubmitAnotherCashiersOrder() {
+        RestaurantOrder order = RestaurantOrder.builder().id(25L).cashierId("cashier-9")
+                .status(OrderStatus.OPEN).items(new java.util.ArrayList<>(List.of(
+                        OrderItem.builder().productId(4L).quantity(1).build()))).build();
+        when(orderRepository.findByIdForUpdate(25L)).thenReturn(Optional.of(order));
+
+        assertThatThrownBy(() -> orderService.submitToKitchen(25L, "KITCHEN", "cashier-4"))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("Order not found");
+        verifyNoInteractions(productRepository, stockMovementRepository, kitchenOrderRepository);
+        verify(orderRepository, never()).save(any());
     }
 }

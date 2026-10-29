@@ -20,6 +20,7 @@ public class Combo {
 
     private String name;
     private String description;
+    @Column(precision = 19, scale = 2)
     private BigDecimal price;
     private Boolean active = true;
 

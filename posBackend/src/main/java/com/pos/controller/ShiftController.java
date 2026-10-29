@@ -35,7 +35,8 @@ public class ShiftController {
         requireOwnerOrManager(cashierId, authentication);
         return shiftRepository.findByCashierIdAndStatus(cashierId, ShiftStatus.OPEN)
                 .map(shift -> {
-                    BigDecimal cashSales = BigDecimal.valueOf(salesRepository.sumCashSalesSince(shift.getCashierId(), shift.getOpenedAt())).setScale(2, java.math.RoundingMode.HALF_UP);
+                    BigDecimal cashSales = salesRepository.sumCashSalesSince(shift.getCashierId(), shift.getOpenedAt())
+                            .setScale(2, java.math.RoundingMode.HALF_UP);
                     shift.setExpectedBalance(shift.getOpeningBalance().add(cashSales));
                     return ResponseEntity.ok(shift);
                 })
@@ -71,7 +72,8 @@ public class ShiftController {
         requireOwnerOrManager(shift.getCashierId(), authentication);
         if (shift.getStatus() != ShiftStatus.OPEN) throw new ResponseStatusException(HttpStatus.CONFLICT, "Only open shifts can be closed");
         if (request.getClosingBalance() == null || request.getClosingBalance().signum() < 0) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A non-negative closing balance is required");
-        BigDecimal cashSales = BigDecimal.valueOf(salesRepository.sumCashSalesSince(shift.getCashierId(), shift.getOpenedAt())).setScale(2, java.math.RoundingMode.HALF_UP);
+        BigDecimal cashSales = salesRepository.sumCashSalesSince(shift.getCashierId(), shift.getOpenedAt())
+                .setScale(2, java.math.RoundingMode.HALF_UP);
         BigDecimal expectedBalance = shift.getOpeningBalance().add(cashSales);
         shift.setStatus(ShiftStatus.CLOSED);
         shift.setClosingBalance(request.getClosingBalance());

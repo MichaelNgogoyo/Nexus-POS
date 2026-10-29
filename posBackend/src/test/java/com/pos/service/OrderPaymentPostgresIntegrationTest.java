@@ -93,7 +93,7 @@ class OrderPaymentPostgresIntegrationTest {
     void submitsUnpaidOrderConsumesStockThenSettlesCashExactlyOnce() throws Exception {
         Product product = productRepository.saveAndFlush(Product.builder()
                 .name("Integration breakfast")
-                .price(100.0)
+                .price(new BigDecimal("100.00"))
                 .active(true)
                 .quantity(8)
                 .build());
@@ -128,8 +128,8 @@ class OrderPaymentPostgresIntegrationTest {
         assertThat(sale.getId()).isNotNull();
         assertThat(concurrentReplay.getId()).isEqualTo(sale.getId());
         assertThat(sale.getRestaurantOrderId()).isEqualTo(created.order().id());
-        assertThat(sale.getTotalAmount()).isEqualTo(230.0);
-        assertThat(sale.getChangeGiven()).isEqualTo(20.0);
+        assertThat(sale.getTotalAmount()).isEqualByComparingTo("230.00");
+        assertThat(sale.getChangeGiven()).isEqualByComparingTo("20.00");
         assertThat(sale.getSaleItems()).hasSize(1);
         assertThat(orderRepository.findById(created.order().id()).orElseThrow().getStatus()).isEqualTo(OrderStatus.PAID);
 

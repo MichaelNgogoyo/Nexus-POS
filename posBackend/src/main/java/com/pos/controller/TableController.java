@@ -48,8 +48,6 @@ public class TableController {
             existing.setName(updated.getName());
             existing.setFloor(updated.getFloor());
             existing.setCapacity(updated.getCapacity());
-            existing.setStatus(updated.getStatus());
-            existing.setOccupiedAt(updated.getOccupiedAt());
             return ResponseEntity.ok(tableRepository.save(existing));
         }).orElse(ResponseEntity.notFound().build());
     }
@@ -65,6 +63,7 @@ public class TableController {
     }
 
     @PutMapping("/{id}/status")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public ResponseEntity<RestaurantTable> updateStatus(@PathVariable Long id,
                                                         @Valid @RequestBody TableStatusRequest request,
                                                         Authentication authentication) {

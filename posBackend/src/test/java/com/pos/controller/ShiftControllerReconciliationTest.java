@@ -29,7 +29,7 @@ class ShiftControllerReconciliationTest {
         Shift shift = Shift.builder().id(11L).cashierId("cashier-1").status(ShiftStatus.OPEN)
                 .openingBalance(new BigDecimal("100.00")).openedAt(LocalDateTime.now().minusHours(4)).build();
         when(shiftRepository.findById(11L)).thenReturn(Optional.of(shift));
-        when(salesRepository.sumCashSalesSince(eq("cashier-1"), any())).thenReturn(55.25);
+        when(salesRepository.sumCashSalesSince(eq("cashier-1"), any())).thenReturn(new BigDecimal("55.25"));
         when(shiftRepository.save(any(Shift.class))).thenAnswer(call -> call.getArgument(0));
         ShiftCloseRequest request = new ShiftCloseRequest();
         request.setClosingBalance(new BigDecimal("150.00"));

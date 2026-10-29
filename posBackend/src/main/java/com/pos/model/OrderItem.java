@@ -28,8 +28,10 @@ public class OrderItem {
 
     private Long productId;
     private String productName;
+    @Column(precision = 19, scale = 2)
     private BigDecimal unitPrice;
     private Integer quantity;
+    @Column(precision = 19, scale = 2)
     private BigDecimal lineTotal;
     private String notes;
 

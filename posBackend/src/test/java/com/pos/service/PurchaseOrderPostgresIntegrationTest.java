@@ -75,7 +75,7 @@ class PurchaseOrderPostgresIntegrationTest {
     void concurrentReceiptAddsStockAndLedgerEntryExactlyOnce() throws Exception {
         Product product = productRepository.saveAndFlush(Product.builder()
                 .name("Integration purchase product")
-                .price(12.0)
+                .price(new BigDecimal("12.00"))
                 .active(true)
                 .quantity(8)
                 .build());

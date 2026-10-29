@@ -6,6 +6,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -27,16 +28,26 @@ public class Sales {
     private Long id;
 
     private String cashierId;
-    private double totalAmount;
-    private double subtotalAmount;
-    private double taxAmount;          // tax portion of totalAmount
-    private double amountTendered;     // cash handed by customer
-    private double changeGiven;        // change returned
+    @Column(name = "total_amount", nullable = false, precision = 19, scale = 2)
+    @Builder.Default
+    private BigDecimal totalAmount = BigDecimal.ZERO;
+    @Column(name = "subtotal_amount", nullable = false, precision = 19, scale = 2)
+    @Builder.Default
+    private BigDecimal subtotalAmount = BigDecimal.ZERO;
+    @Column(name = "tax_amount", nullable = false, precision = 19, scale = 2)
+    @Builder.Default
+    private BigDecimal taxAmount = BigDecimal.ZERO;
+    @Column(name = "amount_tendered", nullable = false, precision = 19, scale = 2)
+    @Builder.Default
+    private BigDecimal amountTendered = BigDecimal.ZERO;
+    @Column(name = "change_given", nullable = false, precision = 19, scale = 2)
+    @Builder.Default
+    private BigDecimal changeGiven = BigDecimal.ZERO;
     private String paymentMethod;
 
-    @Column(name = "service_charge_amount", nullable = false)
+    @Column(name = "service_charge_amount", nullable = false, precision = 19, scale = 2)
     @Builder.Default
-    private double serviceChargeAmount = 0.0;
+    private BigDecimal serviceChargeAmount = BigDecimal.ZERO;
 
     @Column(name = "idempotency_key", unique = true, length = 64)
     private String idempotencyKey;

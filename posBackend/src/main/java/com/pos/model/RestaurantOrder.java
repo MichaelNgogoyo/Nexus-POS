@@ -60,18 +60,23 @@ public class RestaurantOrder {
     private List<OrderItem> items = new ArrayList<>();
 
     @Builder.Default
+    @Column(precision = 19, scale = 2)
     private BigDecimal subtotal = BigDecimal.ZERO;
 
     @Builder.Default
+    @Column(precision = 19, scale = 2)
     private BigDecimal taxAmount = BigDecimal.ZERO;
 
     @Builder.Default
+    @Column(precision = 19, scale = 2)
     private BigDecimal serviceChargeAmount = BigDecimal.ZERO;
 
     @Builder.Default
+    @Column(precision = 19, scale = 2)
     private BigDecimal discountAmount = BigDecimal.ZERO;
 
     @Builder.Default
+    @Column(precision = 19, scale = 2)
     private BigDecimal total = BigDecimal.ZERO;
 
     private LocalDateTime createdAt;

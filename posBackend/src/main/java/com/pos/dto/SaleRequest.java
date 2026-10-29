@@ -5,6 +5,7 @@ import jakarta.validation.constraints.*;
 import com.pos.model.OrderType;
 
 import java.util.List;
+import java.math.BigDecimal;
 
 public record SaleRequest(
         @NotBlank(message = "Cashier ID is required")
@@ -23,7 +24,8 @@ public record SaleRequest(
         @NotNull(message = "Cash amount tendered is required")
         @DecimalMin(value = "0.0", message = "Amount tendered cannot be negative")
         @DecimalMax(value = "1000000000.00", message = "Amount tendered is too large")
-        Double amountTendered,
+        @Digits(integer = 10, fraction = 2, message = "Amount tendered must have at most 10 whole digits and 2 decimal places")
+        BigDecimal amountTendered,
 
         @NotNull(message = "Order type is required")
         OrderType orderType,

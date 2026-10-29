@@ -51,6 +51,7 @@ public class SupplierController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         if (!supplierRepository.existsById(id)) return ResponseEntity.notFound().build();
         supplierRepository.deleteById(id);

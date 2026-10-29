@@ -39,6 +39,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.time.LocalDateTime;
 import java.math.BigDecimal;
@@ -61,15 +62,16 @@ public class SalesService {
 
     /** Tax rate as a percentage, e.g. 16 for 16% VAT. Configurable via pos.tax-rate property. */
     @Value("${pos.tax-rate:0}")
-    private double taxRatePercent;
+    private BigDecimal taxRatePercent;
 
     @Value("${pos.service-charge-rate:0}")
-    private double serviceChargeRatePercent;
+    private BigDecimal serviceChargeRatePercent;
 
     @PostConstruct
     void validateRates() {
-        if (!Double.isFinite(taxRatePercent) || taxRatePercent < 0 || taxRatePercent > 100
-                || !Double.isFinite(serviceChargeRatePercent) || serviceChargeRatePercent < 0 || serviceChargeRatePercent > 100) {
+        if (taxRatePercent == null || taxRatePercent.signum() < 0 || taxRatePercent.compareTo(BigDecimal.valueOf(100)) > 0
+                || serviceChargeRatePercent == null || serviceChargeRatePercent.signum() < 0
+                || serviceChargeRatePercent.compareTo(BigDecimal.valueOf(100)) > 0) {
             throw new IllegalStateException("POS tax and service charge rates must be between 0 and 100");
         }
     }
@@ -152,7 +154,7 @@ public class SalesService {
             if (!product.isActive()) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product is unavailable: " + product.getName());
             }
-            if (product.getPrice() == null || product.getPrice() < 0) {
+            if (product.getPrice() == null || product.getPrice().signum() < 0) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Product price is not configured: " + product.getName());
             }
             if (product.getQuantity() < itemReq.quantity()) {
@@ -170,8 +172,8 @@ public class SalesService {
             BigDecimal modifierTotal = selectedModifiers.stream()
                     .map(modifier -> modifier.getAdditionalPrice() == null ? BigDecimal.ZERO : modifier.getAdditionalPrice())
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
-            BigDecimal unitPrice = BigDecimal.valueOf(product.getPrice()).add(modifierTotal).setScale(2, RoundingMode.HALF_UP);
-            saleItem.setPrice(unitPrice.doubleValue());
+            BigDecimal unitPrice = product.getPrice().add(modifierTotal).setScale(2, RoundingMode.HALF_UP);
+            saleItem.setPrice(unitPrice);
             saleItem.setModifiers(selectedModifiers);
             saleItem.setNotes(trimLimit(itemReq.notes(), 250, "Item notes"));
             saleItem.setSales(sales);
@@ -180,12 +182,12 @@ public class SalesService {
             subtotal = subtotal.add(unitPrice.multiply(BigDecimal.valueOf(itemReq.quantity())).setScale(2, RoundingMode.HALF_UP));
         }
 
-        BigDecimal taxAmount = subtotal.multiply(BigDecimal.valueOf(taxRatePercent / 100.0)).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal serviceChargeAmount = subtotal.multiply(BigDecimal.valueOf(serviceChargeRatePercent / 100.0)).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal taxAmount = subtotal.multiply(taxRatePercent).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+        BigDecimal serviceChargeAmount = subtotal.multiply(serviceChargeRatePercent).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
         subtotal = subtotal.setScale(2, RoundingMode.HALF_UP);
         BigDecimal total = subtotal.add(taxAmount).add(serviceChargeAmount).setScale(2, RoundingMode.HALF_UP);
 
-        BigDecimal amountTendered = BigDecimal.valueOf(request.amountTendered()).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal amountTendered = request.amountTendered().setScale(2, RoundingMode.HALF_UP);
         BigDecimal changeGiven = amountTendered.subtract(total).max(BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
 
         if (amountTendered.compareTo(total) < 0) {
@@ -197,12 +199,12 @@ public class SalesService {
         productRepository.saveAll(productMap.values());
         stockMovementRepository.saveAll(movements);
 
-        sales.setTaxAmount(taxAmount.doubleValue());
-        sales.setSubtotalAmount(subtotal.doubleValue());
-        sales.setServiceChargeAmount(serviceChargeAmount.doubleValue());
-        sales.setTotalAmount(total.doubleValue());
-        sales.setAmountTendered(amountTendered.doubleValue());
-        sales.setChangeGiven(changeGiven.doubleValue());
+        sales.setTaxAmount(taxAmount);
+        sales.setSubtotalAmount(subtotal);
+        sales.setServiceChargeAmount(serviceChargeAmount);
+        sales.setTotalAmount(total);
+        sales.setAmountTendered(amountTendered);
+        sales.setChangeGiven(changeGiven);
         sales.setSaleItems(saleItems);
         sales.setIdempotencyKey(request.idempotencyKey());
         sales.setOrderType(request.orderType());
@@ -226,7 +228,7 @@ public class SalesService {
                 .total(total)
                 .build();
         for (SaleItem saleItem : saleItems) {
-            BigDecimal itemPrice = BigDecimal.valueOf(saleItem.getPrice()).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal itemPrice = saleItem.getPrice().setScale(2, RoundingMode.HALF_UP);
             restaurantOrder.getItems().add(OrderItem.builder()
                     .order(restaurantOrder)
                     .productId(saleItem.getProduct().getId())
@@ -265,6 +267,13 @@ public class SalesService {
     /** Records cash payment against an existing server-priced restaurant order. */
     @Transactional
     public Sales settleOrderCash(Long orderId, OrderPaymentRequest request, String actor) {
+        return settleOrderCash(orderId, request, actor, Set.of(actor), false);
+    }
+
+    /** Records cash only for an order owned by the cashier, unless a manager is explicitly authorized. */
+    @Transactional
+    public Sales settleOrderCash(Long orderId, OrderPaymentRequest request, String actor,
+                                 Set<String> actorIdentities, boolean manager) {
         if (request == null || request.amountTendered() == null || request.idempotencyKey() == null
                 || request.idempotencyKey().length() < 16 || request.idempotencyKey().length() > 64) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A valid cash amount and idempotency key are required");
@@ -280,13 +289,17 @@ public class SalesService {
         }
 
         Sales prior = repository.findByIdempotencyKey(request.idempotencyKey()).orElse(null);
-        if (prior != null) return replayOrderPayment(prior, orderId, tendered, actor);
+        if (prior != null) return replayOrderPayment(prior, orderId, tendered, actorIdentities, manager);
 
         RestaurantOrder order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
         // A competing request may have committed while this request waited for the order lock.
         prior = repository.findByIdempotencyKey(request.idempotencyKey()).orElse(null);
-        if (prior != null) return replayOrderPayment(prior, orderId, tendered, actor);
+        if (prior != null) return replayOrderPayment(prior, orderId, tendered, actorIdentities, manager);
+        if (!manager && (order.getCashierId() == null || actorIdentities == null
+                || !actorIdentities.contains(order.getCashierId()))) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found");
+        }
         if (order.getSaleId() != null || order.getStatus() == OrderStatus.PAID
                 || repository.findByRestaurantOrderId(orderId).isPresent()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Payment has already been recorded for this order");
@@ -343,12 +356,12 @@ public class SalesService {
                 .notes(order.getNotes())
                 .restaurantOrderId(order.getId())
                 .orderNumber(order.getOrderNumber())
-                .subtotalAmount(subtotal.doubleValue())
-                .taxAmount(tax.doubleValue())
-                .serviceChargeAmount(service.doubleValue())
-                .totalAmount(total.doubleValue())
-                .amountTendered(tendered.doubleValue())
-                .changeGiven(tendered.subtract(total).setScale(2, RoundingMode.HALF_UP).doubleValue())
+                .subtotalAmount(subtotal)
+                .taxAmount(tax)
+                .serviceChargeAmount(service)
+                .totalAmount(total)
+                .amountTendered(tendered)
+                .changeGiven(tendered.subtract(total).setScale(2, RoundingMode.HALF_UP))
                 .idempotencyKey(request.idempotencyKey())
                 .saleItems(new ArrayList<>())
                 .build();
@@ -357,7 +370,7 @@ public class SalesService {
             sale.getSaleItems().add(SaleItem.builder()
                     .product(products.get(item.getProductId()))
                     .quantity(item.getQuantity())
-                    .price(unitPrice.doubleValue())
+                    .price(unitPrice)
                     .notes(item.getNotes())
                     .modifiers(item.getModifiers() == null ? new ArrayList<>() : new ArrayList<>(item.getModifiers()))
                     .sales(sale)
@@ -382,11 +395,12 @@ public class SalesService {
         return repository.findById(saved.getId()).orElse(saved);
     }
 
-    private Sales replayOrderPayment(Sales prior, Long orderId, BigDecimal tendered, String actor) {
-        if (!java.util.Objects.equals(prior.getCashierId(), actor)
+    private Sales replayOrderPayment(Sales prior, Long orderId, BigDecimal tendered,
+                                     Set<String> actorIdentities, boolean manager) {
+        if ((!manager && (actorIdentities == null || !actorIdentities.contains(prior.getCashierId())))
                 || !java.util.Objects.equals(prior.getRestaurantOrderId(), orderId)
                 || !"CASH".equals(prior.getPaymentMethod())
-                || BigDecimal.valueOf(prior.getAmountTendered()).compareTo(tendered) != 0) {
+                || prior.getAmountTendered() == null || prior.getAmountTendered().compareTo(tendered) != 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Idempotency key is already associated with a different operation");
         }
@@ -401,7 +415,8 @@ public class SalesService {
                 || !java.util.Objects.equals(prior.getGuestName(), request.guestName())
                 || !java.util.Objects.equals(prior.getNotes(), request.notes())
                 || request.amountTendered() == null
-                || Double.compare(prior.getAmountTendered(), request.amountTendered()) != 0
+                || prior.getAmountTendered() == null
+                || prior.getAmountTendered().compareTo(request.amountTendered()) != 0
                 || prior.getSaleItems() == null || request.items() == null
                 || prior.getSaleItems().size() != request.items().size()) {
             return false;

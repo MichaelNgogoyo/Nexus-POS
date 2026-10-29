@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.math.BigDecimal;
 
 @Entity
 @Setter
@@ -24,7 +25,9 @@ public class SaleItem {
     private Product product;
 
     private int quantity;
-    private double price;
+    @Column(nullable = false, precision = 19, scale = 2)
+    @Builder.Default
+    private BigDecimal price = BigDecimal.ZERO;
 
     @Column(length = 250)
     private String notes;

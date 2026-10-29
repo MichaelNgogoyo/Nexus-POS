@@ -14,9 +14,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.server.ResponseStatusException;
+import java.math.BigDecimal;
 
 @RestController
 @RequestMapping({"/api/sale", "/sale"})
@@ -58,8 +59,10 @@ public class SalesController {
         Sales sale = service.viewSale(id);
         boolean manager = authentication.getAuthorities().stream().map(GrantedAuthority::getAuthority)
                 .anyMatch(role -> role.equals("ROLE_ADMIN") || role.equals("ROLE_MANAGER"));
-        String actor = authentication.getPrincipal() instanceof Jwt jwt ? jwt.getSubject() : authentication.getName();
-        if (!manager && !actor.equals(sale.getCashierId())) {
+        boolean owner = authentication.getName().equals(sale.getCashierId())
+                || (authentication.getPrincipal() instanceof org.springframework.security.oauth2.jwt.Jwt jwt
+                && jwt.getSubject().equals(sale.getCashierId()));
+        if (!manager && !owner) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Cashiers may only access their own receipts");
         }
         StringBuilder sb = new StringBuilder();
@@ -76,18 +79,17 @@ public class SalesController {
         sb.append("----------------------------------------\n");
         for (var item : sale.getSaleItems()) {
             String name = item.getProduct() != null ? item.getProduct().getName() : "Unknown";
-            double lineTotal = item.getPrice() * item.getQuantity();
+            BigDecimal lineTotal = item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
             if (name.length() > 22) name = name.substring(0, 22) + "..";
-            sb.append(String.format("%-24s %5d %8.2f%n", name, item.getQuantity(), lineTotal));
+            sb.append(String.format("%-24s %5d %8s%n", name, item.getQuantity(), money(lineTotal)));
         }
         sb.append("----------------------------------------\n");
-        double subtotal = sale.getSubtotalAmount();
-        sb.append(String.format("%-29s %8.2f%n", "Subtotal:", subtotal));
-        sb.append(String.format("%-29s %8.2f%n", "Tax:", sale.getTaxAmount()));
-        sb.append(String.format("%-29s %8.2f%n", "Service charge:", sale.getServiceChargeAmount()));
-        sb.append(String.format("%-29s %8.2f%n", "TOTAL:", sale.getTotalAmount()));
-        sb.append(String.format("%-29s %8.2f%n", "Tendered:", sale.getAmountTendered()));
-        sb.append(String.format("%-29s %8.2f%n", "Change:", sale.getChangeGiven()));
+        sb.append(String.format("%-29s %8s%n", "Subtotal:", money(sale.getSubtotalAmount())));
+        sb.append(String.format("%-29s %8s%n", "Tax:", money(sale.getTaxAmount())));
+        sb.append(String.format("%-29s %8s%n", "Service charge:", money(sale.getServiceChargeAmount())));
+        sb.append(String.format("%-29s %8s%n", "TOTAL:", money(sale.getTotalAmount())));
+        sb.append(String.format("%-29s %8s%n", "Tendered:", money(sale.getAmountTendered())));
+        sb.append(String.format("%-29s %8s%n", "Change:", money(sale.getChangeGiven())));
         sb.append("========================================\n");
         sb.append("        Thank you for your purchase!    \n");
         sb.append("========================================\n");
@@ -100,5 +102,9 @@ public class SalesController {
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public ResponseEntity<Sales> processReturn(@PathVariable Long id, @Valid @RequestBody(required = false) SaleReturnRequest request, Authentication authentication) {
         return ResponseEntity.ok(service.processReturn(id, request, authentication.getName()));
+    }
+
+    private String money(BigDecimal amount) {
+        return (amount == null ? BigDecimal.ZERO : amount).setScale(2, java.math.RoundingMode.HALF_UP).toPlainString();
     }
 }

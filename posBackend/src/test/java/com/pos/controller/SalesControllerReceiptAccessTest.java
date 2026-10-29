@@ -9,6 +9,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -21,7 +22,7 @@ class SalesControllerReceiptAccessTest {
 
     @Test
     void cashierCanReadTheirOwnReceipt() {
-        when(salesService.viewSale(4L)).thenReturn(Sales.builder().id(4L).cashierId("cashier-1").totalAmount(12).build());
+        when(salesService.viewSale(4L)).thenReturn(Sales.builder().id(4L).cashierId("cashier-1").totalAmount(new BigDecimal("12.00")).build());
 
         var response = controller.getSaleReceipt(4L, cashier("cashier-1"));
 

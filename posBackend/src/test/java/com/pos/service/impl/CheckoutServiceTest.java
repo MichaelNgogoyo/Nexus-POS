@@ -18,6 +18,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -54,7 +55,7 @@ class CheckoutServiceTest {
         Product product = Product.builder()
                 .id(1L)
                 .name("Coffee")
-                .price(12.00)
+                .price(new BigDecimal("12.00"))
                 .quantity(5)
                 .active(true)
                 .build();
@@ -70,7 +71,7 @@ class CheckoutServiceTest {
                 Sales sale = service.processCheckout(42L, "cashier-1", "CASH");
 
         assertThat(product.getQuantity()).isEqualTo(3);
-                assertThat(sale.getTotalAmount()).isEqualTo(24.00);
+                assertThat(sale.getTotalAmount()).isEqualByComparingTo("24.00");
         assertThat(cart.getCartItemList()).isEmpty();
 
                 verify(productRepository).saveAll(any());
