@@ -4,7 +4,7 @@
 
 ## Verified in the current feature branch
 
-- Spring validates JWT signatures, expiry, and issuer using the configured Keycloak issuer.
+- Spring validates JWT signatures, expiry, issuer, and at least one configured API audience using the configured Keycloak issuer.
 - Backend authority mapping accepts realm roles and roles from the configured `pos-client` resource only; roles from unrelated Keycloak clients are ignored.
 - Sale and open-order idempotency replays are scoped to the cashier identity and original request data. A different identity or changed payload receives HTTP 409 instead of the stored record.
 - The `/api/tables/{id}/status` operation validates the status value, updates the occupancy timestamp consistently, and writes an audit event.
@@ -15,7 +15,7 @@ These checks have unit-level regression coverage. They do not establish full end
 
 ## Known gaps that still block a security sign-off
 
-- JWT audience is not currently validated. Configure an explicit Keycloak audience mapper and backend audience validation before production use.
+- Keycloak must issue access tokens with the API audience. The backend defaults to `pos-client`; override with `POS_SECURITY_JWT_REQUIRED_AUDIENCES`/`pos.security.jwt.required-audiences` when the API audience differs. Configure and verify the Keycloak audience mapper before staff sign-in testing.
 - The data model has no restaurant or branch ownership boundaries. The current authorization model is single-property and cannot enforce cross-branch isolation.
 - Authorization primarily uses broad role checks (`ADMIN`, `MANAGER`, `CASHIER`, and module roles), not the complete permission model below. Several endpoints still need object-level authorization and API-level authorization tests.
 - Some controllers still bind persistence entities directly, and some administrative mutations do not yet produce audit events.

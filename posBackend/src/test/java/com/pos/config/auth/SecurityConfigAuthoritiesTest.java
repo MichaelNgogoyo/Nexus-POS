@@ -16,6 +16,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 class SecurityConfigAuthoritiesTest {
 
     @Test
+    void audienceValidatorRequiresAConfiguredApiAudience() {
+        SecurityConfig config = new SecurityConfig();
+        ReflectionTestUtils.setField(config, "requiredAudiences", "pos-client, pos-api");
+        Jwt accepted = jwtWithAudience(List.of("account", "pos-api"));
+        Jwt rejected = jwtWithAudience(List.of("account", "other-api"));
+
+        assertThat(config.audienceValidator().validate(accepted).hasErrors()).isFalse();
+        assertThat(config.audienceValidator().validate(rejected).hasErrors()).isTrue();
+        assertThat(config.audienceValidator().validate(jwtWithAudience(List.of())).hasErrors()).isTrue();
+    }
+
+    @Test
     void onlyMapsClientRolesFromTheConfiguredPosClientAndKeepsRealmRoles() {
         SecurityConfig config = new SecurityConfig();
         ReflectionTestUtils.setField(config, "posClientId", "pos-client");
@@ -39,5 +51,15 @@ class SecurityConfigAuthoritiesTest {
         assertThat(authentication.getName()).isEqualTo("cashier");
         assertThat(authorities).contains("ROLE_CASHIER", "ROLE_AUDITOR");
         assertThat(authorities).doesNotContain("ROLE_ADMIN", "ROLE_MANAGER");
+    }
+
+    private Jwt jwtWithAudience(List<String> audience) {
+        return Jwt.withTokenValue("token")
+                .header("alg", "none")
+                .subject("staff-subject")
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(60))
+                .audience(audience)
+                .build();
     }
 }
