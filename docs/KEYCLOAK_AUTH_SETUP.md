@@ -25,9 +25,35 @@ The frontend now normalizes role names and maps the active operational roles to 
 | `CASHIER` | POS checkout | Tables, orders, checkout, guest and shift workflows |
 | `KITCHEN` | Kitchen display | Kitchen tickets only |
 | `STOCK_CLERK` | Inventory | Product and inventory workflows |
+| `PROCUREMENT_OFFICER` | Purchases | Procurement and purchase orders |
 | `USER` | No workspace | Base Keycloak role only |
 
 The backend remains the authority for API access through Spring Security role checks. The frontend route and navigation permissions only improve the staff experience; they are not a security boundary.
+
+## Provision POS staff from a terminal
+
+Use [`scripts/keycloak/provision_staff.py`](../scripts/keycloak/provision_staff.py) to create staff accounts in the `pos` realm and assign application roles. It creates missing canonical POS roles (`ADMIN`, `MANAGER`, `CASHIER`, `KITCHEN`, `STOCK_CLERK`, and `PROCUREMENT_OFFICER`), generates a one-time temporary password per new account, and requires each new user to change that password at first sign-in. It never assigns Keycloak `realm-management` roles. Existing accounts are left unchanged.
+
+Create a tab-separated file with these five columns: `username`, `email`, `first name`, `last name`, and role(s). Use one role for each staff member unless the person truly needs multiple role permissions. For example:
+
+```text
+username	email	first name	last name	roles
+cashier.alex	alex@example.com	Alex	Kimani	CASHIER
+kitchen.joy	joy@example.com	Joy	Wanjiku	KITCHEN
+manager.sam	sam@example.com	Sam	Otieno	MANAGER
+```
+
+Save it locally (for example, as `staff.tsv`) and restrict access because it contains staff identity details:
+
+```bash
+chmod 600 staff.tsv
+python3 scripts/keycloak/provision_staff.py staff.tsv
+python3 scripts/keycloak/provision_staff.py staff.tsv --apply
+```
+
+The first command performs an authenticated dry run. The second asks for the Keycloak admin password without echoing it, shows the planned changes, and requires typing `CREATE pos` before it writes anything. The default Keycloak URL is `http://localhost:8081`; override it with `--url https://keycloak.example.com`. Use `--realm` and `--admin-realm` if your deployment uses different realm names. The script defaults the admin username to `admin`; it prompts if that account name is different. Do not put the admin password in the command line or in the TSV.
+
+Generated temporary passwords are written to a new file under `~/.local/share/nexus-pos/` with mode `600`. Deliver each password to its staff member through a secure channel, then delete that file. Assign `ADMIN` only to staff who need full POS administration. This script creates application users; it does not promote users to Keycloak administrators or edit existing users' role assignments.
 
 ## Changes required in staging and production
 
