@@ -118,7 +118,7 @@ These are unit/build results only. No PostgreSQL, Keycloak, MinIO, payment sandb
 
 1. **P0 — Complete cashier flow:** unpaid order creation and kitchen submission; retrieve the same order later; take cash against it exactly once; update order/payment/table state atomically; issue final paid receipt; preserve the touch-first UI and honest loading/error states.
 2. **P0 — Extend PostgreSQL workflow verification:** the deferred cash order/payment slice, ticket linkage, and duplicate-settlement handling now run against isolated PostgreSQL; still verify table lifecycle, authenticated HTTP behavior, and migration compatibility.
-3. **P0 — Authorization review:** map actual Keycloak roles to operations, restrict object ownership, and add positive/negative API tests for cashier, kitchen, manager, and administrator.
+3. **P0 — Authorization review:** sensitive low-stock and stock-movement reads now have cashier-denial/stock-clerk-allowance HTTP tests; continue mapping actual Keycloak roles to all operations, restrict object ownership, and cover kitchen, manager, and administrator paths.
 4. **P1 — Migration safety:** add a repeatable migration mechanism/process, remove production `ddl-auto=update`, test an upgrade against an isolated database, and document backup/rollback or forward recovery.
 5. **P1 — Financial integrity:** converge on `BigDecimal`/decimal database columns, persist payment states/attempts, define refund/void approvals and cash movement reconciliation.
 6. **P1 — Role-specific/touch UX:** verify cashier tablet targets/accessibility, role landing routes, waiter table flows, and kitchen update behavior at realistic screen sizes.
@@ -189,3 +189,16 @@ Verification on 2026-10-29:
 | `JAVA_HOME=/home/apperstar/.jdks/ms-21.0.11 PATH=/home/apperstar/.jdks/ms-21.0.11/bin:$PATH ./mvnw -B -Dfrontend.skip=true test` in `posBackend/` | Passed: 51 tests, 0 failures/errors/skips, including the PostgreSQL 16 Testcontainers integration test |
 
 The database integration test invokes application services directly and mocks `JwtDecoder`; it does not verify a real Keycloak token, authenticated HTTP request/response, browser printing, provider payment, or deployment. It is skipped when Docker is unavailable. Table concurrency, migration automation, production schema safety, and full frontend-to-backend acceptance remain open. This evidence verifies one cashier order/payment slice and does **not** certify the complete POS or production readiness.
+
+## Focused product-data authorization follow-up (2026-10-29)
+
+The product API's low-stock alert and stock-movement history endpoints previously required a valid login but had no role restriction. They now allow only `ADMIN`, `MANAGER`, and `STOCK_CLERK`; other authenticated roles, including `CASHIER`, receive HTTP 403. Four MockMvc checks exercise the production `SecurityConfig` filter chain and method-security rules, with only `ProductService` and `JwtDecoder` mocked.
+
+Verification on 2026-10-29:
+
+| Command | Result |
+|---|---|
+| `JAVA_HOME=/home/apperstar/.jdks/ms-21.0.11 PATH=/home/apperstar/.jdks/ms-21.0.11/bin:$PATH ./mvnw -B -Dfrontend.skip=true -Dtest=ProductControllerAuthorizationTest test` in `posBackend/` | Passed: 4 authorization tests |
+| `JAVA_HOME=/home/apperstar/.jdks/ms-21.0.11 PATH=/home/apperstar/.jdks/ms-21.0.11/bin:$PATH ./mvnw -B -Dfrontend.skip=true test` in `posBackend/` | Passed: 55 tests, 0 failures/errors/skips; includes isolated PostgreSQL order/payment integration |
+
+This narrows access to these two endpoints only. It does not complete the API-wide permission review, verify real Keycloak-issued tokens, establish branch/property scoping, or certify production security.

@@ -55,6 +55,7 @@ public class ProductController {
     }
 
     @GetMapping("/low-stock")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER','STOCK_CLERK')")
     public ResponseEntity<List<Product>> getLowStockProducts() {
         return ResponseEntity.ok(productService.getLowStockProducts());
     }
@@ -134,6 +135,7 @@ public class ProductController {
     }
 
     @GetMapping("/{id}/stock-movements")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER','STOCK_CLERK')")
     public ResponseEntity<List<StockMovement>> getStockMovements(@PathVariable long id) {
         return ResponseEntity.ok(productService.getStockMovements(id));
     }
