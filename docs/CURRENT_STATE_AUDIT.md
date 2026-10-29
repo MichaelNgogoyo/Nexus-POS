@@ -1,84 +1,131 @@
-# Current state audit
+# Current State Audit
 
-**Audit scope:** repository snapshot on 2026-10-27, branch `feature/hotel-pos-rebuild`. This is a design-stage audit of checked-in code plus the current working tree; it is not a staging or production verification.
+**Audit date:** 2026-10-29
+**Repository:** Nexus-POS
+**Branch / HEAD:** `feature/hotel-pos-rebuild` / `557366e` (`feat: complete POS cashier and reservation workflows`)
+**Scope:** Source, checked-in configuration, tests, deployment files, and current local changes. This is a code and test audit; it is not a staging or production certification.
 
 ## Executive summary
 
-The repository contains a React web application, a Spring Boot REST API, and a separate JavaFX desktop client. PostgreSQL/JPA is the server persistence layer, Keycloak is configured as the web API identity provider, and MinIO stores product images. The web application already has POS, admin, finance, reporting, table, kitchen, order, customer, shift, and reservation screens.
+The repository is a React/Vite web POS backed by a Spring Boot modular monolith and PostgreSQL, with Keycloak JWT authentication and MinIO product-image storage. It also contains a separate JavaFX desktop client. The web project has working-looking screens and APIs for checkout, orders, kitchen tickets, tables, shifts, reservations, catalog, stock, procurement, reports, and audit history. Targeted unit and MVC tests pass, and the frontend builds.
 
-The most important design risk is that cash sales and restaurant orders are separate backend paths. The kitchen queue reads `KitchenOrder` records related to `RestaurantOrder`, while the cashier cash path creates `Sales`; there is no verified link that routes cashier sales into the kitchen queue. Room-charge order creation also does not verify a hotel stay or post to a folio. These must be addressed before claiming a complete live-service workflow.
+The key distinction from the prior audit is that **immediate cash checkout currently creates a Sale, links a RestaurantOrder, and creates a kitchen ticket in one service transaction**. However, the cashier checkout still submits directly to payment. The distinct `/api/orders` path can save an open/unpaid order, but the cashier UI does not yet use it as a “send now, pay later” flow, and no payment endpoint was found that settles an existing open restaurant order. The live-service order-to-kitchen-to-later-cashier-payment-to-final-receipt workflow is therefore incomplete.
+
+The application is **not production-ready**. External payment and hotel folio integrations are absent; database migration execution is manual/unverified; production Hibernate configuration currently enables schema updates; role and ownership coverage is incomplete; and no real-service end-to-end or deployment rehearsal has been performed in this audit.
 
 ## Repository and Git state
 
-- Root repository: `Nexus-POS`; no applicable `AGENTS.md` was found in the inspected repository paths.
-- Current branch: `feature/hotel-pos-rebuild` at `fe80067`; that commit is also the current `master`/`origin/master` tip. The existing `staging` branch is at `100ea97`.
-- The working tree contains extensive modified/untracked POS, backend, configuration, generated static-asset, and documentation files. It also contains a changed `posFrontend/.env` and an untracked `JavaRefresherCourse2024/` directory. Values from environment files were not inspected or copied into this report.
-- No files were staged, committed, reset, or removed for this audit. Before a checkpoint commit, inspect individual diffs, exclude credentials/generated artifacts/unrelated work, and agree which existing POS changes belong in the checkpoint.
+- Current branch is `feature/hotel-pos-rebuild`, at `557366e`; it matches `origin/feature/hotel-pos-rebuild` at audit time.
+- The worktree already contains unrelated and previously made local changes, including environment/configuration files, same-origin API proxy changes, generated backend static assets, and `JavaRefresherCourse2024/`. These were preserved and excluded from the Phase Zero audit commit.
+- `.env` files exist in the working tree. Their values were not read, copied, or included here. Tracked environment templates are present.
+- No applicable repository `AGENTS.md` was found. The only discovered `AGENTS.md` is inside `posFrontend/node_modules/recharts` and does not govern project source changes.
 
-## Technology and build configuration
+## Technology and build setup
 
-| Area | Observed |
-|---|---|
-| Web frontend | React 19, Vite 7, JavaScript/JSX, Tailwind CSS 3, MUI, TanStack Query, Axios, Keycloak JS |
-| API | Java 17 target, Spring Boot 3.5, Spring Security, Spring Data JPA, Bean Validation, Springdoc OpenAPI |
-| Database | PostgreSQL driver; JPA/Hibernate. Production config uses `ddl-auto: validate`; dev config uses `update`. |
-| Identity | Keycloak JWT resource server configuration, Keycloak realm/client role extraction |
-| Object storage | MinIO service/configuration for product images |
-| Desktop client | JavaFX, local SQLite cache and generic queued synchronization |
-| Frontend checks | `npm run lint`, `npm run build`; no frontend test script is defined in `package.json` |
-| Backend checks | Maven wrapper and Spring Boot test dependencies; tests use JUnit/Mockito/MockMvc |
-| CI/CD | `.github/workflows/deploy.yml` exists; no separate pull-request test workflow was found in `.github/workflows/` |
-| Deployment | Backend/frontend Dockerfiles, production Compose, Nginx config, deployment workflow |
-
-## Application modules and routes
-
-The React route map includes `/pos/checkout`, `/pos/tables`, `/pos/orders`, `/pos/kitchen`, `/pos/customers`, `/pos/shift`, `/pos/reservations`, `/admin/*`, and `/finance/*`. Admin modules cover products, categories, inventory, reports, users, settings, customers, and audit. The desktop module is a separate JavaFX shell with module stubs and SQLite sync infrastructure.
-
-Backend route families observed include `/api/sale`, `/api/orders`, `/api/kitchen`, `/api/tables`, `/api/customers`, `/api/reservations`, `/api/shifts`, `/api/product`, `/api/category`, `/api/modifier-groups`, `/api/report`, `/api/audit`, `/api/suppliers`, `/api/purchase-orders`, `/api/expenses`, `/api/cart`, and `/api/config`.
-
-## Current domain and persistence
-
-Observed JPA models include products/categories/modifiers; `RestaurantOrder`/`OrderItem`; `Sales`/`SaleItem`; `KitchenOrder`; tables; customers; reservations; shifts; stock movements; suppliers/purchase orders; expenses; users; and audit logs. Cash/payment method and sale status are stored on `Sales`; no separate payment-attempt, allocation, or refund aggregate was found in the inspected model. A sale-return endpoint exists, but a real provider refund/reconciliation path is not evidenced.
-
-The order lifecycle and sale lifecycle are therefore represented separately. `KitchenOrder` is associated with `RestaurantOrder`, but the cashier sale path does not establish that association. The exact persistence behavior and constraints require database-backed tests before changing the model.
-
-One SQL migration is present at `posBackend/src/main/resources/db/migration/V20261027_01__hotel_pos_sale_fields.sql`. The inspected Maven dependencies did not show Flyway or Liquibase, so production migration execution is not automatically verified by this repository configuration. The schema/migration owner and deployment procedure need to be made explicit.
-
-## Current workflow evidence and gaps
-
-| Workflow | Current evidence | Audit status |
+| Area | Observed implementation | Audit status |
 |---|---|---|
-| Staff access | Keycloak JWT resource server and route/controller role checks exist. | Implemented in part; claim mapping, endpoint coverage, and positive/negative role tests need full verification. |
-| Menu and modifiers | Product/category and modifier-group APIs/entities exist. The current worktree adds modifier selections to sale/order line models and server pricing. | Partial; verify migration, constraints, and frontend/API contract. |
-| Dine-in/takeaway cash sale | `SalesService` computes totals, stock effects, and stores sale information; `OrderType` contains dine-in/takeaway. | Partial; separate from kitchen/order lifecycle. Provider methods beyond cash are not evidenced. |
-| Restaurant orders | `/api/orders` creates, updates, transitions, and cancels `RestaurantOrder` records. | Partial; current checkout and payment lifecycle are not unified with this path. |
-| Kitchen | `/api/kitchen/orders` reads and updates `KitchenOrder`. | Critical gap: no verified creation/linking from a cashier sale/order submission. |
-| Tables | Table list/status APIs and UI exist; sales can mark a selected table occupied. | Partial; assignment conflicts, lifecycle release, transfers, and concurrency need tests. |
-| Room charge | `ROOM_CHARGE` order type and order fields exist. | Unsupported as a hotel folio workflow: no active-stay validation/PMS posting/reconciliation found. |
-| Electronic payments | Payment method enum/UI references exist. | Not verified; current backend sales service rejects non-cash checkout pending provider setup. |
-| Discounts | Order model has a discount field; inspected order calculation forces discount to zero. | Unsupported beyond current behavior; define policy/manager approval before implementation. |
-| Voids/returns | Sale return endpoint/service exists; order cancellation exists. | Partial; refund execution, partial return rules, reason capture, and complete audit history need tests. |
-| Shifts/cash | Open/current/close shift endpoints and models exist. | Partial; cash movements, reconciliation rules, and authorization need verification. |
-| Inventory/purchasing | Product stock, movements, adjustments, suppliers, purchase orders exist. | Partial; recipes/ingredient depletion and restaurant-specific consumption are not evidenced. |
-| Reservations/guests | APIs and screens exist. | Partial; integration with tables, stays, and room guest identity needs verification. |
-| Offline desktop | SQLite cache and generic PUT/DELETE sync queue exist; README says module UI uses sample builders and API contracts need alignment. | Prototype/skeleton; unsafe for offline sales/payments until conflict and idempotency semantics are designed. |
-| External systems | Compose/config includes Keycloak and MinIO. | No PMS/folio, payment-provider sandbox, eTIMS, printer, SMS, or email integration was verified. |
+| Frontend | React 19, Vite 7, JavaScript/JSX, Tailwind 3, MUI, TanStack Query, Axios, Keycloak JS | Present; production build verified |
+| Backend | Java 17 target, Spring Boot 3.5, Spring MVC, Spring Security, JPA, Bean Validation, Springdoc | Present; Maven test suite verified |
+| Database | PostgreSQL via JDBC/JPA; Hibernate schema validation in base config, development config uses `update` | Present; live database/migration compatibility not verified |
+| Identity | Keycloak OIDC/JWT resource server; converter maps realm and client roles to Spring roles | Present; live realm/claim mapping not verified |
+| Object storage | MinIO Java SDK and Compose service | Present; credentials/connectivity/policies not verified |
+| Desktop | Separate JavaFX project with SQLite cache/sync concepts | Present; README and implementation indicate prototype-level scope; offline sale correctness not verified |
+| Frontend tests | Node built-in test runner | 8 tests pass |
+| Backend tests | JUnit, Mockito, MockMvc through Maven wrapper | 31 tests pass |
+| CI/CD | `.github/workflows/deploy.yml` builds/publishes/deploys containers | Deployment workflow exists; it is not a verified PR test/security pipeline |
+| Containers | Backend/frontend Dockerfiles, production Compose and Nginx | Present; deployment health and recovery not verified |
+| External integrations | No configured payment provider, PMS/folio, eTIMS, or printer integration found | Missing or blocked by external setup |
 
-## Tests and baseline evidence
+## Architecture and modules
 
-The frontend package has lint and production-build scripts but no frontend unit/E2E test command. Backend tests are JUnit/Mockito/MockMvc. In the previous verified run on this working tree, `npm run build -- --outDir /tmp/nexus-pos-touch-build-final --emptyOutDir` passed, `npm run lint` passed with 14 warnings and no errors, and the Java 21 JDK Maven run targeting Java 17 passed 14 tests. A fresh npm advisory request failed to reach the registry. No end-to-end run against PostgreSQL/Keycloak/MinIO/PMS/payment sandbox was performed.
+Backend source is organized under `com.pos` into `controller`, `service`, `repository`, `model`, `dto`, `dao`, and `config` packages. This is a modular monolith in deployment but not yet separated into domain-owned packages. Some controller methods still contain workflow and domain decisions (notably order validation/transitions), which should move behind application services as modules are improved.
 
-Commands and results are historical evidence from the prior run, not rerun as part of this document-only design stage.
+Frontend source uses feature-oriented directories for `pos`, reports, finance, admin, products, inventory, reservations, tables, kitchen, orders, and shifts, alongside shared components/services/context. The React app is already the web frontend; the JavaFX application is a separate client and should not be treated as an interchangeable implementation.
 
-## Initial recommendations
+## Existing functional capabilities
 
-1. Make one authoritative order lifecycle feed kitchen, table, checkout, receipt, and history.
-2. Keep payment attempts/provider state separate from order and kitchen state; never infer payment success from a client response.
-3. Treat room charges as unavailable until a PMS contract can validate active stay/guest/room and confirm/reconcile folio posting.
-4. Prioritize the cashier interaction design and build it as a real-API vertical slice, with touch-sized controls and visible error/loading/retry behavior.
-5. Decide whether JavaFX/offline operation is in scope before making it share order/payment writes with the web client.
-6. Add repeatable database migration and isolated integration-test procedures before relying on schema changes.
+Status labels mean: **Verified** = covered by the Phase Zero commands below; **Implemented, not end-to-end verified** = source paths exist and unit tests may exist, but no service-backed user journey was run; **Partial** = important workflow or controls are missing; **Blocked** = requires external service/credentials not available in this repository audit; **Missing** = no implementation found.
 
-## Boundaries of this audit
+| Feature | Evidence and current boundary | Status |
+|---|---|---|
+| Login/session | Keycloak browser integration, protected routes, Spring JWT validation and role extraction | Implemented, not end-to-end verified |
+| Roles | Controllers use coarse Keycloak roles such as ADMIN, MANAGER, CASHIER, KITCHEN, STOCK_CLERK; no complete permission catalog or branch/tenant scope found | Partial |
+| Touch cashier menu | Product/category/search, modifier selection, notes, table selection and cart; responsive styling exists | Implemented, not tablet usability verified |
+| Save unpaid order | `/api/orders` creates an OPEN server-priced order; UI checkout does not submit this as its deferred-payment action | Partial |
+| Immediate cash sale | `SalesService` validates cash, calculates totals, decrements stock, creates Sale, links RestaurantOrder, creates KitchenOrder, and audits in one transaction; idempotency is present | Implemented, unit verified; no database-backed flow verification |
+| Later payment for existing order | No endpoint found to take payment against an already-open restaurant order; current modal pays from cart and creates the sale immediately | Missing |
+| Kitchen workflow | Kitchen API and screen read persisted tickets; statuses advance and link back to restaurant order | Implemented, unit/MVC tested; no live browser-to-database journey |
+| Tables | List/status APIs and selection exist; immediate cash sale checks available table under row lock and marks it occupied | Partial; table release/transfer/merge and concurrent restaurant workflows not fully verified |
+| Receipts | Backend receipt endpoint reads persisted sale details; cashier ownership/manager access checks have tests; frontend can retrieve/print receipt after immediate payment | Implemented for completed sale; pre-bill and delayed-payment receipt flow missing |
+| Payment methods | Backend accepts cash only; non-cash explicitly returns unavailable | Cash implemented; card/M-Pesa blocked |
+| Refunds/voids | Manager-only sale return/void paths and stock restoration exist; not a provider refund ledger; partial returns unsupported | Partial |
+| Room charge | Room-charge order types exist but order API rejects until PMS validation/posting is connected | Blocked; correctly disabled |
+| Shifts | Open/current/close, expected cash, variance UI/API | Partial; cash movements and complete reconciliation controls absent |
+| Catalog and modifiers | Product/category/image and modifier APIs; server validates modifier constraints and prices | Implemented, not full management flow/security verified |
+| Inventory/procurement | Product stock, stock movement, suppliers, purchase orders, receiving and low-stock/report surfaces | Partial; recipe/ingredient ledger and exactly-once consumption absent |
+| Reservations/customers | APIs and screens, reservation lifecycle validation/audit | Implemented in part; no PMS/stay integration |
+| Reporting | API-backed dashboard/reports and audit UI | Implemented in part; source totals and scoped report access need broader verification |
+| Notifications | Low-stock notification UI calls reports endpoint | Partial; alert delivery/retry/role behavior not verified |
+| Offline mode | Desktop client has local persistence/queued sync concepts | Prototype; unsafe to claim reliable offline POS |
 
-This report documents code/configuration evidence only. It does not certify security, production readiness, payment providers, PMS behavior, deployment health, database migration compatibility, or backup restoration. Those require focused tests and access to the corresponding isolated services.
+## Security and data-integrity findings
+
+### High priority
+
+1. **Production schema mutation:** `application-prod.yml` sets `spring.jpa.hibernate.ddl-auto: update`, overriding the base profile’s safer `validate` setting. The SQL files under `db/migration` are not executed by a configured Flyway/Liquibase dependency. Production schema changes therefore lack a verified migration runner/process. Change to reviewed versioned migrations and `validate` only after confirming deployment migration procedure.
+2. **Authorization completeness:** method security and role guards exist, but roles are coarse; several route families allow cashiers broad reads/writes. Object ownership checks are evidenced for receipts, but not comprehensively for shifts, orders, guest data, branch scope, or all direct object IDs. A complete API authorization matrix and negative tests are required.
+3. **Payment lifecycle gap:** no persisted payment-attempt/pending/failure/refund aggregate. The cash `Sales` row represents a completed payment; this cannot represent delayed checkout, provider uncertainty, callback reconciliation, or split payments safely.
+4. **No real provider confirmation:** non-cash payments are rejected, which is safe; M-Pesa/card/folio behavior cannot be claimed until sandbox/provider contracts and callback verification are added.
+5. **Secrets and MinIO:** production Compose injects MinIO root user/password into the backend. Use a restricted service account/policy for the application. Environment values were not inspected; no secret scan was run in this phase.
+
+### Medium priority
+
+- `SecurityConfig` uses stateless bearer JWT and disables CSRF. This is appropriate only while authentication remains bearer-token based and not cookie/session based; verify this invariant if auth changes.
+- CORS is configurable. Local proxy changes are uncommitted; deployment/browser behavior needs staging verification after those changes are integrated.
+- Error handling, upload bounds/content validation, rate limiting, log redaction, and Actuator exposure need a dedicated review.
+- Financial persistence uses `double` in the `Sales` aggregate while restaurant order calculations use `BigDecimal`; standardize on decimal money columns and values through migrations.
+- MinIO request failures can surface as server errors. Credentials, endpoint, bucket policy, and service user must be checked per environment.
+- The standalone legacy cart endpoints and multiple checkout abstractions should be inventoried before removal; no endpoint is classified dead solely from source inspection.
+
+## Database and migration state
+
+JPA entities exist for products, categories, modifiers, restaurant orders/items, sales/items, kitchen tickets, tables, customers, reservations, shifts, stock movements, suppliers, purchase orders, expenses, users, and audit logs. Two PostgreSQL SQL migration files exist, including sale/order link fields. No Flyway or Liquibase runtime was found in `pom.xml`; deployment instructions currently apply SQL manually. Production database state was not inspected or changed.
+
+Historical prices are stored in sale/order item records, but live schema constraints, indexes, foreign-key integrity, concurrent table/order behavior, and migration compatibility were not tested against an isolated PostgreSQL instance in this audit.
+
+## Deployment and operations
+
+- Production Compose includes PostgreSQL, Keycloak, MinIO, backend, and frontend; services have health checks and a private bridge network.
+- Frontend Nginx proxies API paths to the backend. Local Vite proxy/same-origin browser API configuration is present as an uncommitted local change.
+- Deployment GitHub Actions can build/publish/deploy selected parts of the stack. Its backend image build skips tests; no separate PR CI workflow with tests/security scans was found.
+- The frontend/backend image tags and production secrets depend on repository/VPS configuration. No production deployment was run or requested.
+- Backup restore, TLS routing, monitoring/alerts, rollback, container hardening, and full recovery procedure were not verified.
+
+## Phase Zero verification run
+
+Commands executed from the repository on 2026-10-29:
+
+| Command | Result |
+|---|---|
+| `npm test` in `posFrontend/` | Passed: 8 tests, 0 failures |
+| `npm run lint` in `posFrontend/` | Passed: 0 errors, 14 warnings |
+| `npm run build -- --outDir /tmp/nexus-pos-audit-build --emptyOutDir` in `posFrontend/` | Passed: Vite production build completed |
+| `JAVA_HOME=/home/apperstar/.jdks/ms-21.0.11 PATH=/home/apperstar/.jdks/ms-21.0.11/bin:$PATH ./mvnw -B -Dfrontend.skip=true test` in `posBackend/` | Passed: 31 tests, 0 failures/errors; Java 21 runtime targeting Java 17 |
+
+These are unit/build results only. No PostgreSQL, Keycloak, MinIO, payment sandbox, PMS, browser E2E, Docker image scan, or deployed stack was exercised. The frontend lint warnings are pre-existing hook/Fast Refresh warnings; they remain cleanup work.
+
+## Prioritized implementation backlog
+
+1. **P0 — Complete cashier flow:** unpaid order creation and kitchen submission; retrieve the same order later; take cash against it exactly once; update order/payment/table state atomically; issue final paid receipt; preserve the touch-first UI and honest loading/error states.
+2. **P0 — Test the vertical slice with PostgreSQL:** persistence, idempotency under retries/concurrency, ticket linkage, duplicate-payment protection, receipt totals, and table lifecycle.
+3. **P0 — Authorization review:** map actual Keycloak roles to operations, restrict object ownership, and add positive/negative API tests for cashier, kitchen, manager, and administrator.
+4. **P1 — Migration safety:** add a repeatable migration mechanism/process, remove production `ddl-auto=update`, test an upgrade against an isolated database, and document backup/rollback or forward recovery.
+5. **P1 — Financial integrity:** converge on `BigDecimal`/decimal database columns, persist payment states/attempts, define refund/void approvals and cash movement reconciliation.
+6. **P1 — Role-specific/touch UX:** verify cashier tablet targets/accessibility, role landing routes, waiter table flows, and kitchen update behavior at realistic screen sizes.
+7. **P1 — CI and security:** CI tests/builds, dependency/secret scans, endpoint inventory and OpenAPI permission docs, API error/log/upload review, provider callback tests when a provider exists.
+8. **P2 — Integrations and operations:** payment sandbox, PMS folio contract, printer/e-invoicing scope; backup/restore drill, staging deployment, health/monitoring, repeatable installation and release report.
+9. **Scope decision before expansion:** decide whether JavaFX offline use, multi-branch, delivery, recipes, loyalty, and specialized roles are launch requirements. Existing files alone do not establish these as working capabilities.
+
+## Phase Zero conclusion
+
+The audit confirms that the repository has a substantial working foundation and that the immediate cash-sale-to-kitchen link already exists. The critical next implementation is **deferred payment for an existing server-priced restaurant order**, alongside touch-first cashier controls and database-backed tests. This audit does not certify production readiness. No production system or existing business data was modified.
