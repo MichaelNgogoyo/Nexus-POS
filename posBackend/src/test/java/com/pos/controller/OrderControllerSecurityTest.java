@@ -114,7 +114,9 @@ class OrderControllerSecurityTest {
 
     @Test
     void repeatedOrderIdempotencyKeyReturnsOriginalWithoutRepeatingWrites() {
-        RestaurantOrder previous = RestaurantOrder.builder().id(25L).orderNumber("ORD-0025").build();
+        RestaurantOrder previous = RestaurantOrder.builder().id(25L).orderNumber("ORD-0025").cashierId("cashier-4")
+                .orderType(OrderType.TAKEAWAY).items(List.of(OrderItem.builder().productId(4L).quantity(1)
+                        .modifiers(List.of()).build())).build();
         when(orderRepository.findByIdempotencyKey("room-charge-attempt-12345")).thenReturn(Optional.of(previous));
         RestaurantOrderRequest request = new RestaurantOrderRequest(OrderType.TAKEAWAY, "room-charge-attempt-12345",
                 null, null, null, null, List.of(new RestaurantOrderItemRequest(4L, 1, null, List.of())));
@@ -123,6 +125,38 @@ class OrderControllerSecurityTest {
 
         assertThat(result.order().id()).isEqualTo(previous.getId());
         assertThat(result.created()).isFalse();
+        verify(orderRepository, never()).save(any());
+        verifyNoInteractions(productRepository, auditService);
+    }
+
+    @Test
+    void orderIdempotencyReplayCannotExposeAnotherCashiersOrder() {
+        RestaurantOrder previous = RestaurantOrder.builder().id(25L).orderNumber("ORD-0025").cashierId("cashier-9")
+                .orderType(OrderType.TAKEAWAY).items(List.of(OrderItem.builder().productId(4L).quantity(1)
+                        .modifiers(List.of()).build())).build();
+        when(orderRepository.findByIdempotencyKey("room-charge-attempt-12345")).thenReturn(Optional.of(previous));
+        RestaurantOrderRequest request = new RestaurantOrderRequest(OrderType.TAKEAWAY, "room-charge-attempt-12345",
+                null, null, null, null, List.of(new RestaurantOrderItemRequest(4L, 1, null, List.of())));
+
+        assertThatThrownBy(() -> orderService.createOrder(request, "cashier-4"))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("Idempotency key is already associated");
+        verify(orderRepository, never()).save(any());
+        verifyNoInteractions(productRepository, auditService);
+    }
+
+    @Test
+    void orderIdempotencyReplayRejectsDifferentPayloadFromTheSameCashier() {
+        RestaurantOrder previous = RestaurantOrder.builder().id(25L).orderNumber("ORD-0025").cashierId("cashier-4")
+                .orderType(OrderType.TAKEAWAY).items(List.of(OrderItem.builder().productId(4L).quantity(1)
+                        .modifiers(List.of()).build())).build();
+        when(orderRepository.findByIdempotencyKey("room-charge-attempt-12345")).thenReturn(Optional.of(previous));
+        RestaurantOrderRequest request = new RestaurantOrderRequest(OrderType.TAKEAWAY, "room-charge-attempt-12345",
+                null, null, null, null, List.of(new RestaurantOrderItemRequest(4L, 2, null, List.of())));
+
+        assertThatThrownBy(() -> orderService.createOrder(request, "cashier-4"))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("different operation");
         verify(orderRepository, never()).save(any());
         verifyNoInteractions(productRepository, auditService);
     }

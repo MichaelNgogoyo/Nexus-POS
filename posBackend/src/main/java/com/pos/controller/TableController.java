@@ -2,12 +2,14 @@ package com.pos.controller;
 
 import com.pos.dto.TableStatusRequest;
 import com.pos.model.RestaurantTable;
-import com.pos.model.TableStatus;
 import com.pos.repository.RestaurantTableRepository;
+import com.pos.service.TableService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 
 import java.util.List;
 
@@ -18,6 +20,7 @@ import java.util.List;
 public class TableController {
 
     private final RestaurantTableRepository tableRepository;
+    private final TableService tableService;
 
     @GetMapping
     public List<RestaurantTable> getAllTables() {
@@ -63,10 +66,8 @@ public class TableController {
 
     @PutMapping("/{id}/status")
     public ResponseEntity<RestaurantTable> updateStatus(@PathVariable Long id,
-                                                        @RequestBody TableStatusRequest request) {
-        return tableRepository.findById(id).map(table -> {
-            table.setStatus(TableStatus.valueOf(request.getStatus()));
-            return ResponseEntity.ok(tableRepository.save(table));
-        }).orElse(ResponseEntity.notFound().build());
+                                                        @Valid @RequestBody TableStatusRequest request,
+                                                        Authentication authentication) {
+        return ResponseEntity.ok(tableService.updateStatus(id, request.getStatus(), authentication.getName()));
     }
 }

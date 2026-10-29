@@ -24,8 +24,10 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /** Owns restaurant-order validation, pricing, transitions, and related persistence effects. */
 @Service
@@ -74,7 +76,13 @@ public class RestaurantOrderService {
                     "Room charges are unavailable until hotel folio validation and posting are connected");
         }
         RestaurantOrder previous = orderRepository.findByIdempotencyKey(request.idempotencyKey()).orElse(null);
-        if (previous != null) return new CreateResult(orderMapper.toResponse(previous), false);
+        if (previous != null) {
+            if (!Objects.equals(previous.getCashierId(), actor) || !matchesRequest(previous, request)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Idempotency key is already associated with a different operation");
+            }
+            return new CreateResult(orderMapper.toResponse(previous), false);
+        }
         if (request.orderType() == null) throw badRequest("Order type is required");
         RestaurantTable table = resolveTable(request.table() == null ? null : new RestaurantTable(request.table().id(), null, null, null, null, null));
         RestaurantOrder orderDraft = RestaurantOrder.builder().orderType(request.orderType()).table(table).build();
@@ -96,6 +104,41 @@ public class RestaurantOrderService {
         auditService.log(actor, "ORDER_CREATED", "RestaurantOrder", saved.getId().toString(), null, "OPEN");
         return new CreateResult(orderMapper.toResponse(saved), true);
     }
+
+    private boolean matchesRequest(RestaurantOrder previous, RestaurantOrderRequest request) {
+        Long requestedTableId = request.table() == null ? null : request.table().id();
+        if (previous.getOrderType() != request.orderType()
+                || !Objects.equals(previous.getTable() == null ? null : previous.getTable().getId(), requestedTableId)
+                || !Objects.equals(previous.getRoomNumber(), trimToNull(request.roomNumber()))
+                || !Objects.equals(previous.getCustomerName(), trimToNull(request.customerName()))
+                || !Objects.equals(previous.getNotes(), trimToNull(request.notes()))
+                || previous.getItems() == null || request.items() == null
+                || previous.getItems().size() != request.items().size()) {
+            return false;
+        }
+
+        if (request.items().stream().anyMatch(Objects::isNull)) return false;
+        List<OrderItemSignature> savedItems = previous.getItems().stream().map(item -> {
+            if (item == null) return null;
+            List<Long> modifiers = item.getModifiers() == null ? List.of()
+                    : item.getModifiers().stream().map(Modifier::getId).sorted().toList();
+            return new OrderItemSignature(item.getProductId(), item.getQuantity(), item.getNotes(), modifiers);
+        }).toList();
+        List<OrderItemSignature> requestedItems = request.items().stream().map(item -> {
+            List<Long> modifiers = item.modifiers() == null ? List.of()
+                    : item.modifiers().stream().map(RestaurantOrderItemRequest.ModifierReference::id)
+                    .filter(Objects::nonNull).sorted().toList();
+            return new OrderItemSignature(item.productId(), item.quantity(), trimToNull(item.notes()), modifiers);
+        }).toList();
+        if (savedItems.stream().anyMatch(Objects::isNull)) return false;
+        return signatureCounts(savedItems).equals(signatureCounts(requestedItems));
+    }
+
+    private Map<OrderItemSignature, Long> signatureCounts(List<OrderItemSignature> items) {
+        return items.stream().collect(Collectors.groupingBy(item -> item, Collectors.counting()));
+    }
+
+    private record OrderItemSignature(Long productId, Integer quantity, String notes, List<Long> modifiers) {}
 
     @Transactional
     public RestaurantOrderResponse updateOrder(Long id, RestaurantOrderRequest request, String actor) {

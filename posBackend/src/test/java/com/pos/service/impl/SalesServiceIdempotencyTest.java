@@ -3,7 +3,9 @@ package com.pos.service.impl;
 import com.pos.dto.SaleItemRequest;
 import com.pos.dto.SaleRequest;
 import com.pos.model.OrderType;
+import com.pos.model.SaleItem;
 import com.pos.model.Sales;
+import com.pos.model.Product;
 import com.pos.repository.ProductRepository;
 import com.pos.repository.RestaurantTableRepository;
 import com.pos.repository.SalesRepository;
@@ -51,7 +53,10 @@ class SalesServiceIdempotencyTest {
     void repeatingAnIdempotencyKeyReturnsOriginalSaleWithoutRepeatingSideEffects() {
         SaleRequest request = new SaleRequest("cashier", "CASH", List.of(new SaleItemRequest(3L, 1, null, null)), 121.0,
                 OrderType.TAKEAWAY, null, null, null, null, "checkout-attempt-12345");
-        Sales original = Sales.builder().id(91L).totalAmount(121.0).build();
+        Sales original = Sales.builder().id(91L).cashierId("cashier").paymentMethod("CASH")
+                .orderType(OrderType.TAKEAWAY).amountTendered(121.0).totalAmount(121.0)
+                .saleItems(List.of(SaleItem.builder().product(Product.builder().id(3L).build()).quantity(1)
+                        .modifiers(List.of()).build())).build();
         when(salesRepository.findByIdempotencyKey(request.idempotencyKey())).thenReturn(Optional.of(original));
 
         Sales result = service.createSales(request, "cashier");
@@ -59,6 +64,41 @@ class SalesServiceIdempotencyTest {
         assertThat(result).isSameAs(original);
         verifyNoInteractions(productRepository, stockMovementRepository, auditService, tableRepository);
         verifyNoInteractions(orderRepository, kitchenOrderRepository);
+        verify(salesRepository, never()).save(any());
+    }
+
+    @Test
+    void idempotencyReplayCannotExposeAnotherCashiersSale() {
+        SaleRequest request = new SaleRequest("cashier", "CASH", List.of(new SaleItemRequest(3L, 1, null, null)), 121.0,
+                OrderType.TAKEAWAY, null, null, null, null, "checkout-attempt-12345");
+        Sales original = Sales.builder().id(91L).cashierId("different-cashier").totalAmount(121.0).build();
+        when(salesRepository.findByIdempotencyKey(request.idempotencyKey())).thenReturn(Optional.of(original));
+
+        assertThatThrownBy(() -> service.createSales(request, "cashier"))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("Idempotency key is already associated");
+        verifyNoInteractions(productRepository, stockMovementRepository, auditService, tableRepository,
+                orderRepository, kitchenOrderRepository);
+        verify(salesRepository, never()).save(any());
+    }
+
+    @Test
+    void idempotencyReplayRejectsDifferentPayloadFromTheSameCashier() {
+        SaleRequest originalRequest = new SaleRequest("cashier", "CASH", List.of(new SaleItemRequest(3L, 1, null, null)), 121.0,
+                OrderType.TAKEAWAY, null, null, null, null, "checkout-attempt-12345");
+        Sales original = Sales.builder().id(91L).cashierId("cashier").paymentMethod("CASH")
+                .orderType(OrderType.TAKEAWAY).amountTendered(121.0).totalAmount(121.0)
+                .saleItems(List.of(SaleItem.builder().product(Product.builder().id(3L).build()).quantity(1)
+                        .modifiers(List.of()).build())).build();
+        when(salesRepository.findByIdempotencyKey(originalRequest.idempotencyKey())).thenReturn(Optional.of(original));
+        SaleRequest differentPayload = new SaleRequest("cashier", "CASH", List.of(new SaleItemRequest(3L, 2, null, null)), 121.0,
+                OrderType.TAKEAWAY, null, null, null, null, originalRequest.idempotencyKey());
+
+        assertThatThrownBy(() -> service.createSales(differentPayload, "cashier"))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("different operation");
+        verifyNoInteractions(productRepository, stockMovementRepository, auditService, tableRepository,
+                orderRepository, kitchenOrderRepository);
         verify(salesRepository, never()).save(any());
     }
 

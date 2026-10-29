@@ -17,7 +17,7 @@ public record SaleRequest(
         @NotEmpty(message = "Sale must contain at least one item")
         @Size(max = 100, message = "Sale cannot contain more than 100 items")
         @Valid
-        List<SaleItemRequest> items,
+        List<@NotNull @Valid SaleItemRequest> items,
 
         /** Cash tendered by the customer. Required for the currently supported cash flow. */
         @NotNull(message = "Cash amount tendered is required")

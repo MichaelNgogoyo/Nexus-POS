@@ -74,8 +74,17 @@ public class SalesService {
 
     @Transactional
     public Sales createSales(SaleRequest request, String actor) {
+        if (request.idempotencyKey() == null || request.idempotencyKey().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Idempotency key is required");
+        }
         Sales prior = repository.findByIdempotencyKey(request.idempotencyKey()).orElse(null);
-        if (prior != null) return prior;
+        if (prior != null) {
+            if (!java.util.Objects.equals(prior.getCashierId(), actor) || !matchesRequest(prior, request)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Idempotency key is already associated with a different operation");
+            }
+            return prior;
+        }
         if (!"CASH".equals(request.paymentMethod())) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "Only cash checkout is enabled until the configured payment provider is connected");
@@ -250,6 +259,40 @@ public class SalesService {
         log.info("Sale #{} created — subtotal={} tax={} service={} total={} change={}", saved.getId(), subtotal, taxAmount, serviceChargeAmount, total, changeGiven);
         return saved;
     }
+
+    private boolean matchesRequest(Sales prior, SaleRequest request) {
+        if (!java.util.Objects.equals(prior.getPaymentMethod(), request.paymentMethod())
+                || prior.getOrderType() != request.orderType()
+                || !java.util.Objects.equals(prior.getTableId(), request.tableId())
+                || !java.util.Objects.equals(prior.getRoomNumber(), request.roomNumber())
+                || !java.util.Objects.equals(prior.getGuestName(), request.guestName())
+                || !java.util.Objects.equals(prior.getNotes(), request.notes())
+                || request.amountTendered() == null
+                || Double.compare(prior.getAmountTendered(), request.amountTendered()) != 0
+                || prior.getSaleItems() == null || request.items() == null
+                || prior.getSaleItems().size() != request.items().size()) {
+            return false;
+        }
+
+        if (request.items().stream().anyMatch(java.util.Objects::isNull)) return false;
+        List<SaleItemSignature> savedItems = prior.getSaleItems().stream().map(item -> {
+            if (item == null || item.getProduct() == null) return null;
+            List<Long> modifiers = item.getModifiers() == null ? List.of()
+                    : item.getModifiers().stream().map(Modifier::getId).sorted().toList();
+            return new SaleItemSignature(item.getProduct().getId(), item.getQuantity(), item.getNotes(), modifiers);
+        }).toList();
+        List<SaleItemSignature> requestedItems = request.items().stream().map(item -> {
+            if (item.modifierIds() != null && item.modifierIds().contains(null)) return null;
+            List<Long> modifiers = item.modifierIds() == null ? List.of() : item.modifierIds().stream().sorted().toList();
+            return new SaleItemSignature(item.productId(), item.quantity(), item.notes(), modifiers);
+        }).toList();
+        if (savedItems.stream().anyMatch(java.util.Objects::isNull)
+                || requestedItems.stream().anyMatch(java.util.Objects::isNull)) return false;
+        return savedItems.stream().collect(Collectors.groupingBy(item -> item, Collectors.counting()))
+                .equals(requestedItems.stream().collect(Collectors.groupingBy(item -> item, Collectors.counting())));
+    }
+
+    private record SaleItemSignature(Long productId, int quantity, String notes, List<Long> modifierIds) {}
 
     @Transactional(readOnly = true)
     public Sales viewSale(Long id) {

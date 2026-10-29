@@ -1,6 +1,27 @@
-# Security model proposal
+# Security model and implementation status
 
-**Status:** design review, not a security certification. See repository findings in `CURRENT_STATE_AUDIT.md`.
+**Status:** partial implementation review, not a security certification. See repository findings in `CURRENT_STATE_AUDIT.md`.
+
+## Verified in the current feature branch
+
+- Spring validates JWT signatures, expiry, and issuer using the configured Keycloak issuer.
+- Backend authority mapping accepts realm roles and roles from the configured `pos-client` resource only; roles from unrelated Keycloak clients are ignored.
+- Sale and open-order idempotency replays are scoped to the cashier identity and original request data. A different identity or changed payload receives HTTP 409 instead of the stored record.
+- The `/api/tables/{id}/status` operation validates the status value, updates the occupancy timestamp consistently, and writes an audit event.
+- Receipt access checks that a cashier owns the receipt; managers and admins can access receipts across cashiers.
+- Shift operations enforce cashier ownership, while manager/admin paths can operate across cashiers.
+
+These checks have unit-level regression coverage. They do not establish full endpoint or deployment security.
+
+## Known gaps that still block a security sign-off
+
+- JWT audience is not currently validated. Configure an explicit Keycloak audience mapper and backend audience validation before production use.
+- The data model has no restaurant or branch ownership boundaries. The current authorization model is single-property and cannot enforce cross-branch isolation.
+- Authorization primarily uses broad role checks (`ADMIN`, `MANAGER`, `CASHIER`, and module roles), not the complete permission model below. Several endpoints still need object-level authorization and API-level authorization tests.
+- Some controllers still bind persistence entities directly, and some administrative mutations do not yet produce audit events.
+- CSRF is disabled for the stateless bearer-token API. This is safe only while authentication uses explicit bearer headers and never ambient cookies.
+- Production CORS must use exact HTTPS origins. Do not configure wildcard origins with credentialed requests.
+- Payment-provider callbacks, M-Pesa reconciliation, hotel folio posting, and external refund flows are not implemented and must not be represented as verified payment success.
 
 ## Trust boundaries
 
@@ -27,7 +48,7 @@
 | User/role/config administration | No | No | No | No | No | No | Yes |
 | View reports / audit | Own shift only | Own service only | Own queue | Operational | Stock | Financial | Full, audited |
 
-This must be reconciled with actual staff duties and the existing Keycloak realm roles before enforcement. Current branch claims several role checks; this matrix does not assert they are complete.
+This matrix is a target policy, not an assertion that every permission is enforced today. Reconcile it with actual staff duties and the existing Keycloak realm roles before expanding access.
 
 ## Authorization requirements
 

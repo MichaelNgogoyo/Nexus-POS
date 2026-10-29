@@ -38,6 +38,9 @@ public class SecurityConfig {
     @Value("${cors.allowed-origins:http://localhost:5173,http://localhost:3000, http://0.0.0.0:3000}")
     private String allowedOrigins;
 
+    @Value("${spring.security.oauth2.resourceserver.jwt.client-id:pos-client}")
+    private String posClientId;
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
@@ -90,12 +93,10 @@ public class SecurityConfig {
         }
 
         Map<String, Object> resourceAccess = jwt.getClaim("resource_access");
-        if (resourceAccess != null) {
-            for (Object resourceValue : resourceAccess.values()) {
-                if (resourceValue instanceof Map<?, ?> resourceMap) {
-                    Object clientRoles = resourceMap.get("roles");
-                    addRoles(authorities, clientRoles);
-                }
+        if (resourceAccess != null && posClientId != null && !posClientId.isBlank()) {
+            Object posClientAccess = resourceAccess.get(posClientId.trim());
+            if (posClientAccess instanceof Map<?, ?> resourceMap) {
+                addRoles(authorities, resourceMap.get("roles"));
             }
         }
 

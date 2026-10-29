@@ -2,6 +2,7 @@ package com.pos.dto;
 
 import com.pos.model.OrderType;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.Positive;
 
@@ -14,7 +15,7 @@ public record RestaurantOrderRequest(
         @Size(max = 24) String roomNumber,
         @Size(max = 120) String customerName,
         @Size(max = 500) String notes,
-        @Size(min = 1, max = 100) List<@Valid RestaurantOrderItemRequest> items
+        @Size(min = 1, max = 100) List<@NotNull @Valid RestaurantOrderItemRequest> items
 ) {
     public record TableReference(@Positive Long id) {}
 }
