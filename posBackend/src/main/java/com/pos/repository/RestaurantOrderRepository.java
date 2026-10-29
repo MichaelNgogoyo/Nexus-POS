@@ -13,9 +13,11 @@ import org.springframework.data.domain.Pageable;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.Collection;
 
 public interface RestaurantOrderRepository extends JpaRepository<RestaurantOrder, Long> {
     List<RestaurantOrder> findByStatus(OrderStatus status);
+    boolean existsByTable_IdAndStatusIn(Long tableId, Collection<OrderStatus> statuses);
     Page<RestaurantOrder> findByCashierIdIn(Set<String> cashierIds, Pageable pageable);
     Optional<RestaurantOrder> findByIdempotencyKey(String idempotencyKey);
 

@@ -182,6 +182,31 @@ class OrderControllerSecurityTest {
     }
 
     @Test
+    void openDineInOrderCanTransferToAnotherAvailableTable() {
+        RestaurantTable currentTable = RestaurantTable.builder().id(44L).name("T44").status(TableStatus.OCCUPIED).build();
+        RestaurantTable nextTable = RestaurantTable.builder().id(45L).name("T45").status(TableStatus.AVAILABLE).build();
+        Product product = Product.builder().id(4L).name("Breakfast plate").price(new BigDecimal("100.00")).active(true).build();
+        RestaurantOrder order = RestaurantOrder.builder().id(25L).cashierId("cashier-4").orderType(OrderType.DINE_IN)
+                .status(OrderStatus.OPEN).table(currentTable)
+                .items(new java.util.ArrayList<>(List.of(OrderItem.builder().productId(4L).quantity(1).build()))).build();
+        when(orderRepository.findByIdForUpdate(25L)).thenReturn(Optional.of(order));
+        when(tableRepository.findByIdForUpdate(45L)).thenReturn(Optional.of(nextTable));
+        when(productRepository.findById(4L)).thenReturn(Optional.of(product));
+        when(modifierGroupRepository.findByProductId(4L)).thenReturn(List.of());
+        RestaurantOrderRequest request = new RestaurantOrderRequest(OrderType.DINE_IN, null,
+                new RestaurantOrderRequest.TableReference(45L), null, null, null,
+                List.of(new RestaurantOrderItemRequest(4L, 1, null, List.of())));
+
+        var transferred = orderService.updateOrder(25L, request, "cashier-4");
+
+        assertThat(transferred.table().id()).isEqualTo(45L);
+        assertThat(currentTable.getStatus()).isEqualTo(TableStatus.CLEANING);
+        assertThat(nextTable.getStatus()).isEqualTo(TableStatus.OCCUPIED);
+        verify(tableRepository).save(currentTable);
+        verify(tableRepository).save(nextTable);
+    }
+
+    @Test
     void dineInOrderRejectsATableAlreadyTakenByAnotherOrder() {
         RestaurantTable table = RestaurantTable.builder().id(44L).name("T44").status(TableStatus.OCCUPIED).build();
         when(tableRepository.findByIdForUpdate(44L)).thenReturn(Optional.of(table));
@@ -194,6 +219,30 @@ class OrderControllerSecurityTest {
                 .hasMessageContaining("Selected table is no longer available");
         verify(tableRepository, never()).save(any());
         verifyNoInteractions(productRepository);
+    }
+
+    @Test
+    void cancellingDineInOrderMovesItsTableAndKitchenTicketToTheirNextStates() {
+        OrderItem item = OrderItem.builder().productId(4L).productName("Breakfast plate").quantity(1)
+                .kitchenStatus(KitchenStatus.PREPARING).build();
+        RestaurantTable table = RestaurantTable.builder().id(44L).name("T44").status(TableStatus.OCCUPIED)
+                .occupiedAt(java.time.LocalDateTime.now()).build();
+        RestaurantOrder order = RestaurantOrder.builder().id(25L).cashierId("cashier-4").status(OrderStatus.KITCHEN)
+                .table(table).items(new java.util.ArrayList<>(List.of(item))).build();
+        KitchenOrder ticket = KitchenOrder.builder().id(16L).order(order).status(KitchenStatus.PREPARING).build();
+        when(orderRepository.findByIdForUpdate(25L)).thenReturn(Optional.of(order));
+        when(kitchenOrderRepository.findByOrder_Id(25L)).thenReturn(Optional.of(ticket));
+
+        var cancelled = orderService.cancelOrder(25L, "cashier-4");
+
+        assertThat(cancelled.status()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(table.getStatus()).isEqualTo(TableStatus.CLEANING);
+        assertThat(table.getOccupiedAt()).isNull();
+        assertThat(ticket.getStatus()).isEqualTo(KitchenStatus.CANCELLED);
+        assertThat(item.getKitchenStatus()).isEqualTo(KitchenStatus.CANCELLED);
+        verify(tableRepository).save(table);
+        verify(auditService).log("cashier-4", "TABLE_STATUS_CHANGED", "RestaurantTable", "44", "OCCUPIED", "CLEANING");
+        verify(auditService).log("cashier-4", "ORDER_CANCELLED", "RestaurantOrder", "25", "KITCHEN", "CANCELLED");
     }
 
     @Test

@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { usePermissions } from '../../auth/permissions.js';
 import ReceiptLongRoundedIcon from '@mui/icons-material/ReceiptLongRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded';
-import { getActiveOrders, updateOrderStatus } from '../../services/api.js';
+import { cancelRestaurantOrder, getActiveOrders, getAllTables, updateOrderStatus, updateRestaurantOrder } from '../../services/api.js';
 import OrderPaymentModal from './OrderPaymentModal.jsx';
 
 const COLUMNS = [
@@ -16,11 +17,48 @@ const money = (amount) => `KSh ${Number(amount || 0).toLocaleString('en-KE', { m
 
 export default function POSOrders() {
     const client = useQueryClient();
+    const { roles } = usePermissions();
+    const canManageOrders = roles.includes('ADMIN') || roles.includes('MANAGER');
     const [paymentOrder, setPaymentOrder] = useState(null);
+    const [transferOrder, setTransferOrder] = useState(null);
+    const [transferTableId, setTransferTableId] = useState('');
+    const [cancelOrder, setCancelOrder] = useState(null);
     const ordersQuery = useQuery({ queryKey: ['orders'], queryFn: () => getActiveOrders().then(({ data }) => data), refetchInterval: 20_000 });
+    const tablesQuery = useQuery({ queryKey: ['tables'], queryFn: () => getAllTables().then(({ data }) => data), staleTime: 20_000 });
     const statusMutation = useMutation({
         mutationFn: ({ id, status }) => updateOrderStatus(id, status),
         onSuccess: () => client.invalidateQueries({ queryKey: ['orders'] }),
+    });
+    const transferMutation = useMutation({
+        mutationFn: ({ order, tableId }) => updateRestaurantOrder(order.id, {
+            orderType: 'DINE_IN',
+            table: { id: Number(tableId) },
+            roomNumber: null,
+            customerName: order.customerName || null,
+            notes: order.notes || null,
+            items: (order.items || []).map((item) => ({
+                productId: item.productId,
+                quantity: item.quantity,
+                notes: item.notes || null,
+                modifiers: (item.modifiers || []).map((modifier) => ({ id: modifier.id })),
+            })),
+        }).then(({ data }) => data),
+        onSuccess: () => {
+            setTransferOrder(null);
+            setTransferTableId('');
+            client.invalidateQueries({ queryKey: ['orders'] });
+            client.invalidateQueries({ queryKey: ['tables'] });
+        },
+    });
+    const cancelMutation = useMutation({
+        mutationFn: (id) => cancelRestaurantOrder(id).then(({ data }) => data),
+        onSuccess: () => {
+            setCancelOrder(null);
+            client.invalidateQueries({ queryKey: ['orders'] });
+            client.invalidateQueries({ queryKey: ['tables'] });
+            client.invalidateQueries({ queryKey: ['kitchen-orders'] });
+            client.invalidateQueries({ queryKey: ['products'] });
+        },
     });
     const grouped = useMemo(() => {
         const map = Object.fromEntries(COLUMNS.map(({ status }) => [status, []]));
@@ -46,12 +84,18 @@ export default function POSOrders() {
                 <div className={`pos-order-payment-state ${paid ? 'is-paid' : ''}`}>{paid ? `Paid${order.saleId ? ` · Sale #${order.saleId}` : ''}` : order.status === 'OPEN' ? 'Not sent to kitchen' : 'Payment due'}</div>
                 <div className="pos-order-card-actions">
                     {column.next && <button disabled={statusMutation.isPending} className="pos-order-next" onClick={() => statusMutation.mutate({ id: order.id, status: column.next })}>{column.action}<ArrowForwardRoundedIcon /></button>}
+                    {canManageOrders && order.status === 'OPEN' && <button className="pos-order-transfer" onClick={() => { setTransferOrder(order); setTransferTableId(''); }}>Assign / transfer table</button>}
+                    {canManageOrders && ['OPEN', 'KITCHEN', 'READY'].includes(order.status) && <button className="pos-order-cancel" onClick={() => setCancelOrder(order)}>Cancel order</button>}
                     {paymentEligible && <button className="pos-order-pay" onClick={() => setPaymentOrder(order)}>Record cash payment</button>}
                 </div>
             </article>;
         })}</section>)}</div>}
         {statusMutation.isError && <p className="pos-error" role="alert">Order status could not be updated. {statusMutation.error?.response?.data?.message || 'Refresh and retry.'}</p>}
+        {transferMutation.isError && <p className="pos-error" role="alert">Table assignment failed. {transferMutation.error?.response?.data?.message || 'Refresh and retry.'}</p>}
+        {cancelMutation.isError && <p className="pos-error" role="alert">Order could not be cancelled. {cancelMutation.error?.response?.data?.message || 'Refresh and retry.'}</p>}
         {!ordersQuery.isLoading && !ordersQuery.isError && ordersQuery.data?.length === 0 && <div className="pos-state"><ReceiptLongRoundedIcon /><strong>No orders yet</strong><span>New restaurant orders will appear here.</span></div>}
         {paymentOrder && <OrderPaymentModal order={paymentOrder} onClose={() => { setPaymentOrder(null); client.invalidateQueries({ queryKey: ['orders'] }); }} />}
+        {transferOrder && <div className="pos-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !transferMutation.isPending) setTransferOrder(null); }}><section className="pos-dialog" role="dialog" aria-modal="true" aria-labelledby="transfer-order-title"><header><div><p className="hotel-eyebrow">OPEN ORDER</p><h2 id="transfer-order-title">Assign a table</h2></div><button aria-label="Close" disabled={transferMutation.isPending} onClick={() => setTransferOrder(null)}>×</button></header><p className="table-dialog-detail">{transferOrder.orderNumber || `Order #${transferOrder.id}`} · {transferOrder.table?.name ? `currently at ${transferOrder.table.name}` : 'not assigned to a table'}</p>{tablesQuery.isLoading ? <div className="pos-state">Loading available tables…</div> : tablesQuery.isError ? <div className="pos-error" role="alert">Tables could not be loaded. <button onClick={() => tablesQuery.refetch()}>Try again</button></div> : <div className="transfer-table-list">{(tablesQuery.data || []).filter((table) => table.status === 'AVAILABLE' && String(table.id) !== String(transferOrder.table?.id)).map((table) => <button type="button" key={table.id} className={transferTableId === String(table.id) ? 'selected' : ''} aria-pressed={transferTableId === String(table.id)} onClick={() => setTransferTableId(String(table.id))}><strong>{table.name}</strong><span>{table.floor || 'Area not set'} · {table.capacity ? `${table.capacity} seats` : 'No capacity set'}</span></button>)}</div>}{!tablesQuery.isLoading && !tablesQuery.isError && !(tablesQuery.data || []).some((table) => table.status === 'AVAILABLE' && String(table.id) !== String(transferOrder.table?.id)) && <div className="pos-column-empty">No free tables are available right now.</div>}<footer className="transfer-actions"><button className="pos-secondary-action" disabled={transferMutation.isPending} onClick={() => setTransferOrder(null)}>Keep current table</button><button className="pos-primary-action" disabled={!transferTableId || transferMutation.isPending} onClick={() => transferMutation.mutate({ order: transferOrder, tableId: transferTableId })}>{transferMutation.isPending ? 'Moving order…' : 'Confirm table'}</button></footer></section></div>}
+        {cancelOrder && <div className="pos-dialog-backdrop" role="presentation"><section className="pos-dialog" role="alertdialog" aria-modal="true" aria-labelledby="cancel-order-title"><p className="hotel-eyebrow">CANCEL ORDER</p><h2 id="cancel-order-title">Cancel {cancelOrder.orderNumber || `order #${cancelOrder.id}`}?</h2><p className="table-dialog-detail">The order will be marked cancelled, its kitchen ticket will be updated, and its table will move to cleaning. Stock already deducted on kitchen submission is not automatically returned.</p><footer className="transfer-actions"><button className="pos-secondary-action" disabled={cancelMutation.isPending} onClick={() => setCancelOrder(null)}>Keep order</button><button className="pos-danger-action" disabled={cancelMutation.isPending} onClick={() => cancelMutation.mutate(cancelOrder.id)}>{cancelMutation.isPending ? 'Cancelling…' : 'Confirm cancellation'}</button></footer></section></div>}
     </section>;
 }

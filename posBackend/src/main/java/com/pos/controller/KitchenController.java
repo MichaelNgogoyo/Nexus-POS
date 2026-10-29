@@ -1,10 +1,12 @@
 package com.pos.controller;
 
 import com.pos.dto.KitchenStatusRequest;
+import com.pos.dto.KitchenTicketResponse;
 import com.pos.model.KitchenOrder;
 import com.pos.model.KitchenStatus;
 import com.pos.model.OrderStatus;
 import com.pos.model.OrderItem;
+import com.pos.model.RestaurantOrder;
 import com.pos.repository.KitchenOrderRepository;
 import com.pos.repository.RestaurantOrderRepository;
 import com.pos.service.impl.AuditService;
@@ -32,26 +34,44 @@ public class KitchenController {
     private final AuditService auditService;
 
     @GetMapping("/orders")
-    public List<KitchenOrder> getAllKitchenOrders(
-            @RequestParam(required = false) String status) {
+    public List<KitchenTicketResponse> getAllKitchenOrders(
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "false") boolean includeHistory) {
+        List<KitchenOrder> tickets;
         if (status != null) {
             try {
-                return kitchenOrderRepository.findByStatus(KitchenStatus.valueOf(status));
+                tickets = kitchenOrderRepository.findByStatus(KitchenStatus.valueOf(status));
             } catch (IllegalArgumentException exception) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown kitchen ticket status");
             }
+        } else {
+            tickets = includeHistory
+                    ? kitchenOrderRepository.findByStatusIn(List.of(KitchenStatus.PENDING, KitchenStatus.PREPARING,
+                            KitchenStatus.READY, KitchenStatus.SERVED, KitchenStatus.CANCELLED))
+                    : kitchenOrderRepository.findByStatusIn(List.of(KitchenStatus.PENDING, KitchenStatus.PREPARING,
+                            KitchenStatus.READY));
         }
-        return kitchenOrderRepository.findByStatusNot(KitchenStatus.CANCELLED);
+        return tickets.stream().map(this::toKitchenTicketResponse).toList();
     }
 
     @PutMapping("/orders/{id}/status")
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER','KITCHEN')")
     @Transactional
-    public ResponseEntity<KitchenOrder> updateStatus(@PathVariable Long id,
-                                                     @Valid @RequestBody KitchenStatusRequest request,
-                                                     Authentication authentication) {
-        KitchenOrder ticket = kitchenOrderRepository.findById(id)
+    public ResponseEntity<KitchenTicketResponse> updateStatus(@PathVariable Long id,
+                                                               @Valid @RequestBody KitchenStatusRequest request,
+                                                               Authentication authentication) {
+        KitchenOrder observed = kitchenOrderRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Kitchen ticket not found"));
+        Long linkedOrderId = observed.getOrder() == null ? null : observed.getOrder().getId();
+        RestaurantOrder linkedOrder = linkedOrderId == null ? null : restaurantOrderRepository.findByIdForUpdate(linkedOrderId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "Kitchen ticket order no longer exists"));
+        // All ticket transitions acquire locks in order -> ticket sequence, matching cancellation and payment flows.
+        KitchenOrder ticket = kitchenOrderRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Kitchen ticket not found"));
+        if (linkedOrder != null && (linkedOrder.getStatus() == OrderStatus.CANCELLED
+                || linkedOrder.getStatus() == OrderStatus.REFUNDED)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Cancelled or refunded orders cannot advance in the kitchen");
+        }
         KitchenStatus next = KitchenStatus.valueOf(request.getStatus());
         KitchenStatus previous = ticket.getStatus();
         boolean allowed = switch (previous) {
@@ -65,20 +85,41 @@ public class KitchenController {
         if (next == KitchenStatus.PREPARING && ticket.getStartedAt() == null) ticket.setStartedAt(LocalDateTime.now());
         if ((next == KitchenStatus.READY || next == KitchenStatus.SERVED) && ticket.getCompletedAt() == null) ticket.setCompletedAt(LocalDateTime.now());
         KitchenOrder saved = kitchenOrderRepository.save(ticket);
-        if (ticket.getOrder() != null) {
+        if (linkedOrder != null) {
             OrderStatus orderStatus = switch (next) {
                 case PREPARING -> OrderStatus.KITCHEN;
                 case READY -> OrderStatus.READY;
                 case SERVED -> OrderStatus.COMPLETED;
-                default -> ticket.getOrder().getStatus();
+                default -> linkedOrder.getStatus();
             };
-            ticket.getOrder().setStatus(orderStatus);
-            if (ticket.getOrder().getItems() != null) {
-                for (OrderItem item : ticket.getOrder().getItems()) item.setKitchenStatus(next);
+            // Kitchen progress must never turn a settled sale back into an unpaid/completed order.
+            linkedOrder.setStatus(linkedOrder.getStatus() == OrderStatus.PAID || linkedOrder.getSaleId() != null
+                    ? OrderStatus.PAID : orderStatus);
+            if (linkedOrder.getItems() != null) {
+                for (OrderItem item : linkedOrder.getItems()) item.setKitchenStatus(next);
             }
-            restaurantOrderRepository.save(ticket.getOrder());
+            restaurantOrderRepository.save(linkedOrder);
             auditService.log(authentication.getName(), "KITCHEN_STATUS_CHANGED", "KitchenOrder", id.toString(), previous.name(), next.name());
         }
-        return ResponseEntity.ok(saved);
+        return ResponseEntity.ok(toKitchenTicketResponse(saved));
+    }
+
+    private KitchenTicketResponse toKitchenTicketResponse(KitchenOrder ticket) {
+        var order = ticket.getOrder();
+        if (order == null) {
+            return new KitchenTicketResponse(ticket.getId(), ticket.getStatus(), ticket.getReceivedAt(),
+                    ticket.getStartedAt(), ticket.getCompletedAt(), ticket.getNotes(), null);
+        }
+        var table = order.getTable() == null ? null
+                : new KitchenTicketResponse.TableSummary(order.getTable().getId(), order.getTable().getName());
+        var items = order.getItems() == null ? List.<KitchenTicketResponse.ItemSummary>of() : order.getItems().stream()
+                .map(item -> new KitchenTicketResponse.ItemSummary(item.getId(), item.getProductName(), item.getQuantity(),
+                        item.getNotes(), item.getModifiers() == null ? List.of() : item.getModifiers().stream()
+                                .map(modifier -> new KitchenTicketResponse.ModifierSummary(modifier.getName())).toList(),
+                        item.getKitchenStatus()))
+                .toList();
+        var summary = new KitchenTicketResponse.OrderSummary(order.getId(), order.getOrderNumber(), order.getOrderType(), table, items);
+        return new KitchenTicketResponse(ticket.getId(), ticket.getStatus(), ticket.getReceivedAt(),
+                ticket.getStartedAt(), ticket.getCompletedAt(), ticket.getNotes(), summary);
     }
 }

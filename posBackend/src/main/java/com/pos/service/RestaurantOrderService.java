@@ -247,6 +247,15 @@ public class RestaurantOrderService {
         }
         OrderStatus before = order.getStatus();
         order.setStatus(OrderStatus.CANCELLED);
+        RestaurantTable table = order.getTable();
+        if (table != null) {
+            TableStatus previousTableStatus = table.getStatus();
+            table.setStatus(TableStatus.CLEANING);
+            table.setOccupiedAt(null);
+            tableRepository.save(table);
+            auditService.log(actor, "TABLE_STATUS_CHANGED", "RestaurantTable", table.getId().toString(),
+                    previousTableStatus == null ? null : previousTableStatus.name(), TableStatus.CLEANING.name());
+        }
         kitchenOrderRepository.findByOrder_Id(id).ifPresent(ticket -> {
             if (ticket.getStatus() != KitchenStatus.SERVED) {
                 ticket.setStatus(KitchenStatus.CANCELLED);

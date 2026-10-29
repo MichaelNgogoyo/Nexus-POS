@@ -10,13 +10,19 @@ const COLUMNS = [
     { status: 'PREPARING', label: 'Preparing', next: 'READY', action: 'Mark ready' },
     { status: 'READY', label: 'Ready', next: 'SERVED', action: 'Mark served' },
     { status: 'SERVED', label: 'Served' },
+    { status: 'CANCELLED', label: 'Cancelled' },
 ];
 
 function Elapsed({ since }) {
     const [minutes, setMinutes] = useState(() => since ? Math.max(0, Math.floor((Date.now() - new Date(since).getTime()) / 60000)) : null);
     useEffect(() => {
-        if (!since) return undefined;
-        const timer = setInterval(() => setMinutes(Math.max(0, Math.floor((Date.now() - new Date(since).getTime()) / 60000))), 30_000);
+        if (!since) {
+            setMinutes(null);
+            return undefined;
+        }
+        const update = () => setMinutes(Math.max(0, Math.floor((Date.now() - new Date(since).getTime()) / 60000)));
+        update();
+        const timer = setInterval(update, 30_000);
         return () => clearInterval(timer);
     }, [since]);
     return <span>{minutes === null ? 'Time unavailable' : `${minutes} min`}</span>;
@@ -24,15 +30,22 @@ function Elapsed({ since }) {
 
 export default function POSKitchen() {
     const client = useQueryClient();
-    const kitchenQuery = useQuery({ queryKey: ['kitchen-orders'], queryFn: () => getKitchenOrders().then(({ data }) => data), refetchInterval: 15_000 });
+    const [showHistory, setShowHistory] = useState(false);
+    const kitchenQuery = useQuery({
+        queryKey: ['kitchen-orders', { includeHistory: showHistory }],
+        queryFn: () => getKitchenOrders({ includeHistory: showHistory }).then(({ data }) => data),
+        refetchInterval: 15_000,
+    });
     const statusMutation = useMutation({
         mutationFn: ({ id, status }) => advanceKitchenStatus(id, status),
         onSuccess: () => { client.invalidateQueries({ queryKey: ['kitchen-orders'] }); client.invalidateQueries({ queryKey: ['orders'] }); },
+        onError: () => { client.invalidateQueries({ queryKey: ['kitchen-orders'] }); client.invalidateQueries({ queryKey: ['orders'] }); },
     });
     const tickets = kitchenQuery.data ?? [];
+    const columns = showHistory ? COLUMNS : COLUMNS.filter((column) => !['SERVED', 'CANCELLED'].includes(column.status));
     return <section className="pos-data-page pos-board-page">
-        <header className="pos-page-heading"><div><p className="hotel-eyebrow">KITCHEN DISPLAY</p><h1>Kitchen tickets</h1><p>Live tickets from the kitchen API.</p></div><button className="pos-secondary-action" onClick={() => kitchenQuery.refetch()}><RefreshRoundedIcon /> Refresh</button></header>
-        {kitchenQuery.isLoading ? <div className="pos-state">Loading kitchen tickets…</div> : kitchenQuery.isError ? <div className="pos-error" role="alert">Kitchen tickets could not be loaded. <button onClick={() => kitchenQuery.refetch()}><RefreshRoundedIcon /> Try again</button></div> : <div className="pos-order-board">{COLUMNS.map((column) => {
+        <header className="pos-page-heading"><div><p className="hotel-eyebrow">KITCHEN DISPLAY</p><h1>Kitchen tickets</h1><p>Live tickets refresh every 15 seconds and remain saved in the backend.</p></div><div className="pos-heading-actions"><button className="pos-secondary-action" aria-pressed={showHistory} onClick={() => setShowHistory((shown) => !shown)}>{showHistory ? 'Hide served & cancelled' : 'Show served & cancelled'}</button><button className="pos-secondary-action" onClick={() => kitchenQuery.refetch()}><RefreshRoundedIcon /> Refresh</button></div></header>
+        {kitchenQuery.isLoading ? <div className="pos-state">Loading kitchen tickets…</div> : kitchenQuery.isError ? <div className="pos-error" role="alert">Kitchen tickets could not be loaded. <button onClick={() => kitchenQuery.refetch()}><RefreshRoundedIcon /> Try again</button></div> : <div className={`pos-order-board kitchen-board ${showHistory ? 'has-history' : ''}`}>{columns.map((column) => {
             const columnTickets = tickets.filter((ticket) => ticket.status === column.status);
             return <section className="pos-order-column" key={column.status}><header><h2>{column.label}</h2><span>{columnTickets.length}</span></header>{columnTickets.length === 0 ? <div className="pos-column-empty">No tickets.</div> : columnTickets.map((ticket) => {
                 const order = ticket.order || {};

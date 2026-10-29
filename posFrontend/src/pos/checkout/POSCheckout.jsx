@@ -1,6 +1,6 @@
-import { useMemo, useRef, useState, Suspense, lazy } from 'react';
+import { useEffect, useMemo, useRef, useState, Suspense, lazy } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useKeycloak } from '@react-keycloak/web';
 import {
   getAllProducts, getAllTables, getDashboardSummary, getModifierGroups,
@@ -44,6 +44,7 @@ export default function POSCheckout() {
   const { cart, addToCart, removeFromCart, clearCart } = useCart();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [orderType, setOrderType] = useState('DINE_IN');
   const [category, setCategory] = useState(ALL_CATEGORIES);
   const [search, setSearch] = useState('');
@@ -58,6 +59,8 @@ export default function POSCheckout() {
   const [itemNote, setItemNote] = useState('');
   const [showAll, setShowAll] = useState(false);
   const [submittedOrder, setSubmittedOrder] = useState(null);
+  const [tableSelectionWarning, setTableSelectionWarning] = useState('');
+  const requestedTableRef = useRef(searchParams.get('tableId'));
   const submitKeyRef = useRef({ signature: null, key: null });
 
   const productsQuery = useQuery({ queryKey: ['products'], queryFn: () => getAllProducts().then(({ data }) => data), staleTime: 60_000 });
@@ -87,10 +90,14 @@ export default function POSCheckout() {
       clearCart();
       setCartOpen(false);
       setSelectedTable('');
+      setTableSelectionWarning('');
       setGuest(null);
       setGuestQuery('');
       setOrderNote('');
       setSubmittedOrder(order);
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete('tableId');
+      setSearchParams(nextParams, { replace: true });
       submitKeyRef.current = { signature: null, key: null };
       queryClient.invalidateQueries({ queryKey: ['orders'] });
       queryClient.invalidateQueries({ queryKey: ['tables'] });
@@ -100,7 +107,31 @@ export default function POSCheckout() {
   });
 
   const products = useMemo(() => Array.isArray(productsQuery.data) ? productsQuery.data : [], [productsQuery.data]);
-  const tables = Array.isArray(tablesQuery.data) ? tablesQuery.data : [];
+  const tables = useMemo(() => Array.isArray(tablesQuery.data) ? tablesQuery.data : [], [tablesQuery.data]);
+  useEffect(() => {
+    const requestedId = requestedTableRef.current;
+    if (!requestedId || !tablesQuery.data) return;
+    requestedTableRef.current = null;
+    const requestedTable = tables.find((table) => String(table.id) === requestedId);
+    if (requestedTable?.status === 'AVAILABLE') {
+      setSelectedTable(requestedId);
+    } else {
+      setTableSelectionWarning(requestedTable
+        ? 'That table is no longer available. Choose another table.'
+        : 'The selected table could not be found. Choose an available table.');
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete('tableId');
+      setSearchParams(nextParams, { replace: true });
+    }
+  }, [tables, tablesQuery.data, searchParams, setSearchParams]);
+  useEffect(() => {
+    if (!selectedTable || !tablesQuery.data) return;
+    const selected = tables.find((table) => String(table.id) === selectedTable);
+    if (selected?.status !== 'AVAILABLE') {
+      setSelectedTable('');
+      setTableSelectionWarning('That table is no longer available. Choose another table.');
+    }
+  }, [selectedTable, tables, tablesQuery.data]);
   const categories = useMemo(() => getMenuCategories(categoriesQuery.data, products), [categoriesQuery.data, products]);
   const selectedCategory = categories.find((item) => item.id === category);
   const visibleProducts = useMemo(
@@ -125,7 +156,8 @@ export default function POSCheckout() {
   const serviceRate = Number(taxQuery.data?.serviceChargeRate ?? 0);
   const staffName = keycloak?.tokenParsed?.given_name || keycloak?.tokenParsed?.preferred_username || 'Cashier';
   const selectedTableRecord = tables.find((table) => String(table.id) === selectedTable);
-  const availableTables = tables.filter((table) => table.status === 'AVAILABLE' || String(table.id) === selectedTable);
+  const validDineInTable = orderType !== 'DINE_IN' || selectedTableRecord?.status === 'AVAILABLE';
+  const availableTables = tables.filter((table) => table.status === 'AVAILABLE');
   const groups = modifiersQuery.data ?? [];
   const subtotal = roundMoney(cart.reduce((sum, item) => sum + roundMoney(roundMoney(Number(item.price) + (item.modifiers || []).reduce((acc, modifier) => acc + modifierPrice(modifier), 0)) * item.quantity), 0));
   const tax = roundMoney(subtotal * taxRate / 100);
@@ -212,7 +244,7 @@ export default function POSCheckout() {
         <div className="foodpos-order-type" role="group" aria-label="Order type">
           {ORDER_TYPES.map((item) => {
             const IconComponent = item.Icon;
-            return <button type="button" key={item.id} disabled={item.disabled} title={item.disabled ? 'Connect a hotel PMS before using room charges' : undefined} className={`${orderType === item.id ? 'selected' : ''}${item.disabled ? ' unavailable' : ''}`} aria-pressed={orderType === item.id} onClick={() => { if (item.disabled) return; setOrderType(item.id); setSelectedTable(''); }}>
+            return <button type="button" key={item.id} disabled={item.disabled} title={item.disabled ? 'Connect a hotel PMS before using room charges' : undefined} className={`${orderType === item.id ? 'selected' : ''}${item.disabled ? ' unavailable' : ''}`} aria-pressed={orderType === item.id} onClick={() => { if (item.disabled) return; setOrderType(item.id); setSelectedTable(''); setTableSelectionWarning(''); }}>
               <IconComponent aria-hidden="true" /><span>{item.label}</span>
             </button>;
           })}
@@ -300,7 +332,8 @@ export default function POSCheckout() {
           <div className="foodpos-drawer-scroll">
             {orderType === 'DINE_IN' && <section className="foodpos-context-section">
               <div className="foodpos-subheading"><div><h3>Choose a table</h3><p>{selectedTableRecord?.name || 'Available tables'}</p></div><span>{availableTables.length} open</span></div>
-              {tablesQuery.isLoading ? <div className="foodpos-state">Loading tables…</div> : tablesQuery.isError ? <div className="foodpos-inline-error" role="alert">Tables unavailable. <button type="button" onClick={() => tablesQuery.refetch()}><RefreshRoundedIcon /> Retry</button></div> : availableTables.length === 0 ? <div className="foodpos-inline-empty">No available tables. Select takeaway to continue.</div> : <div className="foodpos-table-list">{availableTables.map((table) => <button type="button" key={table.id} className={String(table.id) === selectedTable ? 'selected' : ''} aria-pressed={String(table.id) === selectedTable} onClick={() => setSelectedTable(String(table.id))}><RestaurantRoundedIcon /><span>{table.name}</span><small>{table.capacity ? `${table.capacity} seats` : 'Available'}</small></button>)}</div>}
+              {tablesQuery.isLoading ? <div className="foodpos-state">Loading tables…</div> : tablesQuery.isError ? <div className="foodpos-inline-error" role="alert">Tables unavailable. <button type="button" onClick={() => tablesQuery.refetch()}><RefreshRoundedIcon /> Retry</button></div> : availableTables.length === 0 ? <div className="foodpos-inline-empty">No available tables. Select takeaway to continue.</div> : <div className="foodpos-table-list">{availableTables.map((table) => <button type="button" key={table.id} className={String(table.id) === selectedTable ? 'selected' : ''} aria-pressed={String(table.id) === selectedTable} onClick={() => { setSelectedTable(String(table.id)); setTableSelectionWarning(''); }}><RestaurantRoundedIcon /><span>{table.name}</span><small>{table.capacity ? `${table.capacity} seats` : 'Available'}</small></button>)}</div>}
+              {tableSelectionWarning && <div className="foodpos-inline-error" role="alert">{tableSelectionWarning}</div>}
             </section>}
 
             <section className="foodpos-context-section foodpos-guest-section">
@@ -335,13 +368,13 @@ export default function POSCheckout() {
             <div className="foodpos-total-row foodpos-total-due"><span>Total due</span><strong>{money(total)}</strong></div>
             {submitOrderMutation.isError && <div className="foodpos-inline-error" role="alert">Order could not be sent. {submitOrderMutation.error?.response?.data?.message || 'Check the connection and retry.'}</div>}
             <button type="button" className="foodpos-deferred-action"
-              disabled={!cart.length || taxQuery.isLoading || taxQuery.isError || submitOrderMutation.isPending || (orderType === 'DINE_IN' && !selectedTable)}
+              disabled={!cart.length || taxQuery.isLoading || taxQuery.isError || tablesQuery.isLoading || !validDineInTable || submitOrderMutation.isPending}
               onClick={sendToKitchen}>
               <span>{submitOrderMutation.isPending ? 'Sending order…' : 'Send to kitchen · pay later'}</span>
               {!submitOrderMutation.isPending && <span>{money(total)} <ArrowForwardRoundedIcon /></span>}
             </button>
             <button type="button" className="foodpos-pay-now-action"
-              disabled={!cart.length || taxQuery.isLoading || taxQuery.isError || submitOrderMutation.isPending || (orderType === 'DINE_IN' && !selectedTable)}
+              disabled={!cart.length || taxQuery.isLoading || taxQuery.isError || tablesQuery.isLoading || !validDineInTable || submitOrderMutation.isPending}
               onClick={() => { setCartOpen(false); setShowPayment(true); }}>
               Pay now · {money(total)}
             </button>

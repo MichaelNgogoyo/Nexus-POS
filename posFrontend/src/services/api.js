@@ -238,6 +238,8 @@ export const updateTableStatus = (id, status) => apiClient.put(`/api/tables/${id
 export const getActiveOrders = () => apiClient.get('/api/orders');
 export const getOrderById = (id) => apiClient.get(`/api/orders/${id}`);
 export const createOrder = (data) => apiClient.post('/api/orders', data);
+export const updateRestaurantOrder = (id, data) => apiClient.put(`/api/orders/${id}`, data);
+export const cancelRestaurantOrder = (id) => apiClient.delete(`/api/orders/${id}`);
 export const submitOrderToKitchen = (data) => apiClient.post('/api/orders/submit', data);
 export const updateOrderStatus = (id, status) => apiClient.put(`/api/orders/${id}/status`, { status });
 export const recordOrderCashPayment = (id, data) => apiClient.post(`/api/orders/${id}/payment`, data);
@@ -246,7 +248,7 @@ export const addOrderItem = (orderId, item) => apiClient.post(`/api/orders/${ord
 // ========================================
 // Kitchen API
 // ========================================
-export const getKitchenOrders = () => apiClient.get('/api/kitchen/orders');
+export const getKitchenOrders = ({ includeHistory = false } = {}) => apiClient.get('/api/kitchen/orders', { params: { includeHistory } });
 export const advanceKitchenStatus = (id, status) => apiClient.put(`/api/kitchen/orders/${id}/status`, { status });
 
 // ========================================
@@ -322,6 +324,8 @@ const api = {
     getActiveOrders,
     getOrderById,
     createOrder,
+    updateRestaurantOrder,
+    cancelRestaurantOrder,
     updateOrderStatus,
     addOrderItem,
     getKitchenOrders,
