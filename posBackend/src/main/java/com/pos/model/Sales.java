@@ -1,5 +1,6 @@
 package com.pos.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
@@ -42,6 +43,12 @@ public class Sales {
 
     @Column(name = "restaurant_order_id")
     private Long restaurantOrderId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "restaurant_order_id", insertable = false, updatable = false,
+            foreignKey = @ForeignKey(name = "fk_sales_restaurant_order"))
+    @JsonIgnore
+    private RestaurantOrder restaurantOrder;
 
     @Column(name = "order_number", length = 32)
     private String orderNumber;

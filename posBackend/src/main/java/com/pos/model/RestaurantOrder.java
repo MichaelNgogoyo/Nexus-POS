@@ -1,5 +1,6 @@
 package com.pos.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -30,6 +31,12 @@ public class RestaurantOrder {
 
     @Column(name = "sale_id", unique = true)
     private Long saleId;
+
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sale_id", insertable = false, updatable = false,
+            foreignKey = @ForeignKey(name = "fk_restaurant_orders_sale"))
+    @JsonIgnore
+    private Sales sale;
 
     @Enumerated(EnumType.STRING)
     @Builder.Default
