@@ -89,6 +89,42 @@ class OrderControllerSecurityTest {
     }
 
     @Test
+    void dineInOrderLocksAndOccupiesTheSelectedTable() {
+        RestaurantTable table = RestaurantTable.builder().id(44L).name("T44").status(TableStatus.AVAILABLE).build();
+        Product product = Product.builder().id(4L).name("Breakfast plate").price(100.0).active(true).build();
+        when(tableRepository.findByIdForUpdate(44L)).thenReturn(Optional.of(table));
+        when(productRepository.findById(4L)).thenReturn(Optional.of(product));
+        when(modifierGroupRepository.findByProductId(4L)).thenReturn(List.of());
+        RestaurantOrderRequest request = new RestaurantOrderRequest(OrderType.DINE_IN, "dine-in-table-order-1234",
+                new RestaurantOrderRequest.TableReference(44L), null, null, null,
+                List.of(new RestaurantOrderItemRequest(4L, 1, null, List.of())));
+
+        RestaurantOrderService.CreateResult result = orderService.createOrder(request, "cashier-4");
+
+        assertThat(result.order().table().id()).isEqualTo(44L);
+        assertThat(table.getStatus()).isEqualTo(TableStatus.OCCUPIED);
+        assertThat(table.getOccupiedAt()).isNotNull();
+        verify(tableRepository).findByIdForUpdate(44L);
+        verify(tableRepository).save(table);
+        verify(auditService).log("cashier-4", "TABLE_STATUS_CHANGED", "RestaurantTable", "44", "AVAILABLE", "OCCUPIED");
+    }
+
+    @Test
+    void dineInOrderRejectsATableAlreadyTakenByAnotherOrder() {
+        RestaurantTable table = RestaurantTable.builder().id(44L).name("T44").status(TableStatus.OCCUPIED).build();
+        when(tableRepository.findByIdForUpdate(44L)).thenReturn(Optional.of(table));
+        RestaurantOrderRequest request = new RestaurantOrderRequest(OrderType.DINE_IN, "dine-in-table-order-1234",
+                new RestaurantOrderRequest.TableReference(44L), null, null, null,
+                List.of(new RestaurantOrderItemRequest(4L, 1, null, List.of())));
+
+        assertThatThrownBy(() -> orderService.createOrder(request, "cashier-4"))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("Selected table is no longer available");
+        verify(tableRepository, never()).save(any());
+        verifyNoInteractions(productRepository);
+    }
+
+    @Test
     void roomChargeOrderIsUnavailableWithoutHotelFolioIntegration() {
         RestaurantOrderRequest request = new RestaurantOrderRequest(OrderType.ROOM_CHARGE, "room-charge-attempt-12345",
                 null, "101", null, null, List.of(new RestaurantOrderItemRequest(4L, 1, null, List.of())));

@@ -75,6 +75,9 @@ public class RestaurantOrderService {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "Room charges are unavailable until hotel folio validation and posting are connected");
         }
+        if (request.orderType() == null) throw badRequest("Order type is required");
+        if (request.orderType() == OrderType.DINE_IN && request.table() == null) throw badRequest("Select a table for dine-in orders");
+        if (request.orderType() != OrderType.DINE_IN && request.table() != null) throw badRequest("Only dine-in orders may select a table");
         RestaurantOrder previous = orderRepository.findByIdempotencyKey(request.idempotencyKey()).orElse(null);
         if (previous != null) {
             if (!Objects.equals(previous.getCashierId(), actor) || !matchesRequest(previous, request)) {
@@ -83,8 +86,7 @@ public class RestaurantOrderService {
             }
             return new CreateResult(orderMapper.toResponse(previous), false);
         }
-        if (request.orderType() == null) throw badRequest("Order type is required");
-        RestaurantTable table = resolveTable(request.table() == null ? null : new RestaurantTable(request.table().id(), null, null, null, null, null));
+        RestaurantTable table = lockAvailableTable(request.table() == null ? null : request.table().id());
         RestaurantOrder orderDraft = RestaurantOrder.builder().orderType(request.orderType()).table(table).build();
         validateRoomOrTable(orderDraft);
 
@@ -101,6 +103,7 @@ public class RestaurantOrderService {
                 .build();
         priceOrder(order, request.items());
         RestaurantOrder saved = orderRepository.save(order);
+        occupyTable(table, actor);
         auditService.log(actor, "ORDER_CREATED", "RestaurantOrder", saved.getId().toString(), null, "OPEN");
         return new CreateResult(orderMapper.toResponse(saved), true);
     }
@@ -153,8 +156,22 @@ public class RestaurantOrderService {
         if (request.customerName() != null) order.setCustomerName(trimLimit(request.customerName(), 120, "Guest name"));
         if (request.notes() != null) order.setNotes(trimLimit(request.notes(), 500, "Order notes"));
         if (request.table() != null) {
-            RestaurantTable table = resolveTable(new RestaurantTable(request.table().id(), null, null, null, null, null));
-            order.setTable(table);
+            Long currentTableId = order.getTable() == null ? null : order.getTable().getId();
+            Long requestedTableId = request.table().id();
+            if (!Objects.equals(currentTableId, requestedTableId)) {
+                RestaurantTable newTable = lockAvailableTable(requestedTableId);
+                RestaurantTable previousTable = order.getTable();
+                if (previousTable != null) {
+                    TableStatus previousStatus = previousTable.getStatus();
+                    previousTable.setStatus(TableStatus.CLEANING);
+                    previousTable.setOccupiedAt(null);
+                    tableRepository.save(previousTable);
+                    auditService.log(actor, "TABLE_STATUS_CHANGED", "RestaurantTable", previousTable.getId().toString(),
+                            previousStatus == null ? null : previousStatus.name(), TableStatus.CLEANING.name());
+                }
+                order.setTable(newTable);
+                occupyTable(newTable, actor);
+            }
         }
         validateRoomOrTable(order);
         priceOrder(order, request.items());
@@ -259,9 +276,23 @@ public class RestaurantOrderService {
         order.setTotal(subtotal.add(tax).add(service).setScale(2, RoundingMode.HALF_UP));
     }
 
-    private RestaurantTable resolveTable(RestaurantTable requestTable) {
-        if (requestTable == null || requestTable.getId() == null) return null;
-        return tableRepository.findById(requestTable.getId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Table not found"));
+    private RestaurantTable lockAvailableTable(Long tableId) {
+        if (tableId == null) return null;
+        RestaurantTable table = tableRepository.findByIdForUpdate(tableId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Table not found"));
+        if (table.getStatus() != TableStatus.AVAILABLE) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Selected table is no longer available");
+        }
+        return table;
+    }
+
+    private void occupyTable(RestaurantTable table, String actor) {
+        if (table == null) return;
+        table.setStatus(TableStatus.OCCUPIED);
+        table.setOccupiedAt(java.time.LocalDateTime.now());
+        tableRepository.save(table);
+        auditService.log(actor, "TABLE_STATUS_CHANGED", "RestaurantTable", table.getId().toString(),
+                TableStatus.AVAILABLE.name(), TableStatus.OCCUPIED.name());
     }
 
     private List<Modifier> resolveModifiers(Long productId, List<Long> requestedIds) {
@@ -287,6 +318,7 @@ public class RestaurantOrderService {
                     "Room charges are unavailable until hotel folio validation and posting are connected");
         }
         if (order.getOrderType() == OrderType.DINE_IN && order.getTable() == null) throw badRequest("Select a table for dine-in orders");
+        if (order.getOrderType() != OrderType.DINE_IN && order.getTable() != null) throw badRequest("Only dine-in orders may select a table");
     }
 
     private String trimLimit(String value, int max, String name) {
