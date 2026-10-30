@@ -7,7 +7,7 @@ import {
 import ArrowUpwardRounded from '@mui/icons-material/ArrowUpwardRounded';
 import ArrowDownwardRounded from '@mui/icons-material/ArrowDownwardRounded';
 import FileDownloadRounded from '@mui/icons-material/FileDownloadRounded';
-import { exportToCSV, exportToExcel } from '../utils/exportUtils.js';
+import { exportToCSV } from '../utils/exportUtils.js';
 
 const fmt = (v) =>
   `KSh ${Number(v || 0).toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
@@ -20,6 +20,7 @@ const tooltipStyle = {
 };
 
 const CAT_COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899', '#84cc16'];
+const EMPTY_LIST = [];
 
 function Skeleton({ className = '' }) {
   return <div className={`animate-pulse bg-bg-tertiary rounded-xl ${className}`} />;
@@ -36,8 +37,8 @@ export default function ProductsTab({ summary, products, lowStock, isLoading }) 
   const [sortField, setSortField] = useState('revenue');
   const [sortDir, setSortDir] = useState('desc');
 
-  const topProducts = summary?.topProducts ?? [];
-  const allProducts = Array.isArray(products) ? products : [];
+  const topProducts = Array.isArray(summary?.topProducts) ? summary.topProducts : EMPTY_LIST;
+  const allProducts = Array.isArray(products) ? products : EMPTY_LIST;
   const lowStockCount = lowStock?.length || 0;
 
   // Merge topProducts (has revenue/qty) with allProducts (has stock/category)
@@ -55,8 +56,6 @@ export default function ProductsTab({ summary, products, lowStock, isLoading }) 
       active: p.active !== false,
       revenue: revenueMap[p.name]?.revenue || 0,
       unitsSold: revenueMap[p.name]?.unitsSold || 0,
-      profit: (revenueMap[p.name]?.revenue || 0) * 0.3,
-      margin: 30,
     }));
   }, [allProducts, topProducts]);
 
@@ -110,8 +109,6 @@ export default function ProductsTab({ summary, products, lowStock, isLoading }) 
     Revenue: p.revenue,
     'Current Stock': p.stock,
     'Unit Price': p.price,
-    'Profit Est.': p.profit.toFixed(0),
-    'Margin %': p.margin,
     Status: p.stock === 0 ? 'Out of Stock' : p.stock < 5 ? 'Low Stock' : 'In Stock',
   }));
 
@@ -233,13 +230,7 @@ export default function ProductsTab({ summary, products, lowStock, isLoading }) 
             >
               <FileDownloadRounded sx={{ fontSize: 14 }} /> CSV
             </button>
-            <button
-              onClick={() => exportToExcel(exportData, 'product-performance', 'Products')}
-              className="flex items-center gap-1 px-3 py-1.5 text-xs bg-bg-tertiary text-text-secondary rounded-lg hover:bg-border-primary transition-all"
-            >
-              <FileDownloadRounded sx={{ fontSize: 14 }} /> Excel
-            </button>
-          </div>
+            </div>
         </div>
         {sorted.length === 0 ? (
           <p className="text-text-muted text-center py-8">No products found</p>
@@ -255,8 +246,6 @@ export default function ProductsTab({ summary, products, lowStock, isLoading }) 
                     { label: 'Units Sold', field: 'unitsSold' },
                     { label: 'Revenue', field: 'revenue' },
                     { label: 'Stock', field: 'stock' },
-                    { label: 'Profit Est.', field: 'profit' },
-                    { label: 'Margin' },
                     { label: 'Status' },
                   ].map((col, i) => (
                     <th
@@ -288,8 +277,6 @@ export default function ProductsTab({ summary, products, lowStock, isLoading }) 
                       <td className="py-3 pr-4 font-mono">{p.unitsSold.toLocaleString()}</td>
                       <td className="py-3 pr-4 font-semibold">{fmt(p.revenue)}</td>
                       <td className="py-3 pr-4 font-mono">{p.stock}</td>
-                      <td className="py-3 pr-4 text-text-secondary">{fmt(p.profit)}</td>
-                      <td className="py-3 pr-4 text-text-muted">30%</td>
                       <td className="py-3">
                         <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${stockStatus.cls}`}>
                           {stockStatus.label}

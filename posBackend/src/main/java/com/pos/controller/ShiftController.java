@@ -2,52 +2,139 @@ package com.pos.controller;
 
 import com.pos.dto.ShiftCloseRequest;
 import com.pos.dto.ShiftOpenRequest;
+import com.pos.dto.CashMovementRequest;
+import com.pos.dto.CashMovementResponse;
 import com.pos.model.Shift;
 import com.pos.model.ShiftStatus;
 import com.pos.repository.ShiftRepository;
+import com.pos.repository.SalesRepository;
+import com.pos.service.impl.AuditService;
+import com.pos.service.impl.CashMovementService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
+import java.util.List;
+import org.springframework.transaction.annotation.Transactional;
 
 @RestController
 @RequestMapping("/api/shifts")
 @RequiredArgsConstructor
+@PreAuthorize("hasAnyRole('ADMIN','MANAGER','CASHIER')")
 public class ShiftController {
 
     private final ShiftRepository shiftRepository;
+    private final AuditService auditService;
+    private final SalesRepository salesRepository;
+    private final CashMovementService cashMovementService;
 
     @GetMapping("/current")
-    public ResponseEntity<Shift> getCurrentShift(@RequestParam String cashierId) {
+    public ResponseEntity<Shift> getCurrentShift(@RequestParam String cashierId, Authentication authentication) {
+        requireOwnerOrManager(cashierId, authentication);
         return shiftRepository.findByCashierIdAndStatus(cashierId, ShiftStatus.OPEN)
-                .map(ResponseEntity::ok)
+                .map(shift -> {
+                    BigDecimal cashSales = salesRepository.sumCashSalesForShift(shift.getId(), shift.getCashierId(), shift.getOpenedAt())
+                            .setScale(2, java.math.RoundingMode.HALF_UP);
+                    shift.setExpectedBalance(shift.getOpeningBalance().add(cashSales)
+                            .add(cashMovementService.netMovementForShift(shift.getId())));
+                    return ResponseEntity.ok(shift);
+                })
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    @GetMapping("/{id}/movements")
+    public ResponseEntity<List<CashMovementResponse>> listMovements(@PathVariable Long id,
+                                                                    Authentication authentication) {
+        return ResponseEntity.ok(cashMovementService.listForShift(
+                id, subject(authentication), requireManager(authentication)));
+    }
+
+    @PostMapping("/{id}/movements")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    public ResponseEntity<CashMovementResponse> recordMovement(@PathVariable Long id,
+                                                               @Valid @RequestBody CashMovementRequest request,
+                                                               Authentication authentication) {
+        String actor = subject(authentication);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(cashMovementService.recordShiftMovement(id, request, actor));
+    }
+
     @PostMapping("/open")
-    public ResponseEntity<Shift> openShift(@RequestBody ShiftOpenRequest request) {
+    public ResponseEntity<Shift> openShift(@Valid @RequestBody ShiftOpenRequest request, Authentication authentication) {
+        String actorId = subject(authentication);
+        requireOwnerOrManager(request.getCashierId(), authentication);
+        if (request.getCashierId() == null || request.getOpeningBalance() == null || request.getOpeningBalance().signum() < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cashier and a non-negative opening balance are required");
+        }
+        if (shiftRepository.findByCashierIdAndStatus(request.getCashierId(), ShiftStatus.OPEN).isPresent()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "An open shift already exists for this cashier");
+        }
         Shift shift = Shift.builder()
                 .cashierId(request.getCashierId())
-                .cashierName(request.getCashierName())
+                .cashierName(requireManager(authentication) ? request.getCashierName() : authentication.getName())
                 .openingBalance(request.getOpeningBalance())
                 .status(ShiftStatus.OPEN)
                 .build();
-        return ResponseEntity.ok(shiftRepository.save(shift));
+        Shift saved;
+        try {
+            saved = shiftRepository.saveAndFlush(shift);
+        } catch (DataIntegrityViolationException conflict) {
+            if (shiftRepository.findByCashierIdAndStatus(request.getCashierId(), ShiftStatus.OPEN).isPresent()) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "An open shift already exists for this cashier", conflict);
+            }
+            throw conflict;
+        }
+        auditService.log(actorId, "SHIFT_OPENED", "Shift", saved.getId().toString(), null, "OPEN");
+        return ResponseEntity.ok(saved);
     }
 
     @PutMapping("/{id}/close")
+    @Transactional
     public ResponseEntity<Shift> closeShift(@PathVariable Long id,
-                                            @RequestBody ShiftCloseRequest request) {
-        return shiftRepository.findById(id).map(shift -> {
-            shift.setStatus(ShiftStatus.CLOSED);
-            shift.setClosingBalance(request.getClosingBalance());
-            shift.setNotes(request.getNotes());
-            shift.setClosedAt(LocalDateTime.now());
-            if (request.getClosingBalance() != null && shift.getOpeningBalance() != null) {
-                shift.setVariance(request.getClosingBalance().subtract(shift.getOpeningBalance()));
-            }
-            return ResponseEntity.ok(shiftRepository.save(shift));
-        }).orElse(ResponseEntity.notFound().build());
+                                            @Valid @RequestBody ShiftCloseRequest request,
+                                            Authentication authentication) {
+        Shift shift = shiftRepository.findByIdForUpdate(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Shift not found"));
+        requireOwnerOrManager(shift.getCashierId(), authentication);
+        if (shift.getStatus() != ShiftStatus.OPEN) throw new ResponseStatusException(HttpStatus.CONFLICT, "Only open shifts can be closed");
+        if (request.getClosingBalance() == null || request.getClosingBalance().signum() < 0) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A non-negative closing balance is required");
+        BigDecimal cashSales = salesRepository.sumCashSalesForShift(shift.getId(), shift.getCashierId(), shift.getOpenedAt())
+                .setScale(2, java.math.RoundingMode.HALF_UP);
+        BigDecimal expectedBalance = shift.getOpeningBalance().add(cashSales)
+                .add(cashMovementService.netMovementForShift(shift.getId()));
+        shift.setStatus(ShiftStatus.CLOSED);
+        shift.setClosingBalance(request.getClosingBalance());
+        shift.setExpectedBalance(expectedBalance);
+        shift.setNotes(request.getNotes() == null ? null : request.getNotes().trim());
+        shift.setClosedAt(LocalDateTime.now());
+        shift.setVariance(request.getClosingBalance().subtract(expectedBalance));
+        Shift saved = shiftRepository.save(shift);
+        auditService.log(subject(authentication), "SHIFT_CLOSED", "Shift", id.toString(), "OPEN",
+                "CLOSED; expected=" + expectedBalance + "; variance=" + saved.getVariance());
+        return ResponseEntity.ok(saved);
+    }
+
+    private String subject(Authentication authentication) {
+        return authentication.getPrincipal() instanceof Jwt jwt ? jwt.getSubject() : authentication.getName();
+    }
+
+    private boolean requireManager(Authentication authentication) {
+        return authentication.getAuthorities().stream().anyMatch(authority ->
+                authority.getAuthority().equals("ROLE_ADMIN") || authority.getAuthority().equals("ROLE_MANAGER"));
+    }
+
+    private void requireOwnerOrManager(String cashierId, Authentication authentication) {
+        if (!requireManager(authentication) && !subject(authentication).equals(cashierId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Cashiers may only access their own shift");
+        }
     }
 }

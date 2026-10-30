@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react';
 import {
   ComposedChart, Area, Bar, Line,
-  BarChart, XAxis, YAxis, CartesianGrid, Tooltip,
+  XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend,
 } from 'recharts';
 import FileDownloadRounded from '@mui/icons-material/FileDownloadRounded';
-import { exportToCSV, exportToExcel } from '../utils/exportUtils.js';
+import { exportToCSV } from '../utils/exportUtils.js';
 
 const fmt = (v) =>
   `KSh ${Number(v || 0).toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
@@ -16,25 +16,6 @@ const tooltipStyle = {
   borderRadius: '12px',
   padding: '10px 14px',
 };
-
-const HOUR_MOCK = [
-  { hour: '6am', orders: 3 }, { hour: '7am', orders: 8 }, { hour: '8am', orders: 14 },
-  { hour: '9am', orders: 18 }, { hour: '10am', orders: 22 }, { hour: '11am', orders: 27 },
-  { hour: '12pm', orders: 41 }, { hour: '1pm', orders: 38 }, { hour: '2pm', orders: 29 },
-  { hour: '3pm', orders: 21 }, { hour: '4pm', orders: 19 }, { hour: '5pm', orders: 24 },
-  { hour: '6pm', orders: 33 }, { hour: '7pm', orders: 42 }, { hour: '8pm', orders: 35 },
-  { hour: '9pm', orders: 20 }, { hour: '10pm', orders: 10 },
-];
-
-const DOW_MOCK = [
-  { day: 'Mon', orders: 45, revenue: 18200 },
-  { day: 'Tue', orders: 52, revenue: 21400 },
-  { day: 'Wed', orders: 48, revenue: 19800 },
-  { day: 'Thu', orders: 61, revenue: 25600 },
-  { day: 'Fri', orders: 74, revenue: 31500 },
-  { day: 'Sat', orders: 88, revenue: 38400 },
-  { day: 'Sun', orders: 67, revenue: 28900 },
-];
 
 function Skeleton({ className = '' }) {
   return <div className={`animate-pulse bg-bg-tertiary rounded-xl ${className}`} />;
@@ -50,7 +31,6 @@ const PERIOD_OPTIONS = [
   { label: 'Today', value: '1D' },
   { label: '7 Days', value: '7D' },
   { label: '30 Days', value: '30D' },
-  { label: '90 Days', value: '90D' },
 ];
 
 export default function SalesTab({ summary, isLoading }) {
@@ -61,7 +41,7 @@ export default function SalesTab({ summary, isLoading }) {
   const dailyStats = summary?.dailyStats ?? [];
   const recentSales = summary?.recentSales ?? [];
 
-  const days = period === '1D' ? 1 : period === '7D' ? 7 : period === '30D' ? 30 : 90;
+  const days = period === '1D' ? 1 : period === '7D' ? 7 : 30;
   const filtered = dailyStats.slice(-days);
   const prevPeriod = dailyStats.slice(-days * 2, -days);
 
@@ -138,13 +118,7 @@ export default function SalesTab({ summary, isLoading }) {
           >
             <FileDownloadRounded sx={{ fontSize: 16 }} /> CSV
           </button>
-          <button
-            onClick={() => exportToExcel(exportData, 'sales-report', 'Sales')}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-bg-tertiary text-text-secondary rounded-lg hover:bg-border-primary transition-all"
-          >
-            <FileDownloadRounded sx={{ fontSize: 16 }} /> Excel
-          </button>
-        </div>
+          </div>
       </div>
 
       {/* KPI Row */}
@@ -244,51 +218,9 @@ export default function SalesTab({ summary, isLoading }) {
         )}
       </div>
 
-      {/* Hourly + Weekly charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-bg-secondary rounded-2xl border border-border-primary p-5">
-          <div className="flex items-center justify-between mb-1">
-            <h3 className="font-bold text-text-primary">Sales by Hour</h3>
-            <span className="text-xs text-text-muted bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full font-medium">
-              Sample Data
-            </span>
-          </div>
-          <p className="text-xs text-text-muted mb-3">Typical peak hour distribution</p>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={HOUR_MOCK} margin={{ top: 4, right: 4, left: -10, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-primary)" vertical={false} />
-              <XAxis dataKey="hour" tick={{ fontSize: 10, fill: 'var(--color-text-muted)' }} />
-              <YAxis tick={{ fontSize: 10, fill: 'var(--color-text-muted)' }} />
-              <Tooltip contentStyle={tooltipStyle} />
-              <Bar dataKey="orders" fill="var(--color-brand-primary)" radius={[3, 3, 0, 0]} name="Orders" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="bg-bg-secondary rounded-2xl border border-border-primary p-5">
-          <div className="flex items-center justify-between mb-1">
-            <h3 className="font-bold text-text-primary">Sales by Day of Week</h3>
-            <span className="text-xs text-text-muted bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full font-medium">
-              Sample Data
-            </span>
-          </div>
-          <p className="text-xs text-text-muted mb-3">Typical weekly pattern</p>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={DOW_MOCK} margin={{ top: 4, right: 4, left: -10, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-primary)" vertical={false} />
-              <XAxis dataKey="day" tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} />
-              <YAxis
-                tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
-                tick={{ fontSize: 10, fill: 'var(--color-text-muted)' }}
-              />
-              <Tooltip
-                contentStyle={tooltipStyle}
-                formatter={(v) => [fmt(v), 'Revenue']}
-              />
-              <Bar dataKey="revenue" fill="#8b5cf6" radius={[3, 3, 0, 0]} name="Revenue" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+      <div className="bg-bg-secondary rounded-2xl border border-border-primary p-5">
+        <h3 className="font-bold text-text-primary">Additional sales breakdowns</h3>
+        <p className="text-sm text-text-muted mt-2">Hourly and weekday breakdowns are not provided by the current report API.</p>
       </div>
 
       {/* Recent Sales Table */}

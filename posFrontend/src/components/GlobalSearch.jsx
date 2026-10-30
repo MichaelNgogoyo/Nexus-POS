@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { getAllProducts } from '../services/api.js';
 import { ROUTES } from '../routes.js';
+import { usePermissions } from '../auth/permissions.js';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import StorefrontRoundedIcon from '@mui/icons-material/StorefrontRounded';
@@ -14,12 +15,12 @@ import PointOfSaleRoundedIcon from '@mui/icons-material/PointOfSaleRounded';
 import AttachMoneyRoundedIcon from '@mui/icons-material/AttachMoneyRounded';
 
 const QUICK_LINKS = [
-  { id: 'nav-dashboard', label: 'Dashboard', subtitle: 'Main overview', icon: DashboardRoundedIcon, route: ROUTES.DASHBOARD },
-  { id: 'nav-checkout', label: 'POS Checkout', subtitle: 'Process a new sale', icon: PointOfSaleRoundedIcon, route: ROUTES.CHECKOUT },
-  { id: 'nav-products', label: 'Products', subtitle: 'Manage product catalog', icon: InventoryRoundedIcon, route: ROUTES.PRODUCTS },
-  { id: 'nav-reports', label: 'Reports', subtitle: 'Sales & analytics', icon: AssessmentRoundedIcon, route: ROUTES.REPORTS },
-  { id: 'nav-expenses', label: 'Expenses', subtitle: 'Finance management', icon: AttachMoneyRoundedIcon, route: ROUTES.FINANCE_EXPENSES },
-  { id: 'nav-sales', label: 'Transactions', subtitle: 'Sales history', icon: ReceiptLongRoundedIcon, route: ROUTES.TRANSACTIONS },
+  { id: 'nav-dashboard', label: 'Dashboard', subtitle: 'Main overview', icon: DashboardRoundedIcon, route: ROUTES.DASHBOARD, permission: 'view_dashboard' },
+  { id: 'nav-checkout', label: 'POS Checkout', subtitle: 'Process a new sale', icon: PointOfSaleRoundedIcon, route: ROUTES.CHECKOUT, permission: 'view_sales' },
+  { id: 'nav-products', label: 'Products', subtitle: 'Manage product catalog', icon: InventoryRoundedIcon, route: ROUTES.PRODUCTS, permission: 'view_products' },
+  { id: 'nav-reports', label: 'Reports', subtitle: 'Sales & analytics', icon: AssessmentRoundedIcon, route: ROUTES.REPORTS, permission: 'view_reports' },
+  { id: 'nav-expenses', label: 'Expenses', subtitle: 'Finance management', icon: AttachMoneyRoundedIcon, route: ROUTES.FINANCE_EXPENSES, permission: 'view_finance' },
+  { id: 'nav-sales', label: 'Transactions', subtitle: 'Sales history', icon: ReceiptLongRoundedIcon, route: ROUTES.TRANSACTIONS, permission: 'view_reports' },
 ];
 
 export function useGlobalSearch() {
@@ -42,6 +43,7 @@ export function useGlobalSearch() {
 
 export default function GlobalSearch({ open, onClose }) {
   const navigate = useNavigate();
+  const { can } = usePermissions();
   const [query, setQuery] = useState('');
   const [activeIdx, setActiveIdx] = useState(0);
   const inputRef = useRef(null);
@@ -57,8 +59,9 @@ export default function GlobalSearch({ open, onClose }) {
     ? products.filter(p => p.name?.toLowerCase().includes(query.toLowerCase())).slice(0, 5)
     : [];
 
-  const filteredLinks = QUICK_LINKS.filter(l =>
+  const filteredLinks = QUICK_LINKS.filter(l => can(l.permission) && (
     !query.trim() || l.label.toLowerCase().includes(query.toLowerCase()) || l.subtitle.toLowerCase().includes(query.toLowerCase())
+  )
   );
 
   const allResults = [

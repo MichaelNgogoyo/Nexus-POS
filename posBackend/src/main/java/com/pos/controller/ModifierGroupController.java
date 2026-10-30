@@ -5,12 +5,14 @@ import com.pos.repository.ModifierGroupRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/modifier-groups")
 @RequiredArgsConstructor
+@PreAuthorize("hasAnyRole('ADMIN','MANAGER','CASHIER')")
 public class ModifierGroupController {
 
     private final ModifierGroupRepository modifierGroupRepository;
@@ -31,11 +33,13 @@ public class ModifierGroupController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public ResponseEntity<ModifierGroup> create(@RequestBody ModifierGroup group) {
         return ResponseEntity.ok(modifierGroupRepository.save(group));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public ResponseEntity<ModifierGroup> update(@PathVariable Long id, @RequestBody ModifierGroup updated) {
         return modifierGroupRepository.findById(id).map(existing -> {
             existing.setName(updated.getName());
@@ -49,6 +53,7 @@ public class ModifierGroupController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         if (!modifierGroupRepository.existsById(id)) return ResponseEntity.notFound().build();
         modifierGroupRepository.deleteById(id);

@@ -9,7 +9,7 @@
 
 ## Service Boundaries and Data Flow
 - All backend calls should go through `src/services/api.js` (Axios singleton + interceptors).
-- API base URL comes from `VITE_API_BASE_URL` (fallback: `http://localhost:8080`).
+- API calls use the current page origin. Vite proxies `/api` to the local backend; production Nginx proxies `/api` to Spring Boot.
 - Auth token handling is centralized in Axios request interceptors (`keycloak.updateToken(30)` + Bearer token).
 - Do not add new direct `axios` calls in pages/components; extend `api.js` instead.
 - Product image URLs should use `api.getProductImageUrl(productId)`.

@@ -7,10 +7,14 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/audit")
 @RequiredArgsConstructor
+@PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
 public class AuditController {
 
     private final AuditLogRepository auditLogRepository;
@@ -20,6 +24,10 @@ public class AuditController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size,
             @RequestParam(required = false) String q) {
+
+        if (page < 0 || size < 1 || size > 100 || (q != null && q.length() > 100)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid audit pagination or search query");
+        }
 
         Pageable pageable = PageRequest.of(page, size);
         if (q != null && !q.isBlank()) {

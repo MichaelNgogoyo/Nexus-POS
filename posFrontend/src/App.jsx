@@ -1,7 +1,10 @@
 import { lazy, Suspense } from 'react';
 import { Route, Routes, Navigate } from 'react-router-dom';
+import { useKeycloak } from '@react-keycloak/web';
 import { ROUTES } from './routes.js';
 import RequireAuth from './auth/RequireAuth.jsx';
+import { usePermissions } from './auth/permissions.js';
+import { landingRouteForRoles } from './auth/accessPolicy.js';
 import POSLayout from './pos/POSLayout.jsx';
 import AdminLayout from './admin/AdminLayout.jsx';
 import Error from './components/Error.jsx';
@@ -40,6 +43,37 @@ const Loader = () => (
     </div>
 );
 
+function RoleLanding() {
+    const { keycloak, initialized } = useKeycloak();
+    const { roles } = usePermissions();
+
+    if (!initialized) return <Loader />;
+    if (!keycloak?.authenticated) return <Navigate to={ROUTES.LOGIN} replace />;
+
+    const landingRoute = landingRouteForRoles(roles);
+    if (!landingRoute) {
+        return <div className="min-h-screen flex items-center justify-center px-6 text-center">
+            <p className="text-sm text-text-secondary">Your account does not have access to a POS workspace. Ask an administrator to assign an application role.</p>
+        </div>;
+    }
+    return <Navigate to={landingRoute} replace />;
+}
+
+function POSLanding() {
+    const { can } = usePermissions();
+    return <Navigate to={can('view_sales') ? ROUTES.POS_CHECKOUT : ROUTES.POS_KITCHEN} replace />;
+}
+
+function AdminLanding() {
+    const { can } = usePermissions();
+    return <Navigate to={can('view_dashboard') ? ROUTES.ADMIN_DASHBOARD : ROUTES.ADMIN_INVENTORY} replace />;
+}
+
+function FinanceLanding() {
+    const { can } = usePermissions();
+    return <Navigate to={can('view_finance') ? ROUTES.FINANCE_EXPENSES : ROUTES.FINANCE_PURCHASES} replace />;
+}
+
 function App() {
     return (
         <Suspense fallback={<Loader />}>
@@ -48,21 +82,21 @@ function App() {
                 <Route path={ROUTES.REGISTER} element={<Register />} />
 
                 {/* POS Mode */}
-                <Route path="/pos" element={<RequireAuth requiredPermission="view_sales"><POSLayout /></RequireAuth>}>
-                    <Route index element={<Navigate to={ROUTES.POS_CHECKOUT} replace />} />
-                    <Route path="checkout" element={<POSCheckout />} />
-                    <Route path="tables" element={<POSTables />} />
-                    <Route path="orders" element={<POSOrders />} />
-                    <Route path="kitchen" element={<POSKitchen />} />
-                    <Route path="customers" element={<POSCustomers />} />
-                    <Route path="shift" element={<POSShift />} />
-                    <Route path="reservations" element={<POSReservations />} />
+                <Route path="/pos" element={<RequireAuth requiredAnyPermissions={['view_sales', 'view_kitchen']}><POSLayout /></RequireAuth>}>
+                    <Route index element={<POSLanding />} />
+                    <Route path="checkout" element={<RequireAuth requiredPermission="view_sales"><POSCheckout /></RequireAuth>} />
+                    <Route path="tables" element={<RequireAuth requiredPermission="view_tables"><POSTables /></RequireAuth>} />
+                    <Route path="orders" element={<RequireAuth requiredPermission="view_orders"><POSOrders /></RequireAuth>} />
+                    <Route path="kitchen" element={<RequireAuth requiredPermission="view_kitchen"><POSKitchen /></RequireAuth>} />
+                    <Route path="customers" element={<RequireAuth requiredPermission="view_customers"><POSCustomers /></RequireAuth>} />
+                    <Route path="shift" element={<RequireAuth requiredPermission="view_shift"><POSShift /></RequireAuth>} />
+                    <Route path="reservations" element={<RequireAuth requiredPermission="view_reservations"><POSReservations /></RequireAuth>} />
                 </Route>
 
                 {/* Admin Mode */}
-                <Route path="/admin" element={<RequireAuth requiredPermission="view_dashboard"><AdminLayout /></RequireAuth>}>
-                    <Route index element={<Navigate to={ROUTES.ADMIN_DASHBOARD} replace />} />
-                    <Route path="dashboard" element={<Dashboard />} />
+                <Route path="/admin" element={<RequireAuth requiredAnyPermissions={['view_dashboard', 'view_products', 'view_inventory']}><AdminLayout /></RequireAuth>}>
+                    <Route index element={<AdminLanding />} />
+                    <Route path="dashboard" element={<RequireAuth requiredPermission="view_dashboard"><Dashboard /></RequireAuth>} />
                     <Route path="products" element={<RequireAuth requiredPermission="view_products"><Products /></RequireAuth>} />
                     <Route path="products/create" element={<RequireAuth requiredPermission="edit_products"><AddProduct /></RequireAuth>} />
                     <Route path="products/:id" element={<RequireAuth requiredPermission="view_products"><ProductDetail /></RequireAuth>} />
@@ -70,21 +104,21 @@ function App() {
                     <Route path="inventory" element={<RequireAuth requiredPermission="view_inventory"><Inventory /></RequireAuth>} />
                     <Route path="reports" element={<RequireAuth requiredPermission="view_reports"><Reports /></RequireAuth>} />
                     <Route path="users" element={<RequireAuth requiredPermission="manage_users"><UserManagement /></RequireAuth>} />
-                    <Route path="settings" element={<Settings />} />
-                    <Route path="audit" element={<RequireAuth requiredPermission="manage_users"><AuditLog /></RequireAuth>} />
+                    <Route path="settings" element={<RequireAuth requiredPermission="manage_settings"><Settings /></RequireAuth>} />
+                    <Route path="audit" element={<RequireAuth requiredPermission="view_audit"><AuditLog /></RequireAuth>} />
                 </Route>
 
                 {/* Finance Mode */}
-                <Route path="/finance" element={<RequireAuth requiredPermission="view_reports"><AdminLayout /></RequireAuth>}>
-                    <Route index element={<Navigate to={ROUTES.FINANCE_EXPENSES} replace />} />
-                    <Route path="expenses" element={<Expenses />} />
-                    <Route path="purchases" element={<Purchases />} />
-                    <Route path="suppliers" element={<Suppliers />} />
+                <Route path="/finance" element={<RequireAuth requiredAnyPermissions={['view_finance', 'view_procurement']}><AdminLayout /></RequireAuth>}>
+                    <Route index element={<FinanceLanding />} />
+                    <Route path="expenses" element={<RequireAuth requiredPermission="view_finance"><Expenses /></RequireAuth>} />
+                    <Route path="purchases" element={<RequireAuth requiredPermission="view_procurement"><Purchases /></RequireAuth>} />
+                    <Route path="suppliers" element={<RequireAuth requiredPermission="view_suppliers"><Suppliers /></RequireAuth>} />
                 </Route>
 
                 {/* Legacy redirects */}
-                <Route path="/" element={<Navigate to="/admin/dashboard" replace />} />
-                <Route path="/dashboard" element={<Navigate to="/admin/dashboard" replace />} />
+                <Route path="/" element={<RoleLanding />} />
+                <Route path="/dashboard" element={<Navigate to={ROUTES.HOME} replace />} />
                 <Route path="/products" element={<Navigate to="/admin/products" replace />} />
                 <Route path="/checkout" element={<Navigate to="/pos/checkout" replace />} />
                 <Route path="/sales" element={<Navigate to="/pos/checkout" replace />} />

@@ -65,12 +65,15 @@ public class CheckoutService {
             SaleItem saleItem = new SaleItem();
             saleItem.setProduct(product);
             saleItem.setQuantity(item.getQuantity());
-            saleItem.setPrice(product.getPrice());
+            if (product.getPrice() == null || product.getPrice().signum() < 0) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Product price is not configured: " + product.getName());
+            }
+            saleItem.setPrice(product.getPrice().setScale(2, java.math.RoundingMode.HALF_UP));
             saleItem.setSales(sales);
             saleItems.add(saleItem);
 
             total = total.add(
-                    BigDecimal.valueOf(product.getPrice())
+                    product.getPrice().setScale(2, java.math.RoundingMode.HALF_UP)
                             .multiply(BigDecimal.valueOf(item.getQuantity()))
             );
         }
@@ -79,7 +82,7 @@ public class CheckoutService {
         productRepository.saveAll(productsToUpdate);
         stockMovementRepository.saveAll(movements);
 
-        sales.setTotalAmount(total.doubleValue());
+        sales.setTotalAmount(total.setScale(2, java.math.RoundingMode.HALF_UP));
         sales.setSaleItems(saleItems);
         Sales savedSales = salesRepository.save(sales);
 

@@ -24,6 +24,8 @@ public class PurchaseOrderItem {
     private String productName;
     private Integer orderedQuantity;
     private Integer receivedQuantity = 0;
+    @Column(precision = 19, scale = 2)
     private BigDecimal unitCost;
+    @Column(precision = 19, scale = 2)
     private BigDecimal lineTotal;
 }

@@ -1,6 +1,7 @@
 package com.pos.dto;
 
 import jakarta.validation.constraints.*;
+import java.math.BigDecimal;
 
 public record ProductRequest(
         @NotBlank(message = "Product name is required")
@@ -9,7 +10,8 @@ public record ProductRequest(
 
         @NotNull(message = "Price is required")
         @DecimalMin(value = "0.0", inclusive = false, message = "Price must be greater than 0")
-        Double price,
+        @Digits(integer = 17, fraction = 2, message = "Price must have at most 17 whole digits and 2 decimal places")
+        BigDecimal price,
 
         Boolean active,
 

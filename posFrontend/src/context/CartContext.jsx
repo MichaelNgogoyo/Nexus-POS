@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from "react";
+import { addItemToCart, getCartLineKey, removeCartItem } from "./cartUtils.js";
 
 const CART_STORAGE_KEY = "pos_checkout_cart";
 
@@ -8,7 +9,11 @@ export function CartProvider({ children }) {
     const [cart, setCart] = useState(() => {
         try {
             const saved = localStorage.getItem(CART_STORAGE_KEY);
-            return saved ? JSON.parse(saved) : [];
+            return saved ? JSON.parse(saved).map((item) => ({
+                ...item,
+                cartLineKey: item.cartLineKey || getCartLineKey(item.id, item.modifiers || [], item.notes || ''),
+                modifiers: item.modifiers || [],
+            })) : [];
         } catch {
             return [];
         }
@@ -22,27 +27,12 @@ export function CartProvider({ children }) {
         }
     }, [cart]);
 
-    const addToCart = (product) => {
-        setCart((prev) => {
-            const existing = prev.find((i) => i.id === product.id);
-            if (existing) {
-                return prev.map((i) =>
-                    i.id === product.id ? { ...i, quantity: i.quantity + 1 } : i
-                );
-            }
-            return [...prev, { ...product, quantity: 1 }];
-        });
+    const addToCart = (product, options = {}) => {
+        setCart((previous) => addItemToCart(previous, product, options));
     };
 
-    const removeFromCart = (productId) => {
-        setCart((prev) => {
-            const existing = prev.find((i) => i.id === productId);
-            if (!existing) return prev;
-            if (existing.quantity <= 1) return prev.filter((i) => i.id !== productId);
-            return prev.map((i) =>
-                i.id === productId ? { ...i, quantity: i.quantity - 1 } : i
-            );
-        });
+    const removeFromCart = (lineKeyOrProductId) => {
+        setCart((previous) => removeCartItem(previous, lineKeyOrProductId));
     };
 
     const clearCart = () => {

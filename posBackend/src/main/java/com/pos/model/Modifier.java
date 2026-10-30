@@ -17,10 +17,12 @@ public class Modifier {
     private Long id;
 
     private String name;
+    @Column(name = "additional_price", nullable = false, precision = 19, scale = 2)
     private BigDecimal additionalPrice = BigDecimal.ZERO;
     private Boolean available = true;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "group_id", nullable = false)
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties({"modifiers", "product"})
     private ModifierGroup group;
 }

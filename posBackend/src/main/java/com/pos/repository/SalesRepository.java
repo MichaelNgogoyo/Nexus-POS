@@ -7,12 +7,20 @@ import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.data.jpa.repository.Lock;
+import jakarta.persistence.LockModeType;
 
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
 public interface SalesRepository extends JpaRepository<Sales, Long> {
+
+    @EntityGraph("Sales.withItems")
+    Optional<Sales> findByIdempotencyKey(String idempotencyKey);
+
+    Optional<Sales> findByRestaurantOrderId(Long restaurantOrderId);
 
     /** Lightweight paginated list — no collection fetch, safe pagination */
     @Query("SELECT s FROM Sales s ORDER BY s.createdAt DESC")
@@ -21,13 +29,24 @@ public interface SalesRepository extends JpaRepository<Sales, Long> {
     @EntityGraph("Sales.withItems")
     Optional<Sales> findById(Long id);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT s FROM Sales s WHERE s.id = :id")
+    @EntityGraph("Sales.withItems")
+    Optional<Sales> findByIdForUpdate(@Param("id") Long id);
+
     /** Total revenue for completed sales since a given date */
     @Query("SELECT COALESCE(SUM(s.totalAmount), 0) FROM Sales s WHERE s.status = 'COMPLETED' AND s.createdAt >= :since")
-    double sumRevenueSince(@Param("since") LocalDateTime since);
+    BigDecimal sumRevenueSince(@Param("since") LocalDateTime since);
 
     /** Count of completed sales since a given date */
     @Query("SELECT COUNT(s) FROM Sales s WHERE s.status = 'COMPLETED' AND s.createdAt >= :since")
     long countSalesSince(@Param("since") LocalDateTime since);
+
+    @Query("SELECT COALESCE(SUM(s.totalAmount), 0) FROM Sales s WHERE s.paymentMethod = 'CASH' "
+            + "AND s.status = 'COMPLETED' AND (s.shiftId = :shiftId OR "
+            + "(s.shiftId IS NULL AND s.cashierId = :cashierId AND s.createdAt >= :since))")
+    BigDecimal sumCashSalesForShift(@Param("shiftId") Long shiftId, @Param("cashierId") String cashierId,
+                                    @Param("since") LocalDateTime since);
 
     /** Daily revenue grouped by day for chart data (last N days) */
     @Query("SELECT CAST(s.createdAt AS date) AS day, COALESCE(SUM(s.totalAmount), 0) AS revenue, COUNT(s) AS txCount " +

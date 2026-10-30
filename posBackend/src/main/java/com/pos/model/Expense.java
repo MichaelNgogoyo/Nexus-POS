@@ -22,7 +22,7 @@ public class Expense {
     @Column(nullable = false)
     private ExpenseCategory category;
 
-    @Column(nullable = false)
+    @Column(nullable = false, precision = 19, scale = 2)
     private BigDecimal amount;
 
     private String description;

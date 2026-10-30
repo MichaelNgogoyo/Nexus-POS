@@ -122,22 +122,13 @@ export default function OverviewTab({ summary, lowStock, isLoading }) {
     () => dailyStats.slice(-7).reduce((s, d) => s + (d.revenue || 0), 0),
     [dailyStats]
   );
-  const monthlyRevenue = useMemo(
-    () => dailyStats.slice(-30).reduce((s, d) => s + (d.revenue || 0), 0),
-    [dailyStats]
-  );
+  const monthlyRevenue = Number(summary?.monthRevenue || 0);
 
   const prevWeekRevenue = useMemo(
     () => dailyStats.slice(-14, -7).reduce((s, d) => s + (d.revenue || 0), 0),
     [dailyStats]
   );
   const weekTrend = prevWeekRevenue > 0 ? ((weeklyRevenue - prevWeekRevenue) / prevWeekRevenue) * 100 : 0;
-
-  const prevMonthRevenue = useMemo(
-    () => dailyStats.slice(-60, -30).reduce((s, d) => s + (d.revenue || 0), 0),
-    [dailyStats]
-  );
-  const monthTrend = prevMonthRevenue > 0 ? ((monthlyRevenue - prevMonthRevenue) / prevMonthRevenue) * 100 : 0;
 
   const sparkline7d = dailyStats.slice(-7).map((d) => d.revenue || 0);
   const sparkline30d = dailyStats.slice(-30).map((d) => d.revenue || 0);
@@ -147,11 +138,9 @@ export default function OverviewTab({ summary, lowStock, isLoading }) {
     ? (((summary?.todayRevenue || 0) - prevTodayRevenue) / prevTodayRevenue) * 100
     : 0;
 
-  const avgOrderValue = summary?.totalSalesCount > 0
-    ? (summary.totalRevenue || 0) / summary.totalSalesCount
+  const avgOrderValue = summary?.monthSalesCount > 0
+    ? monthlyRevenue / summary.monthSalesCount
     : 0;
-
-  const grossProfit = (summary?.totalRevenue || 0) * 0.3;
 
   const uniqueCashiers = useMemo(
     () => new Set(recentSales.map((s) => s.cashierId)).size,
@@ -230,17 +219,16 @@ export default function OverviewTab({ summary, lowStock, isLoading }) {
           positive={weekTrend >= 0}
         />
         <PrimaryKpiCard
-          label="Monthly Revenue"
+          label="Month-to-date Revenue"
           value={fmt(monthlyRevenue)}
-          trend={monthTrend}
           accentClass="border-l-4 border-l-violet-500"
           icon={<SavingsRounded sx={{ fontSize: 22, color: '#8b5cf6' }} />}
           sparklineData={sparkline30d}
-          positive={monthTrend >= 0}
+          positive
         />
         <PrimaryKpiCard
-          label="Total Orders"
-          value={(summary?.totalSalesCount || 0).toLocaleString()}
+          label="Orders this month"
+          value={(summary?.monthSalesCount || 0).toLocaleString()}
           accentClass="border-l-4 border-l-orange-500"
           icon={<ShoppingCartRounded sx={{ fontSize: 22, color: '#f97316' }} />}
           sparklineData={dailyStats.slice(-7).map((d) => d.salesCount || 0)}
@@ -248,7 +236,7 @@ export default function OverviewTab({ summary, lowStock, isLoading }) {
       </div>
 
       {/* Row 2 — Secondary KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <SecondaryKpiCard
           label="Avg Order Value"
           value={fmt(avgOrderValue)}
@@ -257,14 +245,7 @@ export default function OverviewTab({ summary, lowStock, isLoading }) {
           icon={<AttachMoneyRounded sx={{ fontSize: 20, color: '#06b6d4' }} />}
         />
         <SecondaryKpiCard
-          label="Gross Profit Est."
-          value={fmt(grossProfit)}
-          sub="~30% margin"
-          accentClass="border-l-4 border-l-teal-500"
-          icon={<TrendingUpRounded sx={{ fontSize: 20, color: '#14b8a6' }} />}
-        />
-        <SecondaryKpiCard
-          label="Active Cashiers"
+          label="Cashiers in recent sales"
           value={uniqueCashiers}
           sub="From recent sales"
           accentClass="border-l-4 border-l-indigo-500"

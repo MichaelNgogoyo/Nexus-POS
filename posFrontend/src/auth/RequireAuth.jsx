@@ -1,26 +1,24 @@
 import {useKeycloak} from "@react-keycloak/web";
-import {useEffect} from "react";
+import {Navigate, useLocation} from "react-router-dom";
 import {usePermissions} from "./permissions";
+import {ROUTES} from "../routes.js";
 
-function RequireAuth({children, requiredPermission}) {
+function RequireAuth({children, requiredPermission, requiredAnyPermissions = []}) {
     const {keycloak, initialized} = useKeycloak();
     const {can} = usePermissions();
-
-    useEffect(() => {
-        if (initialized && keycloak && !keycloak.authenticated) {
-            keycloak.login({redirectUri: window.location.href});
-        }
-    }, [initialized, keycloak]);
+    const location = useLocation();
 
     if (!initialized || keycloak?.authenticated === undefined) {
         return <div className="min-h-screen flex items-center justify-center"><p className="text-sm text-text-secondary">Loading…</p></div>;
     }
 
     if (!keycloak.authenticated) {
-        return null;
+        return <Navigate to={ROUTES.LOGIN} state={{from: location}} replace />;
     }
 
-    if (requiredPermission && !can(requiredPermission)) {
+    const hasSinglePermission = !requiredPermission || can(requiredPermission);
+    const hasAnyPermission = requiredAnyPermissions.length === 0 || requiredAnyPermissions.some(can);
+    if (!hasSinglePermission || !hasAnyPermission) {
         return (
             <div className="min-h-screen flex items-center justify-center px-6 text-center">
                 <div className="space-y-2">

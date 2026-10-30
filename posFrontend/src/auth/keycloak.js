@@ -2,6 +2,7 @@ import Keycloak from "keycloak-js";
 import { runtimeConfig } from "../config/runtimeConfig";
 
 const appOrigin = typeof window !== "undefined" ? window.location.origin : "";
+const currentPageUrl = typeof window !== "undefined" ? window.location.href : "";
 
 const hasWebCrypto =
     typeof window !== "undefined" &&
@@ -19,9 +20,9 @@ const keycloakConfig = {
 
 export const keycloakInitOptions = {
     onLoad: "check-sso",
-    silentCheckSsoRedirectUri: `${appOrigin}/silent-check-sso.html`,
     checkLoginIframe: false,
-    redirectUri: runtimeConfig.redirectUri || appOrigin,
+    // Preserve deep links across Keycloak's check-sso callback.
+    redirectUri: currentPageUrl || runtimeConfig.redirectUri || appOrigin,
     pkceMethod: hasWebCrypto ? "S256" : false,
     enableLogging: import.meta.env.DEV,
 };

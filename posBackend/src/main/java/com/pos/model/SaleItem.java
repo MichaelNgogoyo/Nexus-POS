@@ -3,6 +3,9 @@ package com.pos.model;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.math.BigDecimal;
 
 @Entity
 @Setter
@@ -22,7 +25,19 @@ public class SaleItem {
     private Product product;
 
     private int quantity;
-    private double price;
+    @Column(nullable = false, precision = 19, scale = 2)
+    @Builder.Default
+    private BigDecimal price = BigDecimal.ZERO;
+
+    @Column(length = 250)
+    private String notes;
+
+    @ManyToMany(fetch = FetchType.EAGER)
+    @JoinTable(name = "sale_item_modifiers",
+            joinColumns = @JoinColumn(name = "sale_item_id"),
+            inverseJoinColumns = @JoinColumn(name = "modifier_id"))
+    @Builder.Default
+    private List<Modifier> modifiers = new ArrayList<>();
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "sale_id", nullable = false)

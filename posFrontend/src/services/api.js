@@ -4,8 +4,8 @@ import {emitToast} from "../components/toastBus";
 import { runtimeConfig } from "../config/runtimeConfig";
 
 const API_BASE_URL = runtimeConfig.apiBaseUrl;
-const AUTH_RETRY_KEY = "kc-login-retry-ts";
-const AUTH_RETRY_COOLDOWN_MS = 10_000;
+const AUTH_NOTICE_COOLDOWN_MS = 10_000;
+let lastAuthNoticeAt = 0;
 
 const apiClient = axios.create({
     baseURL: API_BASE_URL,
@@ -29,17 +29,20 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
     (response) => response,
     (error) => {
-        if (error?.response?.status === 401 && keycloak?.authenticated) {
+        const status = error?.response?.status;
+        if (status === 401 && keycloak?.authenticated) {
             const now = Date.now();
-            const lastRetry = Number(sessionStorage.getItem(AUTH_RETRY_KEY) || 0);
-
-            if (now - lastRetry > AUTH_RETRY_COOLDOWN_MS) {
-                sessionStorage.setItem(AUTH_RETRY_KEY, String(now));
-                keycloak.login({redirectUri: window.location.href});
+            if (now - lastAuthNoticeAt > AUTH_NOTICE_COOLDOWN_MS) {
+                lastAuthNoticeAt = now;
+                emitToast("The POS could not validate your sign-in. Sign out and back in; contact an administrator if it continues.", "error");
             }
+            return Promise.reject(error);
         }
 
-        const status = error?.response?.status;
+        if (error?.config?.suppressToastStatuses?.includes(status)) {
+            return Promise.reject(error);
+        }
+
         const message = error?.response?.data?.message || error?.message || "Request failed";
         if (status === 403) {
             emitToast("You are not allowed to perform this action.", "error");
@@ -76,6 +79,8 @@ export const createSale = (saleData) => {
 export const viewSale = (saleId) => {
     return apiClient.get(`/api/sale/${saleId}`);
 };
+
+export const getSaleReceipt = (saleId) => apiClient.get(`/api/sale/${saleId}/receipt`, { responseType: 'text' });
 
 /**
  * Deletes a sale by its ID.
@@ -236,21 +241,30 @@ export const updateTableStatus = (id, status) => apiClient.put(`/api/tables/${id
 export const getActiveOrders = () => apiClient.get('/api/orders');
 export const getOrderById = (id) => apiClient.get(`/api/orders/${id}`);
 export const createOrder = (data) => apiClient.post('/api/orders', data);
+export const updateRestaurantOrder = (id, data) => apiClient.put(`/api/orders/${id}`, data);
+export const cancelRestaurantOrder = (id) => apiClient.delete(`/api/orders/${id}`);
+export const submitOrderToKitchen = (data) => apiClient.post('/api/orders/submit', data);
 export const updateOrderStatus = (id, status) => apiClient.put(`/api/orders/${id}/status`, { status });
+export const recordOrderCashPayment = (id, data) => apiClient.post(`/api/orders/${id}/payment`, data);
 export const addOrderItem = (orderId, item) => apiClient.post(`/api/orders/${orderId}/items`, item);
 
 // ========================================
 // Kitchen API
 // ========================================
-export const getKitchenOrders = () => apiClient.get('/api/kitchen/orders');
+export const getKitchenOrders = ({ includeHistory = false } = {}) => apiClient.get('/api/kitchen/orders', { params: { includeHistory } });
 export const advanceKitchenStatus = (id, status) => apiClient.put(`/api/kitchen/orders/${id}/status`, { status });
 
 // ========================================
 // Shift API
 // ========================================
-export const getCurrentShift = (cashierId) => apiClient.get('/api/shifts/current', { params: { cashierId } });
+export const getCurrentShift = (cashierId) => apiClient.get('/api/shifts/current', {
+    params: { cashierId },
+    suppressToastStatuses: [404],
+});
 export const openShift = (data) => apiClient.post('/api/shifts/open', data);
 export const closeShift = (id, data) => apiClient.put(`/api/shifts/${id}/close`, data);
+export const getShiftMovements = (id) => apiClient.get(`/api/shifts/${id}/movements`);
+export const recordShiftMovement = (id, data) => apiClient.post(`/api/shifts/${id}/movements`, data);
 
 // ========================================
 // Customers API (POS)
@@ -318,6 +332,8 @@ const api = {
     getActiveOrders,
     getOrderById,
     createOrder,
+    updateRestaurantOrder,
+    cancelRestaurantOrder,
     updateOrderStatus,
     addOrderItem,
     getKitchenOrders,
@@ -325,6 +341,8 @@ const api = {
     getCurrentShift,
     openShift,
     closeShift,
+    getShiftMovements,
+    recordShiftMovement,
     searchCustomers,
     createCustomer,
     getAllCustomers,

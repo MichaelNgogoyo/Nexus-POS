@@ -1,8 +1,6 @@
 import { useMemo } from 'react';
 import {
-  PieChart, Pie, Cell, BarChart, Bar,
-  XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Legend,
+  PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 
 const fmt = (v) =>
@@ -22,16 +20,6 @@ const PAYMENT_COLORS = {
   MIXED: '#f59e0b',
 };
 const FALLBACK_COLORS = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444'];
-
-const PAYMENT_TREND_MOCK = [
-  { day: 'Mon', CASH: 12, CARD: 8, MPESA: 18 },
-  { day: 'Tue', CASH: 15, CARD: 11, MPESA: 22 },
-  { day: 'Wed', CASH: 10, CARD: 9, MPESA: 20 },
-  { day: 'Thu', CASH: 14, CARD: 13, MPESA: 28 },
-  { day: 'Fri', CASH: 18, CARD: 16, MPESA: 35 },
-  { day: 'Sat', CASH: 22, CARD: 19, MPESA: 42 },
-  { day: 'Sun', CASH: 17, CARD: 14, MPESA: 30 },
-];
 
 function Skeleton({ className = '' }) {
   return <div className={`animate-pulse bg-bg-tertiary rounded-xl ${className}`} />;
@@ -76,9 +64,9 @@ export default function PaymentsTab({ summary, isLoading }) {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-bg-secondary rounded-2xl border border-border-primary p-4 border-l-4 border-l-blue-500">
-          <p className="text-xs text-text-muted font-semibold uppercase tracking-wider">Total Collected</p>
+          <p className="text-xs text-text-muted font-semibold uppercase tracking-wider">Recent Collected</p>
           <p className="text-xl font-bold text-text-primary mt-1">{fmt(grandTotal)}</p>
-          <p className="text-xs text-text-muted mt-1">{recentSales.length} transactions</p>
+          <p className="text-xs text-text-muted mt-1">From the latest sales returned by the API</p>
         </div>
         {['CASH', 'CARD', 'MPESA'].map((method) => {
           const d = breakdown[method];
@@ -159,33 +147,10 @@ export default function PaymentsTab({ summary, isLoading }) {
           )}
         </div>
 
-        {/* 7-Day Trend */}
+        {/* Current API does not expose payment trends. */}
         <div className="bg-bg-secondary rounded-2xl border border-border-primary p-5">
-          <div className="flex items-center justify-between mb-1">
-            <h3 className="font-bold text-text-primary">Payment Method Trend</h3>
-            <span className="text-xs bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full font-medium">
-              Sample Data
-            </span>
-          </div>
-          <p className="text-xs text-text-muted mb-3">Transaction count by method (last 7 days)</p>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={PAYMENT_TREND_MOCK} margin={{ top: 4, right: 4, left: -10, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-primary)" vertical={false} />
-              <XAxis dataKey="day" tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} />
-              <YAxis tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} />
-              <Tooltip contentStyle={tooltipStyle} />
-              <Legend
-                iconType="circle"
-                iconSize={8}
-                formatter={(value) => (
-                  <span style={{ color: 'var(--color-text-secondary)', fontSize: 11 }}>{value}</span>
-                )}
-              />
-              <Bar dataKey="CASH" fill={PAYMENT_COLORS.CASH} radius={[3, 3, 0, 0]} stackId="a" />
-              <Bar dataKey="CARD" fill={PAYMENT_COLORS.CARD} radius={[0, 0, 0, 0]} stackId="a" />
-              <Bar dataKey="MPESA" fill={PAYMENT_COLORS.MPESA} radius={[3, 3, 0, 0]} stackId="a" />
-            </BarChart>
-          </ResponsiveContainer>
+          <h3 className="font-bold text-text-primary">Payment trends</h3>
+          <p className="text-sm text-text-muted mt-2">The current report API only returns a short recent-sales list. Payment trends will appear when the backend exposes an aggregate endpoint.</p>
         </div>
       </div>
 

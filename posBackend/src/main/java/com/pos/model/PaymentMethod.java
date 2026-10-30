@@ -1,5 +1,5 @@
 package com.pos.model;
 
 public enum PaymentMethod {
-    CASH, MPESA, CARD, MIXED
+    CASH, MPESA, CARD, MIXED, ROOM_CHARGE
 }

@@ -19,16 +19,9 @@ const STATUS_CONFIG = {
 
 const NEXT_STATUS = { PENDING: 'CONFIRMED', CONFIRMED: 'SEATED', SEATED: 'COMPLETED' };
 const NEXT_LABEL  = { PENDING: 'Confirm', CONFIRMED: 'Seat', SEATED: 'Complete' };
+const TABS = ['ALL', 'PENDING', 'CONFIRMED', 'SEATED', 'COMPLETED', 'CANCELLED'];
 
 const EMPTY_FORM = { customerName: '', customerPhone: '', guestCount: 2, reservationTime: '', notes: '' };
-
-// Mock data for when API is not ready
-const MOCK = [
-    { id: 1, customerName: 'Alice Wanjiku', customerPhone: '+254 712 345678', guestCount: 4, reservationTime: new Date(Date.now() + 3600000).toISOString(), status: 'CONFIRMED', notes: 'Birthday dinner, please prepare cake' },
-    { id: 2, customerName: 'Bob Kamau', customerPhone: '+254 722 987654', guestCount: 2, reservationTime: new Date(Date.now() + 7200000).toISOString(), status: 'PENDING', notes: '' },
-    { id: 3, customerName: 'Carol Achieng', customerPhone: '+254 733 111222', guestCount: 6, reservationTime: new Date(Date.now() + 10800000).toISOString(), status: 'SEATED', notes: 'VIP table requested' },
-    { id: 4, customerName: 'David Omondi', customerPhone: '+254 700 555666', guestCount: 3, reservationTime: new Date(Date.now() - 3600000).toISOString(), status: 'COMPLETED', notes: '' },
-];
 
 export default function POSReservations() {
     const qc = useQueryClient();
@@ -36,24 +29,23 @@ export default function POSReservations() {
     const [showModal, setShowModal] = useState(false);
     const [form, setForm] = useState(EMPTY_FORM);
 
-    const { data: reservations = MOCK } = useQuery({
+    const reservationsQuery = useQuery({
         queryKey: ['reservations'],
-        queryFn: () => getReservations().then(r => r.data).catch(() => MOCK),
+        queryFn: () => getReservations().then(r => r.data),
         staleTime: 30_000,
     });
+    const reservations = useMemo(() => reservationsQuery.data ?? [], [reservationsQuery.data]);
 
     const createMut = useMutation({
         mutationFn: createReservation,
-        onSuccess: () => { qc.invalidateQueries(['reservations']); setShowModal(false); setForm(EMPTY_FORM); },
-        onError: () => { qc.invalidateQueries(['reservations']); setShowModal(false); },
+        onSuccess: () => { qc.invalidateQueries({ queryKey: ['reservations'] }); setShowModal(false); setForm(EMPTY_FORM); },
     });
 
     const statusMut = useMutation({
         mutationFn: ({ id, status }) => updateReservationStatus(id, status),
-        onSuccess: () => qc.invalidateQueries(['reservations']),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['reservations'] }),
     });
 
-    const TABS = ['ALL', 'PENDING', 'CONFIRMED', 'SEATED', 'COMPLETED', 'CANCELLED'];
     const filtered = useMemo(() =>
         filter === 'ALL' ? reservations : reservations.filter(r => r.status === filter),
         [reservations, filter]);
@@ -74,25 +66,23 @@ export default function POSReservations() {
     };
 
     return (
-        <div className="h-screen bg-[#0a0a0a] flex flex-col overflow-hidden">
+        <section className="pos-data-page">
             {/* Header */}
-            <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between shrink-0">
+            <header className="pos-page-heading">
                 <div>
-                    <h1 className="text-xl font-black text-white">Reservations</h1>
-                    <p className="text-gray-500 text-xs mt-0.5">{new Date().toLocaleDateString('en-KE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                    <p className="hotel-eyebrow">GUEST SERVICE</p><h1>Reservations</h1>
+                    <p>Manage bookings from the restaurant API.</p>
                 </div>
-                <button onClick={() => setShowModal(true)}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-sm font-semibold transition-all">
-                    <AddRoundedIcon sx={{ fontSize: 18 }} /> New Reservation
+                <button onClick={() => setShowModal(true)} className="pos-primary-action">
+                    <AddRoundedIcon /> New reservation
                 </button>
-            </div>
+            </header>
 
             {/* Tabs */}
-            <div className="px-6 py-3 border-b border-white/5 flex gap-2 overflow-x-auto shrink-0">
+            <div className="pos-filter-tabs">
                 {TABS.map(t => (
                     <button key={t} onClick={() => setFilter(t)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5
-                            ${filter === t ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}>
+                        className={filter === t ? 'active' : ''}>
                         {t}
                         {t !== 'ALL' && counts[t] > 0 && (
                             <span className="bg-white/10 rounded-full px-1.5 py-0.5 text-[9px] font-black">{counts[t]}</span>
@@ -102,61 +92,56 @@ export default function POSReservations() {
             </div>
 
             {/* Reservations grid */}
-            <div className="flex-1 overflow-y-auto p-6">
-                {filtered.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full text-gray-600">
-                        <BookOnlineRoundedIcon sx={{ fontSize: 48 }} className="mb-3 opacity-30" />
-                        <p>No reservations found</p>
-                    </div>
+            <div>
+                {reservationsQuery.isLoading ? <div className="pos-state">Loading reservations…</div> : reservationsQuery.isError ? <div className="pos-error" role="alert">Reservations could not be loaded. <button onClick={() => reservationsQuery.refetch()}>Try again</button></div> : filtered.length === 0 ? (
+                    <div className="pos-state"><BookOnlineRoundedIcon /><strong>No reservations to show</strong><span>Bookings will appear here when they are added.</span></div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                    <div className="pos-record-grid">
                         {filtered.map(r => {
                             const cfg = STATUS_CONFIG[r.status] || STATUS_CONFIG.PENDING;
                             const next = NEXT_STATUS[r.status];
                             return (
-                                <div key={r.id} className={`rounded-2xl border p-5 ${cfg.color} transition-all hover:scale-[1.01]`}>
+                                <div key={r.id} className="pos-reservation-card">
                                     {/* Status dot + status */}
                                     <div className="flex items-center justify-between mb-3">
                                         <div className="flex items-center gap-2">
-                                            <div className={`w-2 h-2 rounded-full ${cfg.dot} animate-pulse`} />
-                                            <span className="text-xs font-bold uppercase tracking-wider opacity-80">{cfg.label}</span>
+                                            <div className={`w-2 h-2 rounded-full ${cfg.dot}`} />
+                                            <span className="reservation-status">{cfg.label}</span>
                                         </div>
-                                        <span className="text-xs opacity-50">#{r.id}</span>
+                                        <span className="reservation-id">#{r.id}</span>
                                     </div>
 
                                     {/* Guest name */}
-                                    <h3 className="text-lg font-black text-white mb-1">{r.customerName}</h3>
+                                    <h2>{r.customerName}</h2>
 
                                     {/* Info */}
-                                    <div className="space-y-1.5 mb-4">
-                                        <div className="flex items-center gap-2 text-xs opacity-70">
+                                    <div className="reservation-details">
+                                        <div>
                                             <AccessTimeRoundedIcon sx={{ fontSize: 14 }} />
                                             <span>{fmtTime(r.reservationTime)}</span>
                                         </div>
-                                        <div className="flex items-center gap-2 text-xs opacity-70">
+                                        <div>
                                             <PeopleAltRoundedIcon sx={{ fontSize: 14 }} />
                                             <span>{r.guestCount} guests</span>
                                         </div>
                                         {r.customerPhone && (
-                                            <div className="flex items-center gap-2 text-xs opacity-70">
+                                            <div>
                                                 <PhoneRoundedIcon sx={{ fontSize: 14 }} />
                                                 <span>{r.customerPhone}</span>
                                             </div>
                                         )}
-                                        {r.notes && <p className="text-xs opacity-60 mt-1 italic">{r.notes}</p>}
+                                        {r.notes && <p>{r.notes}</p>}
                                     </div>
 
                                     {/* Actions */}
-                                    <div className="flex gap-2">
+                                    <div className="reservation-actions">
                                         {next && (
-                                            <button onClick={() => statusMut.mutate({ id: r.id, status: next })}
-                                                className="flex-1 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all">
+                                            <button disabled={statusMut.isPending} onClick={() => statusMut.mutate({ id: r.id, status: next })} className="pos-secondary-action">
                                                 {NEXT_LABEL[r.status]}
                                             </button>
                                         )}
-                                        {r.status !== 'COMPLETED' && r.status !== 'CANCELLED' && (
-                                            <button onClick={() => statusMut.mutate({ id: r.id, status: 'CANCELLED' })}
-                                                className="py-2 px-3 rounded-xl bg-red-900/30 hover:bg-red-900/50 text-red-400 text-xs font-bold transition-all">
+                                        {['PENDING', 'CONFIRMED'].includes(r.status) && (
+                                            <button disabled={statusMut.isPending} onClick={() => statusMut.mutate({ id: r.id, status: 'CANCELLED' })} className="pos-danger-action">
                                                 Cancel
                                             </button>
                                         )}
@@ -167,44 +152,43 @@ export default function POSReservations() {
                     </div>
                 )}
             </div>
+            {statusMut.isError && <p className="pos-error" role="alert">Reservation status could not be updated. {statusMut.error?.response?.data?.message || 'Try again.'}</p>}
 
             {/* New Reservation Modal */}
             {showModal && (
-                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-[#1a1a1a] border border-white/10 rounded-2xl w-full max-w-md shadow-2xl">
-                        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
-                            <h3 className="font-bold text-white">New Reservation</h3>
-                            <button onClick={() => setShowModal(false)} className="text-gray-500 hover:text-white"><CloseRoundedIcon sx={{ fontSize: 20 }} /></button>
-                        </div>
-                        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                <div className="pos-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowModal(false); }}>
+                    <section className="pos-dialog" role="dialog" aria-modal="true" aria-labelledby="reservation-dialog-title">
+                        <header><h2 id="reservation-dialog-title">New reservation</h2><button aria-label="Close" onClick={() => setShowModal(false)}><CloseRoundedIcon /></button></header>
+                        <form onSubmit={handleSubmit} className="reservation-form">
                             {[
-                                { key: 'customerName', label: 'Guest Name', type: 'text', placeholder: 'John Doe', required: true },
+                                { key: 'customerName', label: 'Guest Name', type: 'text', placeholder: 'Guest name', required: true },
                                 { key: 'customerPhone', label: 'Phone', type: 'tel', placeholder: '+254 700 000000' },
                                 { key: 'guestCount', label: 'Party Size', type: 'number', placeholder: '2', min: 1 },
                                 { key: 'reservationTime', label: 'Date & Time', type: 'datetime-local', required: true },
                             ].map(f => (
                                 <div key={f.key}>
-                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-1.5">{f.label}</label>
-                                    <input type={f.type} placeholder={f.placeholder} required={f.required} min={f.min}
+                                    <label>{f.label}</label>
+                                    <input type={f.type} placeholder={f.key === 'customerName' ? 'Guest name' : f.placeholder} required={f.required} min={f.min}
                                         value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
-                                        className="w-full bg-[#111] border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-violet-500 placeholder-gray-600" />
+                                    />
                                 </div>
                             ))}
                             <div>
-                                <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-1.5">Notes</label>
+                                <label>Notes</label>
                                 <textarea rows={2} placeholder="Special requests..." value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
-                                    className="w-full bg-[#111] border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-violet-500 placeholder-gray-600 resize-none" />
+                                />
                             </div>
-                            <div className="flex gap-3 pt-2">
-                                <button type="button" onClick={() => setShowModal(false)} className="flex-1 px-4 py-2.5 rounded-xl bg-white/5 text-gray-400 text-sm font-semibold hover:bg-white/10">Cancel</button>
-                                <button type="submit" disabled={createMut.isPending} className="flex-1 px-4 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold disabled:opacity-50">
+                            {createMut.isError && <p className="pos-error" role="alert">Reservation could not be saved. {createMut.error?.response?.data?.message || 'Try again.'}</p>}
+                            <div className="reservation-form-actions">
+                                <button type="button" onClick={() => setShowModal(false)} className="pos-secondary-action">Cancel</button>
+                                <button type="submit" disabled={createMut.isPending} className="pos-primary-action">
                                     {createMut.isPending ? 'Booking...' : 'Book Reservation'}
                                 </button>
                             </div>
                         </form>
-                    </div>
+                    </section>
                 </div>
             )}
-        </div>
+        </section>
     );
 }

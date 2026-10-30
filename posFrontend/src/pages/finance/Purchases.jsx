@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getPurchaseOrders, getSuppliers, createPurchaseOrder, updatePurchaseOrderStatus, receivePurchaseOrder } from '../../services/api.js';
+import { getAllProducts, getPurchaseOrders, getSuppliers, createPurchaseOrder, updatePurchaseOrderStatus, receivePurchaseOrder } from '../../services/api.js';
 import ShoppingCartRoundedIcon from '@mui/icons-material/ShoppingCartRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
@@ -20,10 +20,14 @@ export default function Purchases() {
     const qc = useQueryClient();
     const [filter, setFilter] = useState('ALL');
     const [showModal, setShowModal] = useState(false);
-    const [form, setForm] = useState({ supplierId: '', notes: '', items: [{ productName: '', orderedQuantity: 1, unitCost: '' }] });
+    const [form, setForm] = useState({ supplierId: '', notes: '', items: [{ productId: '', orderedQuantity: 1, unitCost: '' }] });
 
     const { data: orders = [], isLoading } = useQuery({ queryKey: ['purchase-orders'], queryFn: () => getPurchaseOrders().then(r => r.data) });
     const { data: suppliers = [] } = useQuery({ queryKey: ['suppliers'], queryFn: () => getSuppliers().then(r => r.data) });
+    const productsQuery = useQuery({ queryKey: ['products'], queryFn: () => getAllProducts().then(r => r.data) });
+    const catalogProducts = productsQuery.data || [];
+    const productsLoading = productsQuery.isLoading;
+    const products = catalogProducts.filter(product => product.active);
 
     const createMut = useMutation({
         mutationFn: createPurchaseOrder,
@@ -43,7 +47,7 @@ export default function Purchases() {
     const TABS = ['ALL', 'DRAFT', 'SENT', 'RECEIVED', 'CANCELLED'];
     const filtered = filter === 'ALL' ? orders : orders.filter(o => o.status === filter);
 
-    const addItem = () => setForm(f => ({ ...f, items: [...f.items, { productName: '', orderedQuantity: 1, unitCost: '' }] }));
+    const addItem = () => setForm(f => ({ ...f, items: [...f.items, { productId: '', orderedQuantity: 1, unitCost: '' }] }));
     const removeItem = (i) => setForm(f => ({ ...f, items: f.items.filter((_, idx) => idx !== i) }));
     const updateItem = (i, key, val) => setForm(f => ({ ...f, items: f.items.map((item, idx) => idx === i ? { ...item, [key]: val } : item) }));
 
@@ -51,7 +55,7 @@ export default function Purchases() {
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        createMut.mutate({ supplierId: form.supplierId ? Number(form.supplierId) : null, notes: form.notes, items: form.items.map(i => ({ ...i, orderedQuantity: Number(i.orderedQuantity), unitCost: Number(i.unitCost), lineTotal: Number(i.orderedQuantity) * Number(i.unitCost) })), totalAmount });
+        createMut.mutate({ supplierId: form.supplierId ? Number(form.supplierId) : null, notes: form.notes, items: form.items.map(i => ({ productId: Number(i.productId), orderedQuantity: Number(i.orderedQuantity), unitCost: Number(i.unitCost) })) });
     };
 
     return (
@@ -98,7 +102,7 @@ export default function Purchases() {
                                 {filtered.map(o => (
                                     <tr key={o.id} className="hover:bg-bg-tertiary transition-colors">
                                         <td className="px-5 py-3 font-mono text-text-primary text-xs">{o.orderNumber}</td>
-                                        <td className="px-5 py-3 text-text-primary">{o.supplier?.name || '—'}</td>
+                                        <td className="px-5 py-3 text-text-primary">{o.supplierName || '—'}</td>
                                         <td className="px-5 py-3 text-text-secondary">{o.items?.length ?? 0} items</td>
                                         <td className="px-5 py-3 font-bold text-text-primary">{fmt(o.totalAmount)}</td>
                                         <td className="px-5 py-3">
@@ -108,12 +112,12 @@ export default function Purchases() {
                                         <td className="px-5 py-3">
                                             <div className="flex gap-1">
                                                 {o.status === 'DRAFT' && (
-                                                    <button onClick={() => statusMut.mutate({ id: o.id, status: 'SENT' })} className="p-1.5 text-blue-500 hover:bg-blue-500/10 rounded-lg transition-all" title="Mark Sent">
+                                                    <button disabled={statusMut.isPending} onClick={() => statusMut.mutate({ id: o.id, status: 'SENT' })} className="p-1.5 text-blue-500 hover:bg-blue-500/10 rounded-lg transition-all disabled:opacity-50" title="Mark Sent">
                                                         <SendRoundedIcon sx={{ fontSize: 14 }} />
                                                     </button>
                                                 )}
                                                 {o.status === 'SENT' && (
-                                                    <button onClick={() => receiveMut.mutate(o.id)} className="p-1.5 text-emerald-500 hover:bg-emerald-500/10 rounded-lg transition-all" title="Mark Received">
+                                                    <button disabled={receiveMut.isPending} onClick={() => receiveMut.mutate(o.id)} className="p-1.5 text-emerald-500 hover:bg-emerald-500/10 rounded-lg transition-all disabled:opacity-50" title="Mark Received">
                                                         <CheckCircleRoundedIcon sx={{ fontSize: 14 }} />
                                                     </button>
                                                 )}
@@ -126,6 +130,8 @@ export default function Purchases() {
                     </div>
                 )}
             </div>
+
+            {(statusMut.isError || receiveMut.isError) && <p role="alert" className="text-sm text-red-500">Purchase order could not be updated. {(statusMut.error || receiveMut.error)?.response?.data?.message || 'Refresh the list and try again.'}</p>}
 
             {showModal && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -152,8 +158,11 @@ export default function Purchases() {
                                 <div className="space-y-2">
                                     {form.items.map((item, i) => (
                                         <div key={i} className="flex gap-2 items-center">
-                                            <input type="text" placeholder="Product name" value={item.productName} onChange={e => updateItem(i, 'productName', e.target.value)}
-                                                className="flex-1 bg-bg-tertiary border border-border-primary rounded-xl px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-brand-primary" />
+                                            <select required value={item.productId} onChange={e => updateItem(i, 'productId', e.target.value)}
+                                                className="flex-1 min-w-0 bg-bg-tertiary border border-border-primary rounded-xl px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-brand-primary">
+                                                <option value="">{productsLoading ? 'Loading products…' : 'Select catalog product…'}</option>
+                                                {products.map(product => <option key={product.id} value={product.id}>{product.name}</option>)}
+                                            </select>
                                             <input type="number" min="1" placeholder="Qty" value={item.orderedQuantity} onChange={e => updateItem(i, 'orderedQuantity', e.target.value)}
                                                 className="w-20 bg-bg-tertiary border border-border-primary rounded-xl px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-brand-primary" />
                                             <input type="number" min="0" step="0.01" placeholder="Unit cost" value={item.unitCost} onChange={e => updateItem(i, 'unitCost', e.target.value)}
@@ -173,9 +182,13 @@ export default function Purchases() {
                                     className="w-full bg-bg-tertiary border border-border-primary rounded-xl px-4 py-2.5 text-text-primary text-sm focus:outline-none focus:border-brand-primary resize-none" />
                             </div>
 
+                            {createMut.isError && <p role="alert" className="text-sm text-red-500">Purchase order could not be created. {createMut.error?.response?.data?.message || 'Check the product and supplier details, then try again.'}</p>}
+                            {productsQuery.isError && <p role="alert" className="text-sm text-red-500">Products could not be loaded. <button type="button" onClick={() => productsQuery.refetch()} className="underline">Retry</button></p>}
+                            {productsQuery.isSuccess && products.length === 0 && <p role="status" className="text-sm text-amber-600">Add an active catalog product before creating a purchase order.</p>}
+
                             <div className="flex gap-3 pt-2">
                                 <button type="button" onClick={() => setShowModal(false)} className="flex-1 px-4 py-2.5 rounded-xl bg-bg-tertiary text-text-secondary text-sm font-semibold">Cancel</button>
-                                <button type="submit" disabled={createMut.isPending} className="flex-1 px-4 py-2.5 rounded-xl bg-brand-primary text-white text-sm font-semibold hover:bg-brand-hover disabled:opacity-50">
+                                <button type="submit" disabled={createMut.isPending || productsLoading || products.length === 0} className="flex-1 px-4 py-2.5 rounded-xl bg-brand-primary text-white text-sm font-semibold hover:bg-brand-hover disabled:opacity-50">
                                     {createMut.isPending ? 'Creating...' : 'Create PO'}
                                 </button>
                             </div>

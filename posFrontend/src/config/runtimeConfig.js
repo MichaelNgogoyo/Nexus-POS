@@ -3,7 +3,8 @@ const runtime = window.__APP_CONFIG__ || {};
 const env = import.meta.env;
 
 export const runtimeConfig = {
-  apiBaseUrl: runtime.VITE_API_BASE_URL || env.VITE_API_BASE_URL || window.location.origin,
+  // API requests stay same-origin; Vite and Nginx proxy /api to Spring Boot.
+  apiBaseUrl: window.location.origin,
   keycloakUrl: runtime.VITE_KEYCLOAK_URL || env.VITE_KEYCLOAK_URL || "http://localhost:8081",
   keycloakRealm: runtime.VITE_KEYCLOAK_REALM || env.VITE_KEYCLOAK_REALM || "pos",
   keycloakClientId: runtime.VITE_KEYCLOAK_CLIENT_ID || env.VITE_KEYCLOAK_CLIENT_ID || "pos-client",

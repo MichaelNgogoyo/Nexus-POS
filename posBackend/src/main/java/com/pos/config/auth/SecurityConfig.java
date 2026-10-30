@@ -8,12 +8,21 @@ import org.springframework.core.convert.converter.Converter;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2Error;
+import org.springframework.security.oauth2.core.OAuth2ErrorCodes;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
+import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
@@ -27,14 +36,22 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 @Profile("!seed")
 public class SecurityConfig {
 
     @Value("${cors.allowed-origins:http://localhost:5173,http://localhost:3000, http://0.0.0.0:3000}")
     private String allowedOrigins;
+
+    @Value("${spring.security.oauth2.resourceserver.jwt.client-id:pos-client}")
+    private String posClientId;
+
+    @Value("${pos.security.jwt.required-audiences:${spring.security.oauth2.resourceserver.jwt.client-id:pos-client}}")
+    private String requiredAudiences;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -48,11 +65,10 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/", "/index.html", "/api/public/**", "/assets/**",
                                 "/static/**", "/shop.svg", "/favicon.ico",
-                                "/swagger-ui/**", "/v3/api-docs/**",
-                                "/api/product/*/image", "/api/register",
-                                "/api/report/summary", "/api/report/low-stock",
+                                "/api/product/*/image",
                                 "/api/config/**", "/actuator/health/**", "/actuator/info"
                         ).permitAll()
+                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").hasRole("ADMIN")
                         .requestMatchers("/admin/**").hasRole("ADMIN")
                         .requestMatchers("/user/**").hasAnyRole("USER", "ADMIN")
                         .anyRequest().authenticated()
@@ -60,6 +76,25 @@ public class SecurityConfig {
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())));
 
         return http.build();
+    }
+
+    @Bean
+    public JwtDecoder jwtDecoder(@Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri}") String issuerUri) {
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withIssuerLocation(issuerUri).build();
+        decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
+                JwtValidators.createDefaultWithIssuer(issuerUri), audienceValidator()));
+        return decoder;
+    }
+
+    OAuth2TokenValidator<Jwt> audienceValidator() {
+        Set<String> expectedAudiences = Arrays.stream(requiredAudiences == null ? new String[0] : requiredAudiences.split(","))
+                .map(String::trim)
+                .filter(audience -> !audience.isEmpty())
+                .collect(Collectors.toSet());
+        return jwt -> jwt.getAudience().stream().anyMatch(expectedAudiences::contains)
+                ? OAuth2TokenValidatorResult.success()
+                : OAuth2TokenValidatorResult.failure(new OAuth2Error(OAuth2ErrorCodes.INVALID_TOKEN,
+                        "Access token is missing a required API audience", null));
     }
 
     @Bean
@@ -89,12 +124,10 @@ public class SecurityConfig {
         }
 
         Map<String, Object> resourceAccess = jwt.getClaim("resource_access");
-        if (resourceAccess != null) {
-            for (Object resourceValue : resourceAccess.values()) {
-                if (resourceValue instanceof Map<?, ?> resourceMap) {
-                    Object clientRoles = resourceMap.get("roles");
-                    addRoles(authorities, clientRoles);
-                }
+        if (resourceAccess != null && posClientId != null && !posClientId.isBlank()) {
+            Object posClientAccess = resourceAccess.get(posClientId.trim());
+            if (posClientAccess instanceof Map<?, ?> resourceMap) {
+                addRoles(authorities, resourceMap.get("roles"));
             }
         }
 

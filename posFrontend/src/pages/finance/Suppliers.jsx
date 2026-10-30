@@ -96,7 +96,7 @@ export default function Suppliers() {
                         <form onSubmit={handleSubmit} className="p-6 space-y-4">
                             {[
                                 { key: 'name', label: 'Supplier Name', required: true, placeholder: 'e.g. Fresh Foods Ltd' },
-                                { key: 'contactName', label: 'Contact Person', placeholder: 'e.g. John Doe' },
+                                { key: 'contactName', label: 'Contact Person', placeholder: 'Contact name' },
                                 { key: 'phone', label: 'Phone', placeholder: '+254 700 000000' },
                                 { key: 'email', label: 'Email', placeholder: 'info@supplier.com' },
                                 { key: 'address', label: 'Address', placeholder: 'Nairobi, Kenya' },

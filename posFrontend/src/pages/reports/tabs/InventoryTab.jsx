@@ -6,7 +6,7 @@ import {
 import WarningAmberRounded from '@mui/icons-material/WarningAmberRounded';
 import ErrorRounded from '@mui/icons-material/ErrorRounded';
 import FileDownloadRounded from '@mui/icons-material/FileDownloadRounded';
-import { exportToCSV, exportToExcel } from '../utils/exportUtils.js';
+import { exportToCSV } from '../utils/exportUtils.js';
 
 const fmt = (v) =>
   `KSh ${Number(v || 0).toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
@@ -149,13 +149,7 @@ export default function InventoryTab({ products, lowStock, isLoading }) {
               >
                 <FileDownloadRounded sx={{ fontSize: 14 }} /> CSV
               </button>
-              <button
-                onClick={() => exportToExcel(exportLowStock, 'low-stock', 'LowStock')}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs bg-bg-tertiary text-text-secondary rounded-lg hover:bg-border-primary transition-all"
-              >
-                <FileDownloadRounded sx={{ fontSize: 14 }} /> Excel
-              </button>
-            </div>
+              </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -224,13 +218,7 @@ export default function InventoryTab({ products, lowStock, isLoading }) {
               >
                 <FileDownloadRounded sx={{ fontSize: 14 }} /> CSV
               </button>
-              <button
-                onClick={() => exportToExcel(exportAll, 'full-inventory', 'Inventory')}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs bg-bg-tertiary text-text-secondary rounded-lg hover:bg-border-primary transition-all"
-              >
-                <FileDownloadRounded sx={{ fontSize: 14 }} /> Excel
-              </button>
-            </div>
+              </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

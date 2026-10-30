@@ -1,261 +1,79 @@
 import { useState } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useKeycloak } from '@react-keycloak/web';
-import { createSale, getTaxRate } from '../../services/api.js';
+import { createSale, getSaleReceipt, getTaxRate } from '../../services/api.js';
 import { useCart } from '../../context/CartContext.jsx';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
-import LocalAtmRoundedIcon from '@mui/icons-material/LocalAtm';
-import PhoneAndroidRoundedIcon from '@mui/icons-material/PhoneAndroidRounded';
-import CreditCardRoundedIcon from '@mui/icons-material/CreditCardRounded';
-import CallSplitRoundedIcon from '@mui/icons-material/CallSplitRounded';
+import LocalAtmRoundedIcon from '@mui/icons-material/LocalAtmRounded';
+import ErrorOutlineRoundedIcon from '@mui/icons-material/ErrorOutlineRounded';
 
-const PAYMENT_METHODS = [
-    { value: 'CASH',  label: 'Cash',   Icon: LocalAtmRoundedIcon },
-    { value: 'MPESA', label: 'M-Pesa', Icon: PhoneAndroidRoundedIcon },
-    { value: 'CARD',  label: 'Card',   Icon: CreditCardRoundedIcon },
-    { value: 'MIXED', label: 'Mixed',  Icon: CallSplitRoundedIcon },
-];
+const requestKey = () => globalThis.crypto?.randomUUID?.() ?? `pos-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+const money = (amount) => `KSh ${Number(amount || 0).toLocaleString('en-KE', { maximumFractionDigits: 2 })}`;
+const roundMoney = (amount) => Math.round((Number(amount || 0) + Number.EPSILON) * 100) / 100;
 
-export default function PaymentModal({ orderType, onClose }) {
+export default function PaymentModal({ orderType, tableId, guestName, orderNotes, onClose }) {
     const { keycloak } = useKeycloak();
     const { cart, clearCart } = useCart();
-
-    const [method, setMethod]         = useState('CASH');
-    const [tendered, setTendered]     = useState('');
-    const [phone, setPhone]           = useState('');
-    const [reference, setReference]   = useState('');
-    const [cardLast4, setCardLast4]   = useState('');
-    const [mixedMethod1, setMixedMethod1] = useState('CASH');
-    const [mixedAmount1, setMixedAmount1] = useState('');
-    const [mixedMethod2, setMixedMethod2] = useState('MPESA');
-    const [mixedAmount2, setMixedAmount2] = useState('');
-    const [success, setSuccess]       = useState(false);
-
-    const { data: taxData } = useQuery({
-        queryKey: ['taxRate'],
-        queryFn: () => getTaxRate().then(r => r.data),
-        staleTime: 300_000,
-    });
-
-    const taxRate  = taxData?.taxRate ?? 16;
-    const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    const total    = subtotal * (1 + taxRate / 100);
-
-    const tenderedNum = parseFloat(tendered) || 0;
-    const change      = method === 'CASH' && tenderedNum > total ? tenderedNum - total : 0;
-
-    const { mutate: submitSale, isPending } = useMutation({
-        mutationFn: (saleData) => createSale(saleData),
-        onSuccess: () => {
-            setSuccess(true);
-            setTimeout(() => {
-                clearCart();
-                onClose();
-            }, 2000);
+    const queryClient = useQueryClient();
+    const [amountTendered, setAmountTendered] = useState('');
+    const [sale, setSale] = useState(null);
+    const [idempotencyKey] = useState(requestKey);
+    const taxQuery = useQuery({ queryKey: ['taxRate'], queryFn: () => getTaxRate().then(({ data }) => data), staleTime: 300_000 });
+    const taxRate = Number(taxQuery.data?.taxRate ?? 0);
+    const serviceRate = Number(taxQuery.data?.serviceChargeRate ?? 0);
+    const subtotal = roundMoney(cart.reduce((sum, item) => sum + roundMoney(roundMoney(Number(item.price) + (item.modifiers || []).reduce((acc, modifier) => acc + Number(modifier.additionalPrice || 0), 0)) * item.quantity), 0));
+    const tax = roundMoney(subtotal * taxRate / 100);
+    const service = roundMoney(subtotal * serviceRate / 100);
+    const total = roundMoney(subtotal + tax + service);
+    const tendered = Number(amountTendered || 0);
+    const paymentMutation = useMutation({
+        mutationFn: async () => {
+            const { data } = await createSale({
+                cashierId: keycloak?.tokenParsed?.sub || keycloak?.subject,
+                paymentMethod: 'CASH',
+                orderType,
+                tableId: orderType === 'DINE_IN' ? tableId : null,
+                guestName: guestName || null,
+                notes: orderNotes?.trim() || null,
+                amountTendered: tendered,
+                idempotencyKey,
+                items: cart.map((item) => ({
+                    productId: Number(item.id),
+                    quantity: item.quantity,
+                    modifierIds: (item.modifiers || []).map((modifier) => Number(modifier.id)),
+                    notes: item.notes || null,
+                })),
+            });
+            return data;
+        },
+        onSuccess: (result) => {
+            setSale(result);
+            clearCart();
+            queryClient.invalidateQueries({ queryKey: ['orders'] });
+            queryClient.invalidateQueries({ queryKey: ['kitchen-orders'] });
+            queryClient.invalidateQueries({ queryKey: ['sales'] });
+            queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
+            queryClient.invalidateQueries({ queryKey: ['current-shift', keycloak?.tokenParsed?.sub || keycloak?.subject] });
         },
     });
+    const receiptMutation = useMutation({ mutationFn: async () => (await getSaleReceipt(sale.id)).data });
 
-    const handleComplete = () => {
-        submitSale({
-            cashierId: keycloak?.tokenParsed?.sub,
-            totalAmount: Math.round(total),
-            paymentMethod: method,
-            orderType,
-            items: cart.map(i => ({ productId: i.id, quantity: i.quantity, price: i.price })),
-        });
-    };
+    if (sale) return <div className="pos-dialog-backdrop"><section className="pos-dialog payment-dialog" role="dialog" aria-modal="true" aria-labelledby="payment-success-title"><div className="payment-success-icon"><CheckCircleRoundedIcon /></div><h2 id="payment-success-title">Payment recorded</h2><p>Sale #{sale.id} · {sale.orderNumber ? `Order ${sale.orderNumber} · ` : ''}{money(sale.totalAmount)} received</p>{receiptMutation.data && <pre className="receipt-print-area">{receiptMutation.data}</pre>}{receiptMutation.isError && <p className="hotel-error" role="alert">Receipt could not be loaded. {receiptMutation.error?.response?.data?.message || 'Try again.'}</p>}<footer className="payment-success-actions"><button className="pos-secondary-action" disabled={receiptMutation.isPending} onClick={() => receiptMutation.mutate()}>{receiptMutation.isPending ? 'Loading receipt…' : receiptMutation.data ? 'Reload receipt' : 'Load receipt'}</button>{receiptMutation.data && <button className="pos-secondary-action" onClick={() => window.print()}>Print receipt</button>}<button className="pos-primary-action" onClick={onClose}>Done</button></footer></section></div>;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-            <div className="bg-[#1a1a1a] border border-white/10 rounded-2xl w-full max-w-md mx-4 shadow-2xl">
-                {success ? (
-                    <div className="flex flex-col items-center justify-center py-16 px-8 gap-4">
-                        <CheckCircleRoundedIcon sx={{ fontSize: 72 }} className="text-emerald-400" />
-                        <p className="text-white text-2xl font-bold">Payment Successful!</p>
-                        <p className="text-gray-400">KSh {Math.round(total).toLocaleString()} received</p>
-                    </div>
-                ) : (
-                    <>
-                        {/* Header */}
-                        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
-                            <h2 className="text-white font-bold text-lg">Payment</h2>
-                            <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors">
-                                <CloseRoundedIcon />
-                            </button>
-                        </div>
-
-                        <div className="p-6 space-y-5">
-                            {/* Amount due */}
-                            <div className="bg-[#111] rounded-xl p-4 text-center">
-                                <p className="text-gray-400 text-sm mb-1">Amount Due</p>
-                                <p className="text-white text-4xl font-bold">
-                                    KSh {Math.round(total).toLocaleString()}
-                                </p>
-                            </div>
-
-                            {/* Payment method selector */}
-                            <div>
-                                <p className="text-gray-400 text-sm mb-2 font-medium">Payment Method</p>
-                                <div className="grid grid-cols-4 gap-2">
-                                    {PAYMENT_METHODS.map((pm) => {
-                                        const PmIcon = pm.Icon;
-                                        return (
-                                        <button
-                                            key={pm.value}
-                                            onClick={() => setMethod(pm.value)}
-                                            className={`flex flex-col items-center gap-1.5 py-3 rounded-xl border transition-all ${
-                                                method === pm.value
-                                                    ? 'border-violet-500 bg-violet-600/20 text-violet-400'
-                                                    : 'border-white/10 bg-[#111] text-gray-400 hover:bg-white/5'
-                                            }`}
-                                        >
-                                            <PmIcon sx={{ fontSize: 22 }} />
-                                            <span className="text-xs font-medium">{pm.label}</span>
-                                        </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-
-                            {/* Method-specific inputs */}
-                            {method === 'CASH' && (
-                                <div className="space-y-3">
-                                    <div>
-                                        <label className="text-gray-400 text-sm block mb-1">
-                                            Amount Tendered (KSh)
-                                        </label>
-                                        <input
-                                            type="number"
-                                            value={tendered}
-                                            onChange={e => setTendered(e.target.value)}
-                                            placeholder="0.00"
-                                            className="w-full h-12 bg-[#111] border border-white/10 rounded-xl px-4 text-white text-lg font-semibold focus:outline-none focus:border-violet-500"
-                                        />
-                                    </div>
-                                    {tenderedNum > 0 && (
-                                        <div className={`flex justify-between items-center rounded-xl px-4 py-3 border ${
-                                            change >= 0
-                                                ? 'bg-emerald-600/10 border-emerald-500/20'
-                                                : 'bg-red-600/10 border-red-500/20'
-                                        }`}>
-                                            <span className={change >= 0 ? 'text-emerald-400 font-medium' : 'text-red-400 font-medium'}>
-                                                {change >= 0 ? 'Change' : 'Short by'}
-                                            </span>
-                                            <span className={`font-bold text-lg ${change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                                KSh {Math.abs(change).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                                            </span>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {method === 'MPESA' && (
-                                <div className="space-y-3">
-                                    <div>
-                                        <label className="text-gray-400 text-sm block mb-1">Phone Number</label>
-                                        <input
-                                            type="tel"
-                                            value={phone}
-                                            onChange={e => setPhone(e.target.value)}
-                                            placeholder="0700 000 000"
-                                            className="w-full h-12 bg-[#111] border border-white/10 rounded-xl px-4 text-white focus:outline-none focus:border-violet-500"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="text-gray-400 text-sm block mb-1">M-Pesa Reference</label>
-                                        <input
-                                            type="text"
-                                            value={reference}
-                                            onChange={e => setReference(e.target.value)}
-                                            placeholder="QTZ123456"
-                                            className="w-full h-12 bg-[#111] border border-white/10 rounded-xl px-4 text-white focus:outline-none focus:border-violet-500"
-                                        />
-                                    </div>
-                                </div>
-                            )}
-
-                            {method === 'CARD' && (
-                                <div>
-                                    <label className="text-gray-400 text-sm block mb-1">Card Last 4 Digits</label>
-                                    <input
-                                        type="text"
-                                        value={cardLast4}
-                                        onChange={e => setCardLast4(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                                        placeholder="1234"
-                                        maxLength={4}
-                                        className="w-full h-12 bg-[#111] border border-white/10 rounded-xl px-4 text-white tracking-widest text-lg focus:outline-none focus:border-violet-500"
-                                    />
-                                </div>
-                            )}
-
-                            {method === 'MIXED' && (
-                                <div className="space-y-3">
-                                    {[
-                                        {
-                                            label: 'Method 1',
-                                            sel: mixedMethod1,
-                                            setSel: setMixedMethod1,
-                                            amt: mixedAmount1,
-                                            setAmt: setMixedAmount1,
-                                        },
-                                        {
-                                            label: 'Method 2',
-                                            sel: mixedMethod2,
-                                            setSel: setMixedMethod2,
-                                            amt: mixedAmount2,
-                                            setAmt: setMixedAmount2,
-                                        },
-                                    ].map(({ label, sel, setSel, amt, setAmt }) => (
-                                        <div key={label} className="flex gap-2">
-                                            <select
-                                                value={sel}
-                                                onChange={e => setSel(e.target.value)}
-                                                className="flex-1 h-12 bg-[#111] border border-white/10 rounded-xl px-3 text-white focus:outline-none focus:border-violet-500"
-                                            >
-                                                <option value="CASH">Cash</option>
-                                                <option value="MPESA">M-Pesa</option>
-                                                <option value="CARD">Card</option>
-                                            </select>
-                                            <input
-                                                type="number"
-                                                value={amt}
-                                                onChange={e => setAmt(e.target.value)}
-                                                placeholder="KSh"
-                                                className="flex-1 h-12 bg-[#111] border border-white/10 rounded-xl px-3 text-white focus:outline-none focus:border-violet-500"
-                                            />
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Actions */}
-                        <div className="flex gap-3 px-6 pb-6">
-                            <button
-                                onClick={onClose}
-                                className="flex-1 h-12 rounded-xl bg-[#2a2a2a] text-gray-300 hover:bg-[#333] font-medium transition-all"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleComplete}
-                                disabled={isPending || cart.length === 0}
-                                className="flex-1 h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold transition-all flex items-center justify-center gap-2"
-                            >
-                                {isPending ? (
-                                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                ) : (
-                                    <>
-                                        <CheckCircleRoundedIcon sx={{ fontSize: 20 }} />
-                                        Complete Payment
-                                    </>
-                                )}
-                            </button>
-                        </div>
-                    </>
-                )}
-            </div>
+        <div className="pos-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !paymentMutation.isPending) onClose(); }}>
+            <section className="pos-dialog payment-dialog" role="dialog" aria-modal="true" aria-labelledby="payment-title">
+                <header><div><p className="hotel-eyebrow">PAYMENT</p><h2 id="payment-title">Cash received</h2></div><button aria-label="Close" disabled={paymentMutation.isPending} onClick={onClose}><CloseRoundedIcon /></button></header>
+                <div className="payment-summary"><span>Amount due</span><strong>{money(total)}</strong><small>Cash is recorded by the Java backend. Card and M-Pesa require payment provider setup.</small></div>
+                {taxQuery.isLoading ? <p className="hotel-state">Loading tax and service rates…</p> : taxQuery.isError ? <p className="hotel-error" role="alert">Tax and service rates could not be loaded. Payment is unavailable until the backend responds.</p> : <>
+                    <label className="payment-amount-label">Amount tendered<input autoFocus inputMode="decimal" type="number" min={total} step="0.01" value={amountTendered} onChange={(event) => setAmountTendered(event.target.value)} placeholder="Enter cash received" /></label>
+                    <div className="payment-quick-amounts"><button onClick={() => setAmountTendered(total.toFixed(2))}>Exact · {money(total)}</button>{[500, 1000, 2000].map((value) => <button key={value} onClick={() => setAmountTendered(String(Math.ceil(total / value) * value))}>{money(Math.ceil(total / value) * value)}</button>)}</div>
+                    {tendered > 0 && <div className={`payment-change ${tendered >= total ? '' : 'short'}`}><span>{tendered >= total ? 'Change due' : 'Still due'}</span><strong>{money(Math.abs(tendered - total))}</strong></div>}
+                </>}
+                {paymentMutation.isError && <p className="hotel-error payment-error" role="alert"><ErrorOutlineRoundedIcon /> {paymentMutation.error?.response?.data?.message || 'Payment could not be recorded. Check the connection and try again.'}</p>}
+                <footer><button className="pos-secondary-action" disabled={paymentMutation.isPending} onClick={onClose}>Cancel</button><button className="pos-primary-action" disabled={paymentMutation.isPending || taxQuery.isLoading || taxQuery.isError || cart.length === 0 || !amountTendered || tendered < total} onClick={() => paymentMutation.mutate()}>{paymentMutation.isPending ? 'Recording…' : <><LocalAtmRoundedIcon /> Record cash · {money(total)}</>}</button></footer>
+            </section>
         </div>
     );
 }

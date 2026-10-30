@@ -8,6 +8,7 @@ import StorefrontRoundedIcon from '@mui/icons-material/StorefrontRounded';
 import {usePermissions} from "../auth/permissions";
 import NotificationBell from "./NotificationBell.jsx";
 import GlobalSearch, { useGlobalSearch } from "./GlobalSearch.jsx";
+import { logoutFromKeycloak } from "../auth/logout.js";
 
 function NavBar() {
     const {keycloak, initialized} = useKeycloak();
@@ -16,7 +17,7 @@ function NavBar() {
 
     const handleLogout =()=>{
         if (initialized && keycloak?.authenticated) {
-            keycloak.logout({redirectUri: window.location.origin})
+            logoutFromKeycloak(keycloak);
         }
     };
 
@@ -27,7 +28,7 @@ function NavBar() {
         <nav className="fixed top-0 left-0 right-0 h-16 z-50 glass-effect border-b border-border-primary shadow-sm">
             <div className="h-full max-w-7xl mx-auto px-6 flex items-center justify-between">
                 {/* Brand Logo */}
-                <Link to={ROUTES.DASHBOARD} className="flex items-center gap-2 group">
+                <Link to={ROUTES.HOME} className="flex items-center gap-2 group">
                     <StorefrontRoundedIcon className="text-brand-primary group-hover:scale-110 transition-transform duration-250" sx={{ fontSize: 32 }} />
                     <span className="text-xl font-bold bg-gradient-to-r from-brand-primary to-brand-secondary bg-clip-text text-transparent">
                         POS SYSTEM
@@ -37,28 +38,17 @@ function NavBar() {
                 {/* Navigation Links */}
                 <div className="flex items-center gap-3">
                     {!keycloak.authenticated ? (
-                        <>
-                            <button
-                                onClick={() => keycloak.login()}
-                                className="px-4 py-2 text-text-secondary hover:text-brand-primary transition-colors duration-250 font-medium"
-                            >
-                                Login
-                            </button>
-                            <Link
-                                to={ROUTES.REGISTER}
-                                className="px-4 py-2 bg-brand-primary text-white rounded-lg hover:bg-brand-hover transition-all duration-250 hover:scale-105 active:scale-95 font-medium"
-                            >
-                                Register
-                            </Link>
-                        </>
+                        <Link to={ROUTES.LOGIN} className="px-4 py-2 text-text-secondary hover:text-brand-primary transition-colors duration-250 font-medium">
+                            Login
+                        </Link>
                     ) : (
                         <>
-                            <Link
+                            {can("view_dashboard") && <Link
                                 className="px-3 py-2 text-text-secondary hover:text-brand-primary transition-all duration-250 font-medium hover:bg-bg-secondary rounded-lg"
                                 to={ROUTES.DASHBOARD}
                             >
                                 Dashboard
-                            </Link>
+                            </Link>}
                             {can("view_inventory") && (
                                 <Link
                                     className="px-3 py-2 text-text-secondary hover:text-brand-primary transition-all duration-250 font-medium hover:bg-bg-secondary rounded-lg"
@@ -99,12 +89,12 @@ function NavBar() {
                                     Users
                                 </Link>
                             )}
-                            <Link
+                            {can("manage_settings") && <Link
                                 className="px-3 py-2 text-text-secondary hover:text-brand-primary transition-all duration-250 font-medium hover:bg-bg-secondary rounded-lg"
                                 to={ROUTES.SETTINGS}
                             >
                                 Settings
-                            </Link>
+                            </Link>}
 
                             {/* Global Search trigger */}
                             <button

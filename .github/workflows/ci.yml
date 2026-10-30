@@ -1,0 +1,97 @@
+name: POS CI
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend tests and migration checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Run backend verification
+        working-directory: posBackend
+        env:
+          CORS_ALLOWED_ORIGINS: http://127.0.0.1:5173
+        run: ./mvnw -B -Dfrontend.skip=true verify
+
+  frontend:
+    name: Frontend tests, lint, build, and dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: posFrontend/package-lock.json
+
+      - name: Install locked dependencies
+        working-directory: posFrontend
+        run: npm ci
+
+      - name: Run frontend tests
+        working-directory: posFrontend
+        run: npm test
+
+      - name: Lint frontend
+        working-directory: posFrontend
+        run: npm run lint
+
+      - name: Audit production dependencies
+        working-directory: posFrontend
+        run: npm audit --audit-level=high
+
+      - name: Build frontend
+        working-directory: posFrontend
+        run: npm run build -- --outDir "$RUNNER_TEMP/pos-frontend-build" --emptyOutDir
+
+  container-build:
+    name: Build deployable images
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs:
+      - backend
+      - frontend
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Build backend image
+        run: docker build --tag nexus-pos-backend:ci --file docker/Dockerfile.backend .
+
+      - name: Build frontend image
+        run: >-
+          docker build
+          --build-arg VITE_KEYCLOAK_URL=http://localhost:8081
+          --build-arg VITE_KEYCLOAK_REALM=pos
+          --build-arg VITE_KEYCLOAK_CLIENT_ID=pos-client
+          --build-arg VITE_REDIRECT_URI=http://localhost:5173
+          --tag nexus-pos-frontend:ci
+          --file docker/Dockerfile.frontend
+          .

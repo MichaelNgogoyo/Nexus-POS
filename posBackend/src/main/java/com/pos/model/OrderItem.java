@@ -5,6 +5,8 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "order_items")
@@ -26,10 +28,19 @@ public class OrderItem {
 
     private Long productId;
     private String productName;
+    @Column(precision = 19, scale = 2)
     private BigDecimal unitPrice;
     private Integer quantity;
+    @Column(precision = 19, scale = 2)
     private BigDecimal lineTotal;
     private String notes;
+
+    @ManyToMany(fetch = FetchType.EAGER)
+    @JoinTable(name = "order_item_modifiers",
+            joinColumns = @JoinColumn(name = "order_item_id"),
+            inverseJoinColumns = @JoinColumn(name = "modifier_id"))
+    @Builder.Default
+    private List<Modifier> modifiers = new ArrayList<>();
 
     @Enumerated(EnumType.STRING)
     @Builder.Default
