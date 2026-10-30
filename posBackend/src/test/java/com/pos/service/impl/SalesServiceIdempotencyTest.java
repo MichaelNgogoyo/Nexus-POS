@@ -3,9 +3,11 @@ package com.pos.service.impl;
 import com.pos.dto.SaleItemRequest;
 import com.pos.dto.SaleRequest;
 import com.pos.dto.OrderPaymentRequest;
+import com.pos.dto.SaleReturnRequest;
 import com.pos.model.OrderType;
 import com.pos.model.SaleItem;
 import com.pos.model.Sales;
+import com.pos.model.SaleStatus;
 import com.pos.model.RestaurantOrder;
 import com.pos.model.OrderItem;
 import com.pos.model.OrderStatus;
@@ -45,11 +47,12 @@ class SalesServiceIdempotencyTest {
     @Mock private ModifierGroupRepository modifierGroupRepository;
     @Mock private RestaurantOrderRepository orderRepository;
     @Mock private KitchenOrderRepository kitchenOrderRepository;
+    @Mock private CashMovementService cashMovementService;
     private SalesService service;
 
     @BeforeEach
     void setUp() {
-        service = new SalesService(salesRepository, productRepository, stockMovementRepository, auditService, tableRepository, modifierGroupRepository, orderRepository, kitchenOrderRepository);
+        service = new SalesService(salesRepository, productRepository, stockMovementRepository, auditService, tableRepository, modifierGroupRepository, orderRepository, kitchenOrderRepository, cashMovementService);
         ReflectionTestUtils.setField(service, "taxRatePercent", new BigDecimal("16.00"));
         ReflectionTestUtils.setField(service, "serviceChargeRatePercent", new BigDecimal("5.00"));
     }
@@ -68,7 +71,7 @@ class SalesServiceIdempotencyTest {
 
         assertThat(result).isSameAs(original);
         verifyNoInteractions(productRepository, stockMovementRepository, auditService, tableRepository);
-        verifyNoInteractions(orderRepository, kitchenOrderRepository);
+        verifyNoInteractions(orderRepository, kitchenOrderRepository, cashMovementService);
         verify(salesRepository, never()).save(any());
     }
 
@@ -83,6 +86,8 @@ class SalesServiceIdempotencyTest {
                 .serviceChargeAmount(new BigDecimal("5.00")).discountAmount(BigDecimal.ZERO)
                 .total(new BigDecimal("115.00")).build();
         when(salesRepository.findByIdempotencyKey("payment-request-123456")).thenReturn(Optional.empty());
+        when(cashMovementService.lockOpenShiftForCashier("cashier")).thenReturn(
+                com.pos.model.Shift.builder().id(10L).cashierId("cashier").status(com.pos.model.ShiftStatus.OPEN).build());
         when(orderRepository.findByIdForUpdate(25L)).thenReturn(Optional.of(order));
         when(salesRepository.findByRestaurantOrderId(25L)).thenReturn(Optional.empty());
         when(productRepository.findAllById(List.of(4L))).thenReturn(List.of(product));
@@ -114,6 +119,35 @@ class SalesServiceIdempotencyTest {
     }
 
     @Test
+    void cashReturnRecordsRefundAgainstOpenRegisterShift() {
+        Sales sale = Sales.builder().id(42L).paymentMethod("CASH").status(SaleStatus.COMPLETED)
+                .totalAmount(new BigDecimal("75.50")).saleItems(List.of()).build();
+        when(salesRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(sale));
+        when(salesRepository.save(sale)).thenReturn(sale);
+
+        Sales returned = service.processReturn(42L, new SaleReturnRequest("Incorrect order", List.of(), 9L), "manager-1");
+
+        assertThat(returned.getStatus()).isEqualTo(SaleStatus.RETURNED);
+        verify(cashMovementService).recordCashRefund(9L, 42L, new BigDecimal("75.50"), "Incorrect order", "manager-1");
+        verify(auditService).log("manager-1", "SALE_RETURNED", "Sale", "42", "COMPLETED",
+                "RETURNED amount=75.50; payment=CASH; reason=Incorrect order");
+    }
+
+    @Test
+    void electronicSaleReturnIsRejectedUntilProviderRefundIntegrationExists() {
+        Sales sale = Sales.builder().id(42L).paymentMethod("CARD").status(SaleStatus.COMPLETED)
+                .totalAmount(new BigDecimal("75.50")).saleItems(List.of()).build();
+        when(salesRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(sale));
+
+        assertThatThrownBy(() -> service.processReturn(42L,
+                new SaleReturnRequest("Incorrect order", List.of(), 9L), "manager-1"))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("Non-cash refunds are unavailable");
+        verifyNoInteractions(cashMovementService);
+        verify(salesRepository, never()).save(any());
+    }
+
+    @Test
     void cashSettlementRejectsInsufficientTenderBeforeSaving() {
         OrderItem item = OrderItem.builder().productId(4L).unitPrice(new BigDecimal("100.00"))
                 .quantity(1).lineTotal(new BigDecimal("100.00")).build();
@@ -123,6 +157,8 @@ class SalesServiceIdempotencyTest {
                 .total(new BigDecimal("100.00")).build();
         when(salesRepository.findByIdempotencyKey("payment-request-123456")).thenReturn(Optional.empty());
         when(orderRepository.findByIdForUpdate(25L)).thenReturn(Optional.of(order));
+        when(cashMovementService.lockOpenShiftForCashier("cashier")).thenReturn(
+                com.pos.model.Shift.builder().id(10L).cashierId("cashier").status(com.pos.model.ShiftStatus.OPEN).build());
         when(salesRepository.findByRestaurantOrderId(25L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.settleOrderCash(25L,
@@ -221,6 +257,8 @@ class SalesServiceIdempotencyTest {
         SaleRequest request = new SaleRequest("cashier", "CASH", List.of(new SaleItemRequest(3L, 2, null, "No cream")), new BigDecimal("200.00"),
                 OrderType.TAKEAWAY, null, null, null, "Table takeaway", "cashier-attempt-12345");
         when(salesRepository.findByIdempotencyKey(request.idempotencyKey())).thenReturn(Optional.empty());
+        when(cashMovementService.lockOpenShiftForCashier("cashier-subject")).thenReturn(
+                com.pos.model.Shift.builder().id(10L).cashierId("cashier-subject").status(com.pos.model.ShiftStatus.OPEN).build());
         when(productRepository.findAllByIdForUpdate(List.of(3L))).thenReturn(List.of(product));
         when(modifierGroupRepository.findByProductId(3L)).thenReturn(List.of());
         when(orderRepository.save(any())).thenAnswer(call -> {
@@ -258,6 +296,8 @@ class SalesServiceIdempotencyTest {
         SaleRequest request = new SaleRequest("cashier", "CASH", List.of(new SaleItemRequest(3L, 2, null, null)), new BigDecimal("100.00"),
                 OrderType.TAKEAWAY, null, null, null, null, "cashier-attempt-12345");
         when(salesRepository.findByIdempotencyKey(request.idempotencyKey())).thenReturn(Optional.empty());
+        when(cashMovementService.lockOpenShiftForCashier("cashier-subject")).thenReturn(
+                com.pos.model.Shift.builder().id(10L).cashierId("cashier-subject").status(com.pos.model.ShiftStatus.OPEN).build());
         when(productRepository.findAllByIdForUpdate(List.of(3L))).thenReturn(List.of(product));
         when(modifierGroupRepository.findByProductId(3L)).thenReturn(List.of());
 

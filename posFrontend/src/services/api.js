@@ -39,6 +39,10 @@ apiClient.interceptors.response.use(
             return Promise.reject(error);
         }
 
+        if (error?.config?.suppressToastStatuses?.includes(status)) {
+            return Promise.reject(error);
+        }
+
         const message = error?.response?.data?.message || error?.message || "Request failed";
         if (status === 403) {
             emitToast("You are not allowed to perform this action.", "error");
@@ -253,9 +257,14 @@ export const advanceKitchenStatus = (id, status) => apiClient.put(`/api/kitchen/
 // ========================================
 // Shift API
 // ========================================
-export const getCurrentShift = (cashierId) => apiClient.get('/api/shifts/current', { params: { cashierId } });
+export const getCurrentShift = (cashierId) => apiClient.get('/api/shifts/current', {
+    params: { cashierId },
+    suppressToastStatuses: [404],
+});
 export const openShift = (data) => apiClient.post('/api/shifts/open', data);
 export const closeShift = (id, data) => apiClient.put(`/api/shifts/${id}/close`, data);
+export const getShiftMovements = (id) => apiClient.get(`/api/shifts/${id}/movements`);
+export const recordShiftMovement = (id, data) => apiClient.post(`/api/shifts/${id}/movements`, data);
 
 // ========================================
 // Customers API (POS)
@@ -332,6 +341,8 @@ const api = {
     getCurrentShift,
     openShift,
     closeShift,
+    getShiftMovements,
+    recordShiftMovement,
     searchCustomers,
     createCustomer,
     getAllCustomers,

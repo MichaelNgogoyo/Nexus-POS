@@ -59,6 +59,7 @@ public class SalesService {
     private final ModifierGroupRepository modifierGroupRepository;
     private final RestaurantOrderRepository orderRepository;
     private final KitchenOrderRepository kitchenOrderRepository;
+    private final CashMovementService cashMovementService;
 
     /** Tax rate as a percentage, e.g. 16 for 16% VAT. Configurable via pos.tax-rate property. */
     @Value("${pos.tax-rate:0}")
@@ -93,6 +94,7 @@ public class SalesService {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "Only cash checkout is enabled until the configured payment provider is connected");
         }
+        var cashShift = cashMovementService.lockOpenShiftForCashier(actor);
         if (request.amountTendered() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cash amount tendered is required");
         }
@@ -136,6 +138,7 @@ public class SalesService {
 
         Sales sales = Sales.builder()
                 .cashierId(actor)
+                .shiftId(cashShift.getId())
                 .paymentMethod(request.paymentMethod())
                 .status(SaleStatus.COMPLETED)
                 .build();
@@ -291,6 +294,8 @@ public class SalesService {
         Sales prior = repository.findByIdempotencyKey(request.idempotencyKey()).orElse(null);
         if (prior != null) return replayOrderPayment(prior, orderId, tendered, actorIdentities, manager);
 
+        var cashShift = cashMovementService.lockOpenShiftForCashier(actor);
+
         RestaurantOrder order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
         // A competing request may have committed while this request waited for the order lock.
@@ -347,6 +352,7 @@ public class SalesService {
 
         Sales sale = Sales.builder()
                 .cashierId(actor)
+                .shiftId(cashShift.getId())
                 .paymentMethod("CASH")
                 .status(SaleStatus.COMPLETED)
                 .orderType(order.getOrderType())
@@ -478,8 +484,8 @@ public class SalesService {
 
     @Transactional
     public Sales processReturn(Long saleId, SaleReturnRequest request, String actor) {
-        // findById uses @EntityGraph("Sales.withItems") which eagerly fetches saleItems + product
-        Sales sale = repository.findById(saleId)
+        // Lock the sale to prevent two concurrent refund requests from both restocking it.
+        Sales sale = repository.findByIdForUpdate(saleId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Sale not found"));
 
         if (SaleStatus.RETURNED.equals(sale.getStatus())) {
@@ -491,15 +497,27 @@ public class SalesService {
         if (request != null && request.itemIds() != null && !request.itemIds().isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Partial returns are not supported");
         }
+        if (request == null || request.reason() == null || request.reason().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A return reason is required");
+        }
+        if (!"CASH".equalsIgnoreCase(sale.getPaymentMethod())) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "Non-cash refunds are unavailable until the payment provider refund integration is configured");
+        }
+        if (request.cashShiftId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "An open register shift is required to record a cash refund");
+        }
 
         List<SaleItem> items = sale.getSaleItems();
         if (items == null) {
             items = new ArrayList<>();
         }
 
-        String reason = (request != null && request.reason() != null && !request.reason().isBlank())
-                ? request.reason()
-                : "Return for sale #" + saleId;
+        String reason = request.reason().trim();
+
+        // The cash outflow and returned sale status commit or roll back together.
+        cashMovementService.recordCashRefund(request.cashShiftId(), saleId, sale.getTotalAmount(), reason, actor);
 
         List<Product> productsToUpdate = new ArrayList<>();
         List<StockMovement> movements = new ArrayList<>();

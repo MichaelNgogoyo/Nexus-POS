@@ -55,6 +55,9 @@ public class Sales {
     @Column(name = "restaurant_order_id")
     private Long restaurantOrderId;
 
+    @Column(name = "shift_id")
+    private Long shiftId;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "restaurant_order_id", insertable = false, updatable = false,
             foreignKey = @ForeignKey(name = "fk_sales_restaurant_order"))

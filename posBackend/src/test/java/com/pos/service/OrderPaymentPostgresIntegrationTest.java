@@ -6,10 +6,13 @@ import com.pos.dto.RestaurantOrderRequest;
 import com.pos.model.OrderStatus;
 import com.pos.model.OrderType;
 import com.pos.model.Product;
+import com.pos.model.Shift;
+import com.pos.model.ShiftStatus;
 import com.pos.repository.KitchenOrderRepository;
 import com.pos.repository.ProductRepository;
 import com.pos.repository.RestaurantOrderRepository;
 import com.pos.repository.SalesRepository;
+import com.pos.repository.ShiftRepository;
 import com.pos.repository.StockMovementRepository;
 import com.pos.service.impl.SalesService;
 import org.junit.jupiter.api.Test;
@@ -89,6 +92,9 @@ class OrderPaymentPostgresIntegrationTest {
     @Autowired
     StockMovementRepository stockMovementRepository;
 
+    @Autowired
+    ShiftRepository shiftRepository;
+
     @Test
     void submitsUnpaidOrderConsumesStockThenSettlesCashExactlyOnce() throws Exception {
         Product product = productRepository.saveAndFlush(Product.builder()
@@ -119,6 +125,9 @@ class OrderPaymentPostgresIntegrationTest {
                     assertThat(movement.getBalanceAfter()).isEqualTo(6);
                 });
 
+        Shift openShift = shiftRepository.saveAndFlush(Shift.builder().cashierId("integration-cashier")
+                .openingBalance(new BigDecimal("50.00")).status(ShiftStatus.OPEN).build());
+
         OrderPaymentRequest paymentRequest = new OrderPaymentRequest(
                 new BigDecimal("250.00"), "integration-payment-key-0001");
         List<Future<com.pos.model.Sales>> attempts = settleConcurrently(created.order().id(), paymentRequest);
@@ -130,6 +139,7 @@ class OrderPaymentPostgresIntegrationTest {
         assertThat(sale.getRestaurantOrderId()).isEqualTo(created.order().id());
         assertThat(sale.getTotalAmount()).isEqualByComparingTo("230.00");
         assertThat(sale.getChangeGiven()).isEqualByComparingTo("20.00");
+        assertThat(sale.getShiftId()).isEqualTo(openShift.getId());
         assertThat(sale.getSaleItems()).hasSize(1);
         assertThat(orderRepository.findById(created.order().id()).orElseThrow().getStatus()).isEqualTo(OrderStatus.PAID);
 
