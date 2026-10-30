@@ -15,13 +15,13 @@ This report records the evidence gathered during the current implementation pass
 
 The repository has a working React/Vite frontend, a Spring Boot backend, PostgreSQL migrations, Keycloak integration, and local Docker builds. The core deferred-cash order path has PostgreSQL integration coverage. A GitHub Actions CI workflow and Dependabot update schedule have been added. The branch's frontend lockfile was updated after the new CI audit found high-severity advisories in the pushed lockfile.
 
-The project is **not production-ready**. The authenticated cashier journey has not completed in a browser; the local test Keycloak accounts still require first-login password changes. Electronic payments, refunds, hotel folio posting, branch isolation, a complete drawer movement ledger, restore rehearsal, and staging deployment remain unverified or unavailable. A previously committed third-party access token remains in Git history and must be revoked/rotated by its owner. No real transaction or production deployment was attempted.
+The project is **not production-ready**. A local test cashier completed Keycloak authorization-code/PKCE authentication and API role checks, but a fresh browser sign-in and complete order-to-receipt journey remain unverified. Electronic payments, refunds, hotel folio posting, branch isolation, a complete drawer movement ledger, restore rehearsal, and staging deployment remain unverified or unavailable. A previously committed third-party access token remains in Git history and must be revoked/rotated by its owner. No real transaction or production deployment was attempted.
 
 ## Requirement status
 
 | Requirement | Status | Evidence / remaining work |
 |---|---|---|
-| Staff sign-in | **Partially implemented** | Keycloak is configured and local accounts were provisioned. Role mappings were read back from the realm. The browser did not complete an authenticated API journey; first-login password changes are pending. |
+| Staff sign-in | **Partially verified** | Local cashier `nexus-test-cashier-20261029` completed Keycloak authorization-code/PKCE authentication; token audience `pos-client` and realm role `CASHIER` were verified. `GET /api/product` returned 200 (962 rows) and a manager-only low-stock endpoint returned 403 after the exception mapping fix. A clean browser login and complete cashier transaction journey remain unverified because the opened browser tab reused an existing signed-in session. |
 | Roles and permissions | **Partially implemented** | Endpoint-level role checks and authorization tests exist. A complete permission matrix, cross-branch/property scope, and API-wide privilege review remain incomplete. |
 | Product/catalog management | **Implemented, not end-to-end verified** | Existing API-backed catalog and admin screens build. Manager product changes were not exercised through an authenticated browser. |
 | Cashier order creation | **Verified at service/database test level** | PostgreSQL integration tests cover server-priced deferred orders, saved totals, stock movement, kitchen-ticket creation, and duplicate settlement safety. Authenticated browser acceptance remains blocked. |
@@ -38,7 +38,7 @@ The project is **not production-ready**. The authenticated cashier journey has n
 | API contracts and errors | **Partially implemented** | Springdoc/OpenAPI and common API patterns exist. Endpoint-by-endpoint auth/validation/pagination documentation and compatibility review remain incomplete. |
 | Responsive POS UI | **Implemented, not end-to-end verified** | React production build passes and the cashier UI was observed rendering. API requests previously returned 401, so a real signed-in order cannot yet be certified. |
 | Automated frontend tests | **Verified** | 8 frontend tests passed; lint passed with 14 existing warnings; production build passed. |
-| Automated backend tests | **Verified locally and in GitHub CI** | `CORS_ALLOWED_ORIGINS=http://127.0.0.1:5173 JAVA_HOME=/home/apperstar/.jdks/ms-21.0.11 PATH=/home/apperstar/.jdks/ms-21.0.11/bin:$PATH ./mvnw -B -Dfrontend.skip=true verify` passed: 84 tests, 0 failures/errors/skips, including disposable PostgreSQL integration tests. GitHub run `40954617597` passed backend verification, frontend checks, and both container builds. |
+| Automated backend tests | **Verified locally and in GitHub CI** | `CORS_ALLOWED_ORIGINS=http://127.0.0.1:5173 JAVA_HOME=/home/apperstar/.jdks/ms-21.0.11 PATH=/home/apperstar/.jdks/ms-21.0.11/bin:$PATH ./mvnw -B -Dfrontend.skip=true verify` passed: 84 tests, 0 failures/errors/skips, including disposable PostgreSQL integration tests. The targeted authorization test passed 4/4. Earlier GitHub run `40954617597` passed backend verification, frontend checks, and both container builds; the current local fix still requires a new CI run after push. |
 | Dependency audit | **Verified for current frontend lockfile** | `npm audit --audit-level=high` reports 0 vulnerabilities after updating the lockfile. The previous pushed lockfile had 17 high and 7 lower-severity advisories; it has been replaced. Backend dependency and container CVE scans remain to be added. |
 | Docker image builds | **Verified locally** | Frontend and backend images built successfully. The backend image compile emitted existing Lombok builder warnings. Images were not deployed or run as a production stack. |
 | Production Compose configuration | **Partially verified** | Compose syntax was parsed with placeholder environment values. Actual hostnames, credentials, TLS, volumes, and service readiness are not verified. |
@@ -59,7 +59,7 @@ The project is **not production-ready**. The authenticated cashier journey has n
 | Backend Docker image build | Passed locally; Java compilation emitted existing Lombok `@Builder` warnings. |
 | Production Compose syntax | Passed with dummy placeholder values; this does not validate real deployment settings. |
 | Local service probes | Frontend, backend actuator health, local Keycloak realm discovery, and MinIO readiness each returned HTTP 200 in this pass. |
-| Browser POS workflow | Not passed: the browser API session had HTTP 401; no order/payment/receipt was created in that attempt. |
+| Browser POS workflow | **Not verified end-to-end**: the fresh browser tab redirected to the already-authenticated admin dashboard, so it did not verify cashier sign-in in the UI. No order/payment/receipt was created in this follow-up. The separate isolated OIDC/API flow verified the cashier token and role enforcement. |
 | Security scans | Frontend npm audit only. A secret-scanning binary and backend/container vulnerability scanner were not available in the environment. The committed token noted below is a known finding, not a clean scan result. |
 
 ## Critical and high risks
@@ -75,7 +75,7 @@ The project is **not production-ready**. The authenticated cashier journey has n
 
 ## Release gates
 
-1. Complete the first-login password change for local test users, then verify a cashier token's audience/roles and complete sign-in → open shift → create order → kitchen → cash settlement → receipt → report in a browser.
+1. Use the local test cashier credentials from the secure local credential file, verify a clean browser sign-in, then complete sign-in → open shift → create order → kitchen → cash settlement → receipt → report in a browser. The protocol-level token and authorization checks now pass, but the UI workflow remains open.
 2. Complete API-wide authorization and restaurant/branch scoping before supporting multiple properties or branches.
 3. Define and implement cash movement, refund, discount, and manager-approval policies with tests.
 4. Obtain payment/PMS sandbox access and verify their pending, failure, duplicate callback, reconciliation, and reversal paths; keep unsupported methods disabled.
@@ -86,3 +86,14 @@ The project is **not production-ready**. The authenticated cashier journey has n
 9. Require explicit owner approval before production deployment or real financial operations.
 
 **Final recommendation:** keep this branch in review/testing. Do not represent the system as production-ready until the critical release gates above are passed with recorded evidence.
+
+## Follow-up verification — 2026-10-30
+
+- Reset the local-only cashier account's required first-login password and cleared its `UPDATE_PASSWORD` action. The username, test password, and role are stored outside the repository in `/home/apperstar/.local/share/nexus-pos/keycloak-cashier-reset-20261030T062026Z.txt` with owner-only permissions. Do not reuse this test account or password outside the local environment.
+- Completed an isolated Keycloak authorization-code/PKCE exchange. Verified the resulting token identifies `nexus-test-cashier-20261029`, includes audience `pos-client`, and carries realm role `CASHIER`.
+- Exercised authenticated APIs with that cashier token: `GET /api/product` returned HTTP 200; a manager-only low-stock endpoint returned HTTP 500 before the fix and HTTP 403 after it.
+- Fixed `GlobalExceptionHandler` to map Spring Security `AccessDeniedException` to HTTP 403 rather than the generic 500 response. Added the real exception advice to `ProductControllerAuthorizationTest`; all four focused tests passed.
+- Full backend verification passed locally: `CORS_ALLOWED_ORIGINS=http://127.0.0.1:5173 JAVA_HOME=/home/apperstar/.jdks/ms-21.0.11 PATH=/home/apperstar/.jdks/ms-21.0.11/bin:$PATH ./mvnw -B -Dfrontend.skip=true verify` — 84 tests, 0 failures, 0 errors, 0 skipped; disposable PostgreSQL integration tests ran successfully.
+- The in-app browser already had an authenticated session. Opening a separate tab to `/login` redirected it to the existing admin dashboard, so this does not count as a fresh browser sign-in or complete POS acceptance journey.
+- The current local catalog contains 962 products across generic retail categories. The repository's separate `seed/seed.js` utility explicitly generates Faker product names and categories such as electronics, clothing, and pharmacy. This is evidence of optional development/demo data, not a verified production catalog source. Do not run its `--clean` option against any persistent database.
+- No payment, PMS, staging, production, backup/restore, branch-isolation, or historical-token revocation actions were performed.

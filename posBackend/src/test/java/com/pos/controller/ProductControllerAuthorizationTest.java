@@ -2,6 +2,7 @@ package com.pos.controller;
 
 import com.pos.model.Product;
 import com.pos.config.auth.SecurityConfig;
+import com.pos.handler.GlobalExceptionHandler;
 import com.pos.service.impl.ProductService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -92,7 +93,7 @@ class ProductControllerAuthorizationTest {
 
     @Configuration(proxyBeanMethods = false)
     @EnableWebMvc
-    @Import({SecurityConfig.class, ProductController.class})
+    @Import({SecurityConfig.class, GlobalExceptionHandler.class, ProductController.class})
     static class TestSecurityConfiguration {
     }
 }
