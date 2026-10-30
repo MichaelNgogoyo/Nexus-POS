@@ -6,7 +6,7 @@
 
 **Branch:** `feature/hotel-pos-rebuild`
 
-**Application revision assessed:** `99b6f4c` plus the local working-tree changes described below
+**Application revision assessed:** `a66c4f0`
 **Decision:** **NO-GO for production**
 
 This report records the evidence gathered during the current implementation pass. It distinguishes code and automated-test evidence from live application behavior. A passing build does not certify production readiness.
@@ -38,11 +38,11 @@ The project is **not production-ready**. A local test cashier completed Keycloak
 | API contracts and errors | **Partially implemented** | Springdoc/OpenAPI and common API patterns exist. Endpoint-by-endpoint auth/validation/pagination documentation and compatibility review remain incomplete. |
 | Responsive POS UI | **Implemented, not end-to-end verified** | React production build passes and the cashier UI was observed rendering. API requests previously returned 401, so a real signed-in order cannot yet be certified. |
 | Automated frontend tests | **Verified** | 8 frontend tests passed; lint passed with 14 existing warnings; production build passed. |
-| Automated backend tests | **Verified locally** | The latest full `verify` passed 94 tests, 0 failures/errors/skips, including disposable PostgreSQL migration/integration tests. A new GitHub CI run for the cash ledger changes is required after push. |
+| Automated backend tests | **Verified locally and in GitHub CI** | The latest full `verify` passed 94 tests, 0 failures/errors/skips, including disposable PostgreSQL migration/integration tests. GitHub Actions run [41016446324](https://github.com/MichaelNgogoyo/Nexus-POS/actions/runs/41016446324) passed backend verification. |
 | Dependency audit | **Verified for current frontend lockfile** | `npm audit --audit-level=high` reports 0 vulnerabilities after updating the lockfile. The previous pushed lockfile had 17 high and 7 lower-severity advisories; it has been replaced. Backend dependency and container CVE scans remain to be added. |
 | Docker image builds | **Verified locally** | Frontend and backend images built successfully. The backend image compile emitted existing Lombok builder warnings. Images were not deployed or run as a production stack. |
 | Production Compose configuration | **Partially verified** | Compose syntax was parsed with placeholder environment values. Actual hostnames, credentials, TLS, volumes, and service readiness are not verified. |
-| CI/CD | **Partially implemented** | CI and weekly Dependabot workflows are pushed. The deployment workflow remains separate and production deployment is not authorized; the corrected CI run is pending. |
+| CI/CD | **Partially implemented** | GitHub Actions run [41016446324](https://github.com/MichaelNgogoyo/Nexus-POS/actions/runs/41016446324) passed frontend tests/lint/audit/build, backend verification, and both deployable image builds. No staging or production deployment has been performed; deployment configuration and recovery still require environment verification. |
 | Backup and recovery | **Missing verification** | No restore rehearsal or rollback/forward-recovery drill has been performed. |
 | Staging or production deployment | **Not performed** | No staging credentials/infrastructure were verified. Production deployment requires explicit approval and a reviewed migration/backup plan. |
 
@@ -107,4 +107,4 @@ The project is **not production-ready**. A local test cashier completed Keycloak
 - Backend `./mvnw -B -Dfrontend.skip=true verify`: 94 tests passed, 0 failures/errors/skips, including Testcontainers PostgreSQL and Flyway. A controller test covers the concurrent open-shift conflict response.
 - Frontend `npm test`: 8 passed. `npm run lint`: 0 errors, 14 warnings. `npm run build`: passed. The frontend build writes generated bundles under `posBackend/src/main/resources/static`; those generated files are excluded from the source commit.
 - The in-app browser showed the open-shift empty state with no unexpected 404 toast and no console errors. A fresh cashier session and the manager cash adjustment form have not been exercised in the browser; no financial or register records were changed.
-- These changes remain local and require a new CI run after commit/push. They do not resolve provider/PMS access, multi-branch isolation, third-party token revocation, backup restore, or staging verification.
+- The cash-ledger changes were committed as `a66c4f0` and pushed to `feature/hotel-pos-rebuild`. GitHub Actions run [41016446324](https://github.com/MichaelNgogoyo/Nexus-POS/actions/runs/41016446324) passed all jobs, including both image builds. CI reported existing Lombok `@Builder` warnings; it did not report failures. The changes do not resolve provider/PMS access, multi-branch isolation, third-party token revocation, backup restore, or staging verification.
