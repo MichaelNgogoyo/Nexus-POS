@@ -47,8 +47,7 @@ A modern point-of-sale frontend with Keycloak authentication, theme-aware Tailwi
 - Keycloak is the single authentication authority.
 - Protected pages are wrapped with `RequireAuth`.
 - API calls should be added to `src/services/api.js`, not directly in pages.
-- Base URL is read from:
-  - `VITE_API_BASE_URL` (fallback: `http://localhost:8080`)
+- API requests use the current page origin. In local development, Vite proxies `/api` to `http://localhost:8080`; in production, Nginx proxies `/api` to Spring Boot. This avoids changing API origins between environments.
 
 ## Theming and UI Standards
 

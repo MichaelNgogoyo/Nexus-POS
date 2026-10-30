@@ -3,6 +3,7 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { useKeycloak } from '@react-keycloak/web';
 import { ROUTES } from '../routes.js';
 import { usePermissions } from '../auth/permissions.js';
+import { logoutFromKeycloak } from '../auth/logout.js';
 import PointOfSaleRoundedIcon from '@mui/icons-material/PointOfSaleRounded';
 import TableRestaurantRoundedIcon from '@mui/icons-material/TableRestaurantRounded';
 import ReceiptLongRoundedIcon from '@mui/icons-material/ReceiptLongRounded';
@@ -72,7 +73,7 @@ export default function POSLayout() {
           <div className="foodpos-profile">
             <span className="foodpos-profile-avatar" aria-hidden="true">{initials || 'S'}</span>
             <span className="foodpos-profile-copy"><strong>{staffName}</strong><small>Signed in</small></span>
-            <button type="button" className="foodpos-signout" onClick={() => keycloak?.logout()} aria-label="Sign out" title="Sign out">
+            <button type="button" className="foodpos-signout" onClick={() => logoutFromKeycloak(keycloak)} aria-label="Sign out" title="Sign out">
               <LogoutRoundedIcon />
             </button>
           </div>
@@ -102,7 +103,7 @@ export default function POSLayout() {
             {can('view_dashboard') && <NavLink to={ROUTES.DASHBOARD} onClick={() => setMobileMoreOpen(false)}>
               <DashboardRoundedIcon aria-hidden="true" /><span>Manager dashboard</span>
             </NavLink>}
-            <button type="button" onClick={() => keycloak?.logout()}>
+            <button type="button" onClick={() => logoutFromKeycloak(keycloak)}>
               <LogoutRoundedIcon aria-hidden="true" /><span>Sign out</span>
             </button>
           </div>

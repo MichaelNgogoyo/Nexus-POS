@@ -8,6 +8,7 @@ import StorefrontRoundedIcon from '@mui/icons-material/StorefrontRounded';
 import {usePermissions} from "../auth/permissions";
 import NotificationBell from "./NotificationBell.jsx";
 import GlobalSearch, { useGlobalSearch } from "./GlobalSearch.jsx";
+import { logoutFromKeycloak } from "../auth/logout.js";
 
 function NavBar() {
     const {keycloak, initialized} = useKeycloak();
@@ -16,7 +17,7 @@ function NavBar() {
 
     const handleLogout =()=>{
         if (initialized && keycloak?.authenticated) {
-            keycloak.logout({redirectUri: window.location.origin})
+            logoutFromKeycloak(keycloak);
         }
     };
 
