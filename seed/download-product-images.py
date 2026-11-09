@@ -112,15 +112,15 @@ def words(value):
     }
 
 
-def choose_image(candidates, product, used_pages, allow_unmatched=False):
+def choose_image(candidates, product, used_pages, allow_unmatched=False, allow_reuse=False, allow_group_fallback=False):
     product_words = words(product["name"]) - GENERIC_TERMS
     required_group = next((group for group in FOOD_GROUPS if product_words & group), None)
     ranked = []
     for candidate in candidates:
-        if candidate["pageid"] in used_pages:
+        if not allow_reuse and candidate["pageid"] in used_pages:
             continue
         title_words = words(candidate["title"])
-        if required_group and not (title_words & required_group):
+        if required_group and not (title_words & required_group) and not allow_group_fallback:
             continue
         overlap = len(product_words & title_words)
         ranked.append((overlap, candidate))
@@ -192,6 +192,17 @@ def main():
                     if category not in category_cache:
                         category_cache[category] = search_images(CATEGORY_SEARCH.get(category, category + " food"), 50)
                     image = choose_image(category_cache[category], product, used_pages, allow_unmatched=True)
+                if image is None:
+                    image = choose_image(candidates, product, used_pages, allow_reuse=True)
+                if image is None:
+                    image = choose_image(
+                        category_cache.get(product["category"], []),
+                        product,
+                        used_pages,
+                        allow_unmatched=True,
+                        allow_reuse=True,
+                        allow_group_fallback=True,
+                    )
                 if image is None:
                     failures.append({"sku": product["sku"], "reason": "No suitable distinct image found"})
                     continue

@@ -7,6 +7,12 @@ upload_module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(upload_module)
 validate_manifest = upload_module.validate_manifest
 
+download_spec = importlib.util.spec_from_file_location(
+    "download_product_images", Path(__file__).with_name("download-product-images.py")
+)
+download_module = importlib.util.module_from_spec(download_spec)
+download_spec.loader.exec_module(download_module)
+
 
 def image_row(sku):
     return {
@@ -32,6 +38,22 @@ class ProductImageManifestTest(unittest.TestCase):
         self.assertTrue(any("Object key mismatch" in error for error in errors))
         self.assertTrue(any("Duplicate SKU" in error for error in errors))
         self.assertTrue(any("Missing attribution" in error for error in errors))
+
+    def test_category_fallback_can_reuse_a_food_photo_for_every_product(self):
+        product = {"name": "Chicken Pilau", "category": "Kenyan Classics"}
+        category_photo = {"pageid": 42, "title": "Kenyan vegetable meal"}
+        self.assertIsNone(download_module.choose_image([category_photo], product, set()))
+        self.assertEqual(
+            download_module.choose_image(
+                [category_photo],
+                product,
+                {42},
+                allow_unmatched=True,
+                allow_reuse=True,
+                allow_group_fallback=True,
+            ),
+            category_photo,
+        )
 
 
 if __name__ == "__main__":

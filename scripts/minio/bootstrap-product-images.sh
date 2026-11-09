@@ -23,7 +23,7 @@ cat > "$policy_file" <<JSON
   "Statement": [
     {
       "Effect": "Allow",
-      "Action": ["s3:ListBucket"],
+      "Action": ["s3:ListBucket", "s3:GetBucketLocation"],
       "Resource": ["arn:aws:s3:::$MINIO_BUCKET"]
     },
     {
@@ -37,13 +37,18 @@ JSON
 
 "$MC_BIN" alias set "$MC_ALIAS" "$MINIO_ENDPOINT" "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null
 "$MC_BIN" mb --ignore-existing "$MC_ALIAS/$MINIO_BUCKET" >/dev/null
-if ! "$MC_BIN" admin policy info "$MC_ALIAS" nexus-pos-product-images >/dev/null 2>&1; then
-  "$MC_BIN" admin policy create "$MC_ALIAS" nexus-pos-product-images "$policy_file" >/dev/null
+POLICY_NAME=nexus-pos-product-images-v2
+if ! "$MC_BIN" admin policy info "$MC_ALIAS" "$POLICY_NAME" >/dev/null 2>&1; then
+  "$MC_BIN" admin policy create "$MC_ALIAS" "$POLICY_NAME" "$policy_file" >/dev/null
 fi
 if ! "$MC_BIN" admin user info "$MC_ALIAS" "$MINIO_ACCESS_KEY" >/dev/null 2>&1; then
   "$MC_BIN" admin user add "$MC_ALIAS" "$MINIO_ACCESS_KEY" "$MINIO_SECRET_KEY" >/dev/null
 fi
-"$MC_BIN" admin policy attach "$MC_ALIAS" nexus-pos-product-images --user "$MINIO_ACCESS_KEY" >/dev/null
+"$MC_BIN" admin policy attach "$MC_ALIAS" "$POLICY_NAME" --user "$MINIO_ACCESS_KEY" >/dev/null
+if "$MC_BIN" admin policy info "$MC_ALIAS" nexus-pos-product-images >/dev/null 2>&1; then
+  "$MC_BIN" admin policy detach "$MC_ALIAS" nexus-pos-product-images --user "$MINIO_ACCESS_KEY" >/dev/null 2>&1 || true
+  "$MC_BIN" admin policy rm "$MC_ALIAS" nexus-pos-product-images >/dev/null 2>&1 || true
+fi
 
 # Replace the root alias credentials in the private mc config with the scoped app user.
 "$MC_BIN" alias set "$MC_ALIAS" "$MINIO_ENDPOINT" "$MINIO_ACCESS_KEY" "$MINIO_SECRET_KEY" >/dev/null

@@ -13,10 +13,11 @@ generated Compose files with owner-only permissions.
 
 On the VPS, use a verified MinIO `mc` client and a private config directory to
 run `bootstrap-product-images.sh` once. It creates the private `product-images`
-bucket and a scoped app user with only bucket listing, object read and object
-write permissions. It then replaces the alias's root credentials with the
-scoped app credentials. Do not make the bucket public or put root credentials
-in the backend service.
+bucket and a scoped app user with only bucket listing/location, object read and
+object write permissions. The bucket-location permission is needed by the
+MinIO Java SDK when it resolves the bucket region before reading an object. It
+then replaces the alias's root credentials with the scoped app credentials. Do
+not make the bucket public or put root credentials in the backend service.
 
 The image seeder uploads to keys under `catalog/` and writes an idempotent SQL
 mapping for only the `KE-FOOD-*` product SKUs. The source and license for each
