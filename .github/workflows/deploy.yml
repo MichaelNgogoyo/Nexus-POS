@@ -301,6 +301,8 @@ jobs:
                   - ALL
                 cap_add:
                   - CHOWN
+                  - SETGID
+                  - SETUID
                 security_opt:
                   - no-new-privileges:true
                 healthcheck:
@@ -400,6 +402,8 @@ jobs:
               }
             }
             EOF
+
+            chmod 600 docker-compose.core.yml docker-compose.backend.yml docker-compose.frontend.yml
 
             CORE_PROFILE_ARGS=""
             if [ "$DEPLOY_MINIO" = "true" ]; then
