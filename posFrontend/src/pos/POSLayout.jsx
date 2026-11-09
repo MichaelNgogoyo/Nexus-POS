@@ -67,6 +67,7 @@ export default function POSLayout() {
         </nav>
 
         <div className="foodpos-sidebar-bottom">
+          <a className="foodpos-credit-link" href="/image-credits.csv" target="_blank" rel="noreferrer">Food photo credits</a>
           {can('view_dashboard') && <NavLink to={ROUTES.DASHBOARD} className="foodpos-nav-link foodpos-admin-link">
             <DashboardRoundedIcon aria-hidden="true" /><span>Manager dashboard</span>
           </NavLink>}
@@ -103,6 +104,7 @@ export default function POSLayout() {
             {can('view_dashboard') && <NavLink to={ROUTES.DASHBOARD} onClick={() => setMobileMoreOpen(false)}>
               <DashboardRoundedIcon aria-hidden="true" /><span>Manager dashboard</span>
             </NavLink>}
+            <a href="/image-credits.csv" target="_blank" rel="noreferrer"><ReceiptLongRoundedIcon aria-hidden="true" /><span>Food photo credits</span></a>
             <button type="button" onClick={() => logoutFromKeycloak(keycloak)}>
               <LogoutRoundedIcon aria-hidden="true" /><span>Sign out</span>
             </button>

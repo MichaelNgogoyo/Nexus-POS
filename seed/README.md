@@ -29,3 +29,31 @@ an untrusted shell or place it in source control.
 The existing active field is the product status; available is the separate POS
 availability flag. The cost_price field is internal and excluded from JSON
 product responses.
+
+## Product photos
+
+`download-product-images.py` finds food photos on Wikimedia Commons, downloads
+JPEGs, and writes `manifest.csv` / `manifest.json` with source and license
+credits. The manifest is designed for the 200 stable `KE-FOOD-*` SKUs. It also
+creates `image-update.sql`, which updates only those SKUs and verifies every
+mapping. No product image binary or credit is fabricated.
+
+```sh
+node --input-type=module -e "import { RESTAURANT_CATALOG } from './restaurant-catalog.js'; console.log(JSON.stringify(RESTAURANT_CATALOG.flatMap(c => c.products.map(({sku,name,category}) => ({sku,name,category})))));" > /tmp/pos-food-products.json
+python3 download-product-images.py --catalog-json /tmp/pos-food-products.json --output /tmp/pos-food-images
+```
+
+Configure an `mc` alias using the restricted MinIO application credential from
+the deployment secret store. Keep the mc configuration directory private, then
+upload and verify every object:
+
+```sh
+MC_CONFIG_DIR=/tmp/pos-mc-config mc alias set nexuspos http://127.0.0.1:9000 "$MINIO_ACCESS_KEY" "$MINIO_SECRET_KEY"
+MC_CONFIG_DIR=/tmp/pos-mc-config MINIO_BUCKET=product-images \
+  python3 upload-product-images.py --mc "$(command -v mc)" /tmp/pos-food-images/manifest.json
+```
+
+Then apply `/tmp/pos-food-images/image-update.sql` to the POS database. The
+image manifest's credits should be retained with the deployment; photos may
+require attribution under their listed Creative Commons licenses. The
+catalog's stable image keys match those uploaded by this process.

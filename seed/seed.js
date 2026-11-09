@@ -94,7 +94,8 @@ async function verifySeed(client) {
       "(SELECT count(DISTINCT sku) FROM product WHERE sku LIKE 'KE-FOOD-%') AS unique_seeded_skus, " +
       "(SELECT count(*) FROM product WHERE sku LIKE 'KE-FOOD-%' AND " +
       "(name IS NULL OR description IS NULL OR category_id IS NULL OR price IS NULL " +
-      "OR cost_price IS NULL OR active IS NOT TRUE OR available IS NOT TRUE OR quantity <= 0)) AS incomplete_products, " +
+      "OR cost_price IS NULL OR active IS NOT TRUE OR available IS NOT TRUE OR quantity <= 0 " +
+      "OR imageurl IS NULL OR imageurl NOT LIKE 'catalog/KE-FOOD-%.jpg')) AS incomplete_products, " +
       "(SELECT count(*) FROM (SELECT c.id FROM category c JOIN product p ON p.category_id=c.id " +
       "WHERE c.name = ANY($1::text[]) GROUP BY c.id HAVING count(*)=20) category_counts) " +
       "AS categories_with_20_products",

@@ -15,6 +15,7 @@ test("all seeded food products have unique names and SKUs with complete KES pric
   assert.equal(new Set(products.map((product) => product.sku)).size, 200);
   for (const product of products) {
     assert.match(product.sku, /^KE-FOOD-\d{3}$/);
+    assert.equal(product.imageURL, `catalog/${product.sku}.jpg`);
     assert.ok(product.description.length > product.name.length);
     assert.ok(product.costPrice > 0 && product.costPrice < product.price);
     assert.ok(product.price >= 80 && product.price <= 3200);

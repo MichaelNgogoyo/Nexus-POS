@@ -56,6 +56,12 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Validate required deployment secrets
+        env:
+          DEPLOY_MINIO: ${{ env.DEPLOY_MINIO }}
+          MINIO_ROOT_USER: ${{ secrets.MINIO_ROOT_USER }}
+          MINIO_ROOT_PASSWORD: ${{ secrets.MINIO_ROOT_PASSWORD }}
+          MINIO_ACCESS_KEY: ${{ secrets.MINIO_ACCESS_KEY }}
+          MINIO_SECRET_KEY: ${{ secrets.MINIO_SECRET_KEY }}
         run: |
           echo "Using GHCR identity: ${{ github.actor }}"
           if [ -z "${{ github.token }}" ]; then
@@ -74,6 +80,22 @@ jobs:
           if [ -z "${{ secrets.VPS_SSH_PRIVATE_KEY }}" ]; then
             echo "VPS_SSH_PRIVATE_KEY is missing. Add it in Settings > Secrets and variables > Actions."
             exit 1
+          fi
+          if [ -z "$MINIO_ACCESS_KEY" ] || [ -z "$MINIO_SECRET_KEY" ]; then
+            echo "MINIO_ACCESS_KEY and MINIO_SECRET_KEY are required for backend deployment."
+            exit 1
+          fi
+          if [ "$DEPLOY_MINIO" = "true" ]; then
+            for name in MINIO_ROOT_USER MINIO_ROOT_PASSWORD MINIO_ACCESS_KEY MINIO_SECRET_KEY; do
+              if [ -z "${!name}" ]; then
+                echo "$name is required when deploy_minio is true."
+                exit 1
+              fi
+            done
+            if [ "$MINIO_ROOT_USER" = "$MINIO_ACCESS_KEY" ] || [ "$MINIO_ROOT_PASSWORD" = "$MINIO_SECRET_KEY" ]; then
+              echo "Use separate MinIO root and application credentials."
+              exit 1
+            fi
           fi
 
       - name: Log in to GitHub Container Registry
@@ -103,56 +125,16 @@ jobs:
           docker build -t ghcr.io/${OWNER_LC}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }} -f docker/Dockerfile.backend .
           docker push ghcr.io/${OWNER_LC}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.sha }}
 
-      - name: Mirror MinIO image to GHCR
+      - name: Build and push MinIO image
         if: ${{ (env.TARGET_SERVICE == 'all' || env.TARGET_SERVICE == 'core') && env.DEPLOY_MINIO == 'true' }}
         run: |
           set -euo pipefail
           OWNER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          DOCKERHUB_USERNAME="${{ secrets.DOCKERHUB_USERNAME || '' }}"
-          DOCKERHUB_TOKEN="${{ secrets.DOCKERHUB_TOKEN || '' }}"
-          MINIO_SOURCE_IMAGE_OVERRIDE="${{ secrets.MINIO_SOURCE_IMAGE || '' }}"
-
-          if [ -n "$DOCKERHUB_USERNAME" ] && [ -n "$DOCKERHUB_TOKEN" ]; then
-            echo "$DOCKERHUB_TOKEN" | docker login docker.io -u "$DOCKERHUB_USERNAME" --password-stdin >/dev/null 2>&1 || true
-          fi
-
-          HUB_TAGS_JSON="$(curl -fsSL "https://hub.docker.com/v2/repositories/minio/minio/tags?page_size=100" || true)"
-          LATEST_RELEASE_TAG=""
-          if [ -n "$HUB_TAGS_JSON" ]; then
-            LATEST_RELEASE_TAG=$(printf '%s' "$HUB_TAGS_JSON" | grep -oE '"name"\s*:\s*"RELEASE\.[^"]+"' | head -n1 | sed -E 's/"name"\s*:\s*"([^"]+)"/\1/' || true)
-          fi
-
-          MINIO_SOURCE_CANDIDATES=""
-          if [ -n "$MINIO_SOURCE_IMAGE_OVERRIDE" ]; then
-            MINIO_SOURCE_CANDIDATES="$MINIO_SOURCE_IMAGE_OVERRIDE"
-          fi
-          if [ -n "$LATEST_RELEASE_TAG" ]; then
-            MINIO_SOURCE_CANDIDATES="$MINIO_SOURCE_CANDIDATES docker.io/minio/minio:$LATEST_RELEASE_TAG quay.io/minio/minio:$LATEST_RELEASE_TAG"
-          fi
-          MINIO_SOURCE_CANDIDATES="$MINIO_SOURCE_CANDIDATES docker.io/minio/minio:RELEASE.2024-10-13T13-34-11Z quay.io/minio/minio:RELEASE.2024-10-13T13-34-11Z"
-
-          if [ -z "$MINIO_SOURCE_CANDIDATES" ]; then
-            echo "Unable to resolve a MinIO source image automatically."
-            echo "Set MINIO_SOURCE_IMAGE secret to a known working image (for example docker.io/minio/minio:RELEASE.xxxxx)."
-            exit 1
-          fi
-
-          MINIO_SOURCE_IMAGE=""
-          for candidate in $MINIO_SOURCE_CANDIDATES; do
-            echo "Trying MinIO source image on runner: ${candidate}"
-            if docker pull "$candidate"; then
-              MINIO_SOURCE_IMAGE="$candidate"
-              break
-            fi
-          done
-
-          if [ -z "$MINIO_SOURCE_IMAGE" ]; then
-            echo "Failed to pull any MinIO source image candidate: $MINIO_SOURCE_CANDIDATES"
-            exit 1
-          fi
-
           GHCR_MINIO_IMAGE="ghcr.io/${OWNER_LC}/${{ env.IMAGE_NAME_MINIO }}:${{ github.sha }}"
-          docker tag "${MINIO_SOURCE_IMAGE}" "${GHCR_MINIO_IMAGE}"
+          docker build \
+            --build-arg MINIO_VERSION=RELEASE.2025-10-15T17-29-55Z \
+            -t "${GHCR_MINIO_IMAGE}" \
+            -f docker/Dockerfile.minio .
           docker push "${GHCR_MINIO_IMAGE}"
 
       - name: Verify SSH access to VPS
@@ -193,6 +175,7 @@ jobs:
           key: ${{ env.VPS_SSH_PRIVATE_KEY }}
           script: |
             set -euo pipefail
+            umask 077
             mkdir -p /opt/pos
             cd /opt/pos
 
@@ -213,13 +196,13 @@ jobs:
             export KEYCLOAK_CLIENT_SECRET="${{ secrets.KEYCLOAK_CLIENT_SECRET || 'CHANGE_ME_FROM_KEYCLOAK_ADMIN' }}"
             export KEYCLOAK_REDIRECT_URI="https://${APP_DOMAIN}"
             export MINIO_ENDPOINT="${{ secrets.MINIO_ENDPOINT || 'http://minio:9000' }}"
-            export MINIO_ACCESS_KEY="${{ secrets.MINIO_ACCESS_KEY || 'minioadmin' }}"
-            export MINIO_SECRET_KEY="${{ secrets.MINIO_SECRET_KEY || 'CHANGE_ME_IN_PRODUCTION' }}"
+            export MINIO_ACCESS_KEY="${{ secrets.MINIO_ACCESS_KEY }}"
+            export MINIO_SECRET_KEY="${{ secrets.MINIO_SECRET_KEY }}"
             export MINIO_BUCKET="${{ secrets.MINIO_BUCKET || 'product-images' }}"
             export KEYCLOAK_ADMIN="${{ secrets.KEYCLOAK_ADMIN || 'admin' }}"
             export KEYCLOAK_ADMIN_PASSWORD="${{ secrets.KEYCLOAK_ADMIN_PASSWORD || 'CHANGE_ME_KEYCLOAK_ADMIN_PASSWORD' }}"
-            export MINIO_ROOT_USER="${{ secrets.MINIO_ROOT_USER || 'minioadmin' }}"
-            export MINIO_ROOT_PASSWORD="${{ secrets.MINIO_ROOT_PASSWORD || 'CHANGE_ME_MINIO_ROOT_PASSWORD' }}"
+            export MINIO_ROOT_USER="${{ secrets.MINIO_ROOT_USER }}"
+            export MINIO_ROOT_PASSWORD="${{ secrets.MINIO_ROOT_PASSWORD }}"
             export MINIO_IMAGE_OVERRIDE="${{ secrets.MINIO_IMAGE || '' }}"
             export DOCKERHUB_USERNAME="${{ secrets.DOCKERHUB_USERNAME || '' }}"
             export DOCKERHUB_TOKEN="${{ secrets.DOCKERHUB_TOKEN || '' }}"
@@ -304,6 +287,8 @@ jobs:
                 image: ${MINIO_IMAGE}
                 profiles: ["minio"]
                 command: server /data --console-address ":9001"
+                ports:
+                  - "127.0.0.1:9000:9000"
                 environment:
                   MINIO_ROOT_USER: ${MINIO_ROOT_USER}
                   MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
@@ -312,6 +297,18 @@ jobs:
                   - pos-shared
                 volumes:
                   - minio-data:/data
+                cap_drop:
+                  - ALL
+                cap_add:
+                  - CHOWN
+                security_opt:
+                  - no-new-privileges:true
+                healthcheck:
+                  test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:9000/minio/health/ready"]
+                  interval: 10s
+                  timeout: 5s
+                  retries: 12
+                  start_period: 20s
 
             volumes:
               postgres-data:

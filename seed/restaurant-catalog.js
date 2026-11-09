@@ -237,10 +237,11 @@ export const RESTAURANT_CATALOG = definitions.map((category, categoryIndex) => (
   name: category.name,
   products: category.items.map(([name, price], itemIndex) => {
     const globalIndex = categoryIndex * 20 + itemIndex + 1;
+    const sku = `KE-FOOD-${String(globalIndex).padStart(3, "0")}`;
     return {
       name,
       description: `${name}: ${category.descriptions[itemIndex % category.descriptions.length]}`,
-      sku: `KE-FOOD-${String(globalIndex).padStart(3, "0")}`,
+      sku,
       category: category.name,
       price,
       costPrice: roundToFive(price * category.costRatio),
@@ -251,7 +252,7 @@ export const RESTAURANT_CATALOG = definitions.map((category, categoryIndex) => (
       lowStockThreshold: 5,
       reorderLevel: 5,
       reorderQuantity: 20,
-      imageURL: null,
+      imageURL: `catalog/${sku}.jpg`,
       status: "ACTIVE",
     };
   }),
@@ -274,7 +275,7 @@ export function validateRestaurantCatalog(catalog = RESTAURANT_CATALOG) {
   if (new Set(skus).size !== skus.length) errors.push("Product SKUs must be unique.");
 
   for (const product of products) {
-    if (!product.name || !product.description || !product.category || !product.sku) {
+    if (!product.name || !product.description || !product.category || !product.sku || product.imageURL !== `catalog/${product.sku}.jpg`) {
       errors.push(`Incomplete catalog fields for SKU ${product.sku || "(missing)"}.`);
     }
     if (!Number.isFinite(product.price) || product.price <= 0 || product.costPrice <= 0 || product.costPrice >= product.price) {

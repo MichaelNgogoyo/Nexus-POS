@@ -59,6 +59,8 @@
 .foodpos-nav-link:hover { background: #f4f3f0; color: var(--food-ink); }
 .foodpos-nav-link.active { background: #151515; color: #fff; }
 .foodpos-sidebar-bottom { display: grid; gap: 15px; }
+.foodpos-credit-link { width: fit-content; padding: 0 5px; color: var(--food-muted); font-size: 10px; text-decoration: underline; text-underline-offset: 2px; }
+.foodpos-credit-link:hover,.foodpos-credit-link:focus-visible { color: #472537; }
 .foodpos-profile { display: flex; min-width: 0; align-items: center; gap: 9px; padding: 13px 5px 0; border-top: 1px solid #efeee9; }
 .foodpos-profile-avatar,.foodpos-staff-avatar { display: grid; flex: 0 0 auto; width: 35px; height: 35px; place-items: center; border-radius: 12px; background: #f2d9e7; color: #472537; font-size: 12px; font-weight: 800; }
 .foodpos-profile-copy { display: grid; min-width: 0; flex: 1; gap: 3px; }

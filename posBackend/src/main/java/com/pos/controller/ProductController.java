@@ -117,8 +117,12 @@ public class ProductController {
 
     @GetMapping("/{id}/image")
     public ResponseEntity<byte[]> getProductImageById(@PathVariable int id) throws Exception {
-        byte[] imageFile = productService.getImageByProductId(id);
         Product product = productService.getProductById(id);
+        if (product == null || product.getImageURL() == null || product.getImageURL().isBlank()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        byte[] imageFile = productService.getImageByProductId(id);
         String guessedType = URLConnection.guessContentTypeFromName(product.getImageURL());
 
         return ResponseEntity.ok()

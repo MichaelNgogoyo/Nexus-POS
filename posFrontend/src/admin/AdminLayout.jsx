@@ -79,6 +79,9 @@ export default function AdminLayout() {
               <SideLink to={ROUTES.SETTINGS} icon={SettingsRoundedIcon} iconClass="text-text-muted">Settings</SideLink>
             </div>}
           </nav>
+          <a href="/image-credits.csv" target="_blank" rel="noreferrer" className="px-5 py-3 text-xs text-text-muted hover:text-brand-primary">
+            Food photo credits
+          </a>
         </aside>
 
         <main className="admin-content flex-grow ml-64 p-6 bg-bg-primary min-h-[calc(100vh-4rem)]">

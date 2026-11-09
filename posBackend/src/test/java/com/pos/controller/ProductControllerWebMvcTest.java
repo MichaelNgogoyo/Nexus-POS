@@ -24,6 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -117,5 +118,28 @@ class ProductControllerWebMvcTest {
 
         verify(productService).getImageByProductId(9);
         verify(productService).getProductById(9L);
+    }
+
+    @Test
+    void getProductImageReturnsNotFoundWhenProductHasNoImage() throws Exception {
+        Product product = Product.builder().id(127L).imageURL(null).build();
+        when(productService.getProductById(127L)).thenReturn(product);
+
+        mockMvc.perform(get("/api/product/127/image"))
+                .andExpect(status().isNotFound());
+
+        verify(productService).getProductById(127L);
+        verify(productService, never()).getImageByProductId(127);
+    }
+
+    @Test
+    void getProductImageReturnsNotFoundWhenProductDoesNotExist() throws Exception {
+        when(productService.getProductById(999L)).thenReturn(null);
+
+        mockMvc.perform(get("/api/product/999/image"))
+                .andExpect(status().isNotFound());
+
+        verify(productService).getProductById(999L);
+        verify(productService, never()).getImageByProductId(999);
     }
 }
