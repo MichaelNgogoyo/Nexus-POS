@@ -1,263 +1,182 @@
 /**
- * POS Product Seeder
- * ──────────────────
- * Generates PRODUCT_COUNT fake products, fetches images from Unsplash (or
- * picsum.photos as fallback), uploads them to MinIO, and inserts the products
- * directly into PostgreSQL.
+ * Idempotently seed the configured POS PostgreSQL database with the curated
+ * Kenyan restaurant demo catalog. No unrelated rows are deleted or modified.
  *
- * Usage:
- *   cp .env.example .env          # fill in your values
- *   npm install
- *   npm run seed                  # insert products
- *   npm run seed -- --clean       # wipe products first, then re-seed
+ * Usage: DB_URL=postgresql://... npm run seed -- --apply
+ * Without --apply, the script validates the catalog and reports the target DB.
  */
 
-import { faker } from "@faker-js/faker";
-import { Client as MinioClient } from "minio";
 import pg from "pg";
-import fetch from "node-fetch";
 import * as dotenv from "dotenv";
-import { Readable } from "stream";
-import { argv } from "process";
+import { argv } from "node:process";
+import { RESTAURANT_CATALOG, validateRestaurantCatalog } from "./restaurant-catalog.js";
 
 dotenv.config();
 
-// ── Config ────────────────────────────────────────────────────────────────────
+const APPLY = argv.includes("--apply");
+const DB_URL = process.env.DB_URL;
+const CATALOG = RESTAURANT_CATALOG;
 
-const PRODUCT_COUNT = parseInt(process.env.PRODUCT_COUNT ?? "1000", 10);
-const CONCURRENCY   = parseInt(process.env.CONCURRENCY  ?? "8",    10);
-const CLEAN         = argv.includes("--clean");
-
-const DB_URL           = process.env.DB_URL           ?? "postgresql://postgres:postgres@localhost:5432/pos_db";
-const MINIO_ENDPOINT   = process.env.MINIO_ENDPOINT   ?? "localhost";
-const MINIO_PORT       = parseInt(process.env.MINIO_PORT ?? "9000", 10);
-const MINIO_ACCESS_KEY = process.env.MINIO_ACCESS_KEY ?? "minioadmin";
-const MINIO_SECRET_KEY = process.env.MINIO_SECRET_KEY ?? "minioadmin";
-const MINIO_BUCKET     = process.env.MINIO_BUCKET     ?? "product-images";
-const MINIO_USE_SSL    = process.env.MINIO_USE_SSL    === "true";
-const UNSPLASH_KEY     = process.env.UNSPLASH_ACCESS_KEY ?? "";
-
-// ── Product categories with matching image keywords ───────────────────────────
-
-const CATEGORIES = [
-  { name: "Electronics",  keywords: ["electronics", "gadget", "technology", "computer"] },
-  { name: "Beverages",    keywords: ["coffee", "drinks", "juice", "beverage"] },
-  { name: "Dairy",        keywords: ["milk", "cheese", "yogurt", "dairy"] },
-  { name: "Bakery",       keywords: ["bread", "bakery", "cake", "pastry"] },
-  { name: "Produce",      keywords: ["vegetables", "fruit", "farm", "fresh food"] },
-  { name: "Meat",         keywords: ["meat", "butcher", "protein", "steak"] },
-  { name: "Clothing",     keywords: ["fashion", "clothing", "apparel", "shirt"] },
-  { name: "Stationery",   keywords: ["stationery", "office supplies", "notebook", "pen"] },
-  { name: "Household",    keywords: ["home", "household", "cleaning", "kitchen"] },
-  { name: "Pharmacy",     keywords: ["medicine", "health", "pharmacy", "vitamins"] },
-];
-
-// ── Clients ───────────────────────────────────────────────────────────────────
-
-const pool = new pg.Pool({ connectionString: DB_URL });
-
-const minio = new MinioClient({
-  endPoint: MINIO_ENDPOINT,
-  port:     MINIO_PORT,
-  useSSL:   MINIO_USE_SSL,
-  accessKey: MINIO_ACCESS_KEY,
-  secretKey: MINIO_SECRET_KEY,
-});
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-/** Run tasks with a max concurrency cap */
-async function withConcurrency(items, concurrency, task) {
-  const results = [];
-  let index = 0;
-
-  async function worker() {
-    while (index < items.length) {
-      const i = index++;
-      results[i] = await task(items[i], i);
-    }
+function maskedDatabaseTarget(value) {
+  try {
+    const target = new URL(value);
+    return target.hostname + ":" + (target.port || "5432") + target.pathname;
+  } catch {
+    return "(unparseable DB_URL)";
   }
-
-  await Promise.all(Array.from({ length: concurrency }, worker));
-  return results;
 }
 
-/** Fetch an image buffer from Unsplash or picsum fallback */
-async function fetchImage(keywords) {
-  const keyword = keywords[Math.floor(Math.random() * keywords.length)];
-
-  let url;
-  if (UNSPLASH_KEY) {
-    // Official Unsplash API — returns JSON with image urls
-    const apiUrl = `https://api.unsplash.com/photos/random?query=${encodeURIComponent(keyword)}&orientation=squarish&client_id=${UNSPLASH_KEY}`;
-    const res = await fetch(apiUrl, { redirect: "follow" });
-    if (!res.ok) throw new Error(`Unsplash API error ${res.status}`);
-    const json = await res.json();
-    url = json.urls?.regular ?? json.urls?.full;
-    if (!url) throw new Error("No URL in Unsplash response");
-  } else {
-    // picsum.photos — totally free, no key needed
-    const seed = Math.floor(Math.random() * 1000);
-    url = `https://picsum.photos/seed/${seed}/800/800`;
-  }
-
-  const imgRes = await fetch(url, { redirect: "follow" });
-  if (!imgRes.ok) throw new Error(`Image fetch failed: ${imgRes.status} from ${url}`);
-
-  const buffer = Buffer.from(await imgRes.arrayBuffer());
-  const contentType = imgRes.headers.get("content-type") ?? "image/jpeg";
-  return { buffer, contentType };
+function assertCatalogIsValid() {
+  const errors = validateRestaurantCatalog(CATALOG);
+  if (errors.length) throw new Error("Catalog validation failed:\n- " + errors.join("\n- "));
 }
 
-/** Upload buffer to MinIO; returns the object name (stored as imageURL in DB) */
-async function uploadToMinio(buffer, contentType) {
-  const ext = contentType.includes("png") ? ".png" : ".jpg";
-  const objectName = `${faker.string.uuid()}${ext}`;
-
-  await minio.putObject(
-    MINIO_BUCKET,
-    objectName,
-    Readable.from(buffer),
-    buffer.length,
-    { "Content-Type": contentType }
+async function assertSchema(client) {
+  const result = await client.query(
+    "SELECT column_name FROM information_schema.columns " +
+      "WHERE table_schema = current_schema() AND table_name = 'product' " +
+      "AND column_name = ANY($1::text[])",
+    [["description", "cost_price", "available"]],
   );
-
-  return objectName;
-}
-
-/** Ensure MinIO bucket exists */
-async function ensureBucket() {
-  const exists = await minio.bucketExists(MINIO_BUCKET);
-  if (!exists) {
-    await minio.makeBucket(MINIO_BUCKET, "us-east-1");
-    console.log(`  ✓ Created MinIO bucket: ${MINIO_BUCKET}`);
+  const columns = new Set(result.rows.map((row) => row.column_name));
+  const missing = ["description", "cost_price", "available"].filter((column) => !columns.has(column));
+  if (missing.length) {
+    throw new Error("Product catalog migration is missing columns: " + missing.join(", ") + ". Deploy the backend migration first.");
   }
 }
 
-/** Upsert categories, return map of name → id */
-async function upsertCategories(client) {
-  const map = {};
-  for (const cat of CATEGORIES) {
-    const res = await client.query(
-      `INSERT INTO category (name, product_count)
-       VALUES ($1, 0)
-       ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
-       RETURNING id`,
-      [cat.name]
-    );
-    map[cat.name] = res.rows[0].id;
-  }
-  return map;
+async function getDatabaseSummary(client) {
+  const result = await client.query(
+    "SELECT current_database() AS database_name, current_schema() AS schema_name, " +
+      "(SELECT count(*) FROM category) AS categories, " +
+      "(SELECT count(*) FROM product) AS products, " +
+      "(SELECT count(*) FROM product WHERE sku LIKE 'KE-FOOD-%') AS seeded_products",
+  );
+  return result.rows[0];
 }
 
-/** Generate a random SKU */
-function makeSku(index) {
-  return `PRD-${String(index).padStart(6, "0")}`;
+async function upsertCategory(client, name) {
+  const result = await client.query(
+    "INSERT INTO category (name, product_count) VALUES ($1, 0) " +
+      "ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING id",
+    [name],
+  );
+  return result.rows[0].id;
 }
 
-/** Generate a random EAN-13-style barcode */
-function makeBarcode() {
-  const digits = Array.from({ length: 12 }, () => Math.floor(Math.random() * 10));
-  // Compute check digit
-  const check =
-    (10 -
-      (digits.reduce((sum, d, i) => sum + d * (i % 2 === 0 ? 1 : 3), 0) % 10)) %
-    10;
-  return [...digits, check].join("");
+async function upsertProduct(client, product, categoryId) {
+  await client.query(
+    "INSERT INTO product " +
+      "(name, description, price, cost_price, active, available, imageurl, discount, quantity, " +
+      "low_stock_threshold, reorder_level, reorder_quantity, sku, category_id, created_at, updated_at) " +
+      "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,now(),now()) " +
+      "ON CONFLICT (sku) DO UPDATE SET " +
+      "name=EXCLUDED.name, description=EXCLUDED.description, price=EXCLUDED.price, " +
+      "cost_price=EXCLUDED.cost_price, active=EXCLUDED.active, available=EXCLUDED.available, " +
+      "imageurl=EXCLUDED.imageurl, discount=EXCLUDED.discount, quantity=EXCLUDED.quantity, " +
+      "low_stock_threshold=EXCLUDED.low_stock_threshold, reorder_level=EXCLUDED.reorder_level, " +
+      "reorder_quantity=EXCLUDED.reorder_quantity, category_id=EXCLUDED.category_id, updated_at=now()",
+    [
+      product.name, product.description, product.price, product.costPrice, product.active,
+      product.available, product.imageURL, product.discount, product.quantity,
+      product.lowStockThreshold, product.reorderLevel, product.reorderQuantity,
+      product.sku, categoryId,
+    ],
+  );
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────────
+async function verifySeed(client) {
+  const result = await client.query(
+    "SELECT (SELECT count(*) FROM category) AS total_categories, " +
+      "(SELECT count(*) FROM product) AS total_products, " +
+      "(SELECT count(*) FROM category WHERE name = ANY($1::text[])) AS seeded_categories, " +
+      "(SELECT count(*) FROM product WHERE sku LIKE 'KE-FOOD-%') AS seeded_products, " +
+      "(SELECT count(DISTINCT sku) FROM product WHERE sku LIKE 'KE-FOOD-%') AS unique_seeded_skus, " +
+      "(SELECT count(*) FROM product WHERE sku LIKE 'KE-FOOD-%' AND " +
+      "(name IS NULL OR description IS NULL OR category_id IS NULL OR price IS NULL " +
+      "OR cost_price IS NULL OR active IS NOT TRUE OR available IS NOT TRUE OR quantity <= 0)) AS incomplete_products, " +
+      "(SELECT count(*) FROM (SELECT c.id FROM category c JOIN product p ON p.category_id=c.id " +
+      "WHERE c.name = ANY($1::text[]) GROUP BY c.id HAVING count(*)=20) category_counts) " +
+      "AS categories_with_20_products",
+    [CATALOG.map((category) => category.name)],
+  );
+  const counts = result.rows[0];
+  const valid = Number(counts.seeded_categories) === 10
+    && Number(counts.seeded_products) === 200
+    && Number(counts.unique_seeded_skus) === 200
+    && Number(counts.incomplete_products) === 0
+    && Number(counts.categories_with_20_products) === 10;
+  if (!valid) throw new Error("Database verification failed: " + JSON.stringify(counts));
+  return counts;
+}
 
 async function main() {
-  console.log("╔══════════════════════════════════════════════╗");
-  console.log("║           POS Product Seeder                 ║");
-  console.log("╚══════════════════════════════════════════════╝");
-  console.log(`  Products    : ${PRODUCT_COUNT}`);
-  console.log(`  Concurrency : ${CONCURRENCY}`);
-  console.log(`  Images      : ${UNSPLASH_KEY ? "Unsplash API" : "picsum.photos (free fallback)"}`);
-  console.log(`  MinIO       : ${MINIO_ENDPOINT}:${MINIO_PORT} → ${MINIO_BUCKET}`);
-  console.log(`  Database    : ${DB_URL.replace(/:\/\/[^@]+@/, "://<credentials>@")}`);
-  console.log();
+  const errors = validateRestaurantCatalog(CATALOG);
+  if (errors.length) throw new Error("Catalog validation failed:\n- " + errors.join("\n- "));
+  if (!DB_URL) {
+    throw new Error("Set DB_URL to the intended POS PostgreSQL database. The script has no fallback credentials.");
+  }
 
+  const pool = new pg.Pool({ connectionString: DB_URL, max: 2, connectionTimeoutMillis: 10000 });
   const client = await pool.connect();
-
   try {
-    await ensureBucket();
-
-    if (CLEAN) {
-      console.log("  ⚠  --clean: deleting all existing products…");
-      await client.query("DELETE FROM product");
-      await client.query("UPDATE category SET product_count = 0");
-      console.log("  ✓  Cleared.\n");
+    await assertSchema(client);
+    const before = await getDatabaseSummary(client);
+    console.log("Target database: " + before.database_name + "/" + before.schema_name +
+      " (" + maskedDatabaseTarget(DB_URL) + ")");
+    console.log("Before: " + before.categories + " categories, " + before.products +
+      " products; " + before.seeded_products + " rows in the KE-FOOD seed namespace.");
+    console.log("Catalog: " + CATALOG.length + " categories and " +
+      CATALOG.reduce((total, category) => total + category.products.length, 0) + " products.");
+    if (!APPLY) {
+      console.log("Dry run only. Pass --apply to upsert the demo restaurant catalog.");
+      return;
     }
 
-    console.log("  Upserting categories…");
-    const categoryMap = await upsertCategories(client);
-    console.log(`  ✓  ${Object.keys(categoryMap).length} categories ready.\n`);
-
-    // Build the list of product indices to seed
-    const indices = Array.from({ length: PRODUCT_COUNT }, (_, i) => i + 1);
-
-    let done = 0;
-    let failed = 0;
-
-    await withConcurrency(indices, CONCURRENCY, async (idx) => {
-      const cat = CATEGORIES[idx % CATEGORIES.length];
-      const categoryId = categoryMap[cat.name];
-
-      const name     = faker.commerce.productName();
-      const price    = parseFloat(faker.commerce.price({ min: 50, max: 50000, dec: 2 }));
-      const quantity = faker.number.int({ min: 0, max: 500 });
-      const discount = faker.helpers.arrayElement([0, 0, 0, 5, 10, 15, 20, 25]);
-      const active   = faker.datatype.boolean({ probability: 0.85 });
-      const lowStock = faker.number.int({ min: 3, max: 15 });
-      const sku      = makeSku(idx);
-      const barcode  = makeBarcode();
-
-      try {
-        // 1. Fetch image
-        const { buffer, contentType } = await fetchImage(cat.keywords);
-
-        // 2. Upload to MinIO
-        const imageURL = await uploadToMinio(buffer, contentType);
-
-        // 3. Insert product
-        await client.query(
-          `INSERT INTO product
-             (name, price, active, imageurl, discount, quantity,
-              low_stock_threshold, sku, barcode, category_id)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-           ON CONFLICT (sku) DO NOTHING`,
-          [name, price, active, imageURL, discount, quantity,
-           lowStock, sku, barcode, categoryId]
-        );
-
-        // 4. Bump category product count
-        await client.query(
-          "UPDATE category SET product_count = product_count + 1 WHERE id = $1",
-          [categoryId]
-        );
-
-        done++;
-        if (done % 50 === 0 || done === PRODUCT_COUNT) {
-          const pct = ((done / PRODUCT_COUNT) * 100).toFixed(1);
-          process.stdout.write(`\r  ⏳ ${done}/${PRODUCT_COUNT} (${pct}%)  `);
-        }
-      } catch (err) {
-        failed++;
-        // Non-fatal: log and continue
-        process.stderr.write(`\n  ✗ [${idx}] ${name}: ${err.message}\n`);
+    await client.query("BEGIN");
+    try {
+      const categoryIds = new Map();
+      for (const category of CATALOG) {
+        categoryIds.set(category.name, await upsertCategory(client, category.name));
       }
-    });
+      for (const category of CATALOG) {
+        const categoryId = categoryIds.get(category.name);
+        for (const product of category.products) await upsertProduct(client, product, categoryId);
+      }
+      await client.query(
+        "UPDATE category c SET product_count = " +
+          "(SELECT count(*) FROM product p WHERE p.category_id = c.id) WHERE c.id = ANY($1::bigint[])",
+        [[...categoryIds.values()]],
+      );
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    }
 
-    console.log(`\n\n  ✅ Done! Inserted: ${done}  Failed: ${failed}`);
+    const counts = await verifySeed(client);
+    console.log("Verified: " + counts.seeded_categories + " seeded categories, " +
+      counts.seeded_products + " products, " + counts.unique_seeded_skus +
+      " unique SKUs, " + counts.incomplete_products + " incomplete rows.");
+    console.log("Database totals: " + counts.total_categories + " categories, " +
+      counts.total_products + " products.");
+    console.log("Category product counts:");
+    const categoryCounts = await client.query(
+      "SELECT c.name, c.product_count, count(p.id) AS actual_products " +
+        "FROM category c LEFT JOIN product p ON p.category_id=c.id " +
+        "WHERE c.name = ANY($1::text[]) GROUP BY c.id ORDER BY c.name",
+      [CATALOG.map((category) => category.name)],
+    );
+    for (const row of categoryCounts.rows) {
+      console.log("- " + row.name + ": " + row.product_count + " recorded / " + row.actual_products + " actual");
+    }
   } finally {
     client.release();
     await pool.end();
   }
 }
 
-main().catch((err) => {
-  console.error("\n  ❌ Fatal:", err.message);
-  process.exit(1);
+main().catch((error) => {
+  console.error("Seeding failed: " + error.message);
+  process.exitCode = 1;
 });

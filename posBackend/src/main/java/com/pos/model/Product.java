@@ -26,9 +26,18 @@ public class Product {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     private String name;
+    @Column(length = 500)
+    private String description;
     @Column(precision = 19, scale = 2)
     private BigDecimal price;
+    /** Internal purchasing cost; never expose this value in public product API responses. */
+    @JsonIgnore
+    @Column(name = "cost_price", precision = 19, scale = 2)
+    private BigDecimal costPrice;
     private boolean active;
+    @Builder.Default
+    @Column(nullable = false)
+    private boolean available = true;
     private String imageURL;
 
     private double discount;
