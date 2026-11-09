@@ -367,8 +367,24 @@ END $$;
     END IF;
 END $$;
 
+-- CREATE TABLE IF NOT EXISTS does not add columns to legacy tables that already exist.
+-- Keep the order/sale relationship columns present before adding their constraints below.
+ALTER TABLE restaurant_orders ADD COLUMN IF NOT EXISTS sale_id bigint;
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS restaurant_order_id bigint;
+
     DO $$ BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_restaurant_orders_sale' AND conrelid = to_regclass(current_schema() || '.restaurant_orders')) THEN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = 'restaurant_orders'
+          AND column_name = 'sale_id'
+    ) AND NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'fk_restaurant_orders_sale'
+          AND conrelid = to_regclass(current_schema() || '.restaurant_orders')
+    ) THEN
         ALTER TABLE restaurant_orders ADD CONSTRAINT fk_restaurant_orders_sale foreign key (sale_id) references sales;
     END IF;
 END $$;
@@ -404,7 +420,18 @@ END $$;
 END $$;
 
     DO $$ BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_sales_restaurant_order' AND conrelid = to_regclass(current_schema() || '.sales')) THEN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = 'sales'
+          AND column_name = 'restaurant_order_id'
+    ) AND NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'fk_sales_restaurant_order'
+          AND conrelid = to_regclass(current_schema() || '.sales')
+    ) THEN
         ALTER TABLE sales ADD CONSTRAINT fk_sales_restaurant_order foreign key (restaurant_order_id) references restaurant_orders;
     END IF;
 END $$;

@@ -34,7 +34,7 @@ The backend remains the authority for API access through Spring Security role ch
 
 Use [`scripts/keycloak/provision_staff.py`](../scripts/keycloak/provision_staff.py) to create staff accounts in the `pos` realm and assign application roles. It creates missing canonical POS roles (`ADMIN`, `MANAGER`, `CASHIER`, `KITCHEN`, `STOCK_CLERK`, and `PROCUREMENT_OFFICER`), generates a one-time temporary password per new account, and requires each new user to change that password at first sign-in. It never assigns Keycloak `realm-management` roles. Existing accounts are left unchanged.
 
-Create a tab-separated file with these five columns: `username`, `email`, `first name`, `last name`, and role(s). Use one role for each staff member unless the person truly needs multiple role permissions. For example:
+Create a CSV or tab-separated file with these five columns: `username`, `email`, `first name`, `last name`, and role(s). Use one role for each staff member unless the person truly needs multiple role permissions. For example:
 
 ```text
 username	email	first name	last name	roles
@@ -49,9 +49,11 @@ Save it locally (for example, as `staff.tsv`) and restrict access because it con
 chmod 600 staff.tsv
 python3 scripts/keycloak/provision_staff.py staff.tsv
 python3 scripts/keycloak/provision_staff.py staff.tsv --apply
+# Or use the sample CSV roster:
+python3 scripts/keycloak/provision_staff.py scripts/keycloak/test_staff.csv --url https://nexuspos.apperstar.com/auth
 ```
 
-The first command performs an authenticated dry run. The second asks for the Keycloak admin password without echoing it, shows the planned changes, and requires typing `CREATE pos` before it writes anything. The default Keycloak URL is `http://localhost:8081`; override it with `--url https://keycloak.example.com`. Use `--realm` and `--admin-realm` if your deployment uses different realm names. The script defaults the admin username to `admin`; it prompts if that account name is different. Do not put the admin password in the command line or in the TSV.
+CSV files use commas; TSV files use tabs. The first command performs an authenticated dry run. The second asks for the Keycloak admin password without echoing it, shows the planned changes, and requires typing `CREATE pos` before it writes anything. The default Keycloak URL is `http://localhost:8081`; override it with `--url https://keycloak.example.com`. Use `--realm` and `--admin-realm` if your deployment uses different realm names. The script defaults the admin username to `admin`; it prompts if that account name is different. Do not put the admin password in the command line or in the input file.
 
 Generated temporary passwords are written to a new file under `~/.local/share/nexus-pos/` with mode `600`. Deliver each password to its staff member through a secure channel, then delete that file. Assign `ADMIN` only to staff who need full POS administration. This script creates application users; it does not promote users to Keycloak administrators or edit existing users' role assignments.
 
@@ -65,3 +67,5 @@ Generated temporary passwords are written to a new file under `~/.local/share/ne
 6. Enable Keycloak brute-force protection and choose a lockout policy before production. It is disabled in the inspected local realm.
 
 The local role and audience setup should be rechecked after signing into the POS with an actual `pos` realm user. No application-user password was available during this inspection, so the full browser login and authenticated API request have not yet been verified.
+
+The local realm's login theme must be `keycloak` (the built-in styled login theme). The `base` theme has no stylesheet, so selecting it produces an unstyled sign-in page. The `pos-client` should list each development frontend origin in its post-logout redirect URIs, currently `http://localhost:3000` and `http://localhost:5173`; the frontend passes its current origin when signing out. Add the exact HTTPS frontend origin to the client before deployment.
