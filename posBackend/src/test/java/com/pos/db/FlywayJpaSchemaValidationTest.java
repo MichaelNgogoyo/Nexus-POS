@@ -4,6 +4,7 @@ import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -46,9 +47,42 @@ class FlywayJpaSchemaValidationTest {
     @Autowired
     Flyway flyway;
 
+    @Autowired
+    JdbcTemplate jdbcTemplate;
+
     @Test
     void flywayCreatesASchemaThatHibernateCanValidate() {
         assertThat(flyway.info().current()).isNotNull();
         assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("20261030.01");
+    }
+
+    @Test
+    void migrationRepairsLegacyOrderSaleTablesMissingLinkColumns() {
+        jdbcTemplate.execute("ALTER TABLE restaurant_orders DROP CONSTRAINT IF EXISTS fk_restaurant_orders_sale");
+        jdbcTemplate.execute("ALTER TABLE sales DROP CONSTRAINT IF EXISTS fk_sales_restaurant_order");
+        jdbcTemplate.execute("ALTER TABLE restaurant_orders DROP COLUMN IF EXISTS sale_id");
+        jdbcTemplate.execute("ALTER TABLE sales DROP COLUMN IF EXISTS restaurant_order_id");
+        jdbcTemplate.execute("DROP TABLE flyway_schema_history");
+
+        flyway.migrate();
+
+        assertThat(hasColumn("restaurant_orders", "sale_id")).isTrue();
+        assertThat(hasColumn("sales", "restaurant_order_id")).isTrue();
+        assertThat(hasConstraint("restaurant_orders", "fk_restaurant_orders_sale")).isTrue();
+        assertThat(hasConstraint("sales", "fk_sales_restaurant_order")).isTrue();
+    }
+
+    private boolean hasColumn(String table, String column) {
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+                "SELECT EXISTS (SELECT 1 FROM information_schema.columns "
+                        + "WHERE table_schema = current_schema() AND table_name = ? AND column_name = ?)",
+                Boolean.class, table, column));
+    }
+
+    private boolean hasConstraint(String table, String constraint) {
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+                "SELECT EXISTS (SELECT 1 FROM pg_constraint "
+                        + "WHERE conname = ? AND conrelid = to_regclass(current_schema() || '.' || ?))",
+                Boolean.class, constraint, table));
     }
 }
