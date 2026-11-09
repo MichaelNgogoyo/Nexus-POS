@@ -48,7 +48,6 @@ SPRING_PROFILES_ACTIVE=dev \
 DB_URL=jdbc:postgresql://localhost:5432/pos_db \
 DB_USERNAME=pos_user DB_PASSWORD='REPLACE_WITH_DB_PASSWORD' \
 KEYCLOAK_ISSUER_URI=http://localhost:8081/realms/pos \
-CORS_ALLOWED_ORIGINS=http://localhost:5173 \
 POS_TAX_RATE=0 POS_SERVICE_CHARGE_RATE=0 \
 ./mvnw spring-boot:run
 ```
@@ -56,7 +55,6 @@ POS_TAX_RATE=0 POS_SERVICE_CHARGE_RATE=0 \
 Frontend, from `posFrontend/`:
 
 ```bash
-VITE_API_BASE_URL=http://localhost:8080 \
 VITE_KEYCLOAK_URL=http://localhost:8081 \
 VITE_KEYCLOAK_REALM=pos \
 VITE_KEYCLOAK_CLIENT_ID=pos-client \
@@ -77,7 +75,6 @@ Build/tag the backend and frontend images, then set `BACKEND_IMAGE` and `FRONTEN
 ```bash
 docker build -f docker/Dockerfile.backend -t nexus-pos-backend:hotel-pos .
 docker build -f docker/Dockerfile.frontend \
-  --build-arg VITE_API_BASE_URL=https://pos.example.com/api \
   --build-arg VITE_KEYCLOAK_URL=https://auth.example.com \
   --build-arg VITE_KEYCLOAK_REALM=pos \
   --build-arg VITE_KEYCLOAK_CLIENT_ID=pos-client \
@@ -85,7 +82,9 @@ docker build -f docker/Dockerfile.frontend \
   -t nexus-pos-frontend:hotel-pos .
 ```
 
-Configure Keycloak’s public issuer URL, frontend redirect, and exact CORS origin to the HTTPS domain. The example hostnames above are placeholders.
+Configure Keycloak’s public issuer URL and frontend redirect to the HTTPS domain. The example hostnames above are placeholders. API requests use the same-origin Nginx proxy, so the API does not require a per-domain CORS allowlist.
+
+The browser uses the frontend's current origin for API requests. Nginx forwards `/api/` to the backend service, so no per-environment API base URL is required.
 
 Start the database and apply the migration before starting the new backend:
 

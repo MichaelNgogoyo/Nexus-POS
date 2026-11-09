@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import getpass
 import json
 import os
@@ -101,40 +102,46 @@ def get_admin_token(base_url: str, admin_realm: str, username: str, password: st
 def read_users(path: Path):
     users = []
     seen = set()
-    for line_number, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-        if not raw_line.strip() or raw_line.lstrip().startswith("#"):
-            continue
-        columns = raw_line.split("\t")
-        if len(columns) == 5 and columns[0].strip().lower() == "username" and columns[4].strip().lower() == "roles":
-            continue
-        if len(columns) != 5 or any(not column.strip() for column in columns):
-            raise KeycloakError(
-                f"{path}:{line_number}: expected five non-empty tab-separated fields: "
-                "username, email, first name, last name, roles."
+    delimiter = "," if path.suffix.lower() == ".csv" else "\t"
+    with path.open(encoding="utf-8-sig", newline="") as stream:
+        reader = csv.reader(stream, delimiter=delimiter)
+        for columns in reader:
+            line_number = reader.line_num
+            if not columns or not any(column.strip() for column in columns):
+                continue
+            if columns[0].lstrip().startswith("#"):
+                continue
+            if len(columns) == 5 and columns[0].strip().lower() == "username" and columns[4].strip().lower() == "roles":
+                continue
+            if len(columns) != 5 or any(not column.strip() for column in columns):
+                separator = "comma-separated" if delimiter == "," else "tab-separated"
+                raise KeycloakError(
+                    f"{path}:{line_number}: expected five non-empty {separator} fields: "
+                    "username, email, first name, last name, roles."
+                )
+            username, email, first_name, last_name, raw_roles = [column.strip() for column in columns]
+            if not USERNAME_RE.fullmatch(username):
+                raise KeycloakError(f"{path}:{line_number}: invalid username {username!r}.")
+            if any("\n" in value or "\r" in value for value in (email, first_name, last_name)):
+                raise KeycloakError(f"{path}:{line_number}: fields cannot contain newlines.")
+            roles = [role.strip().upper() for role in raw_roles.split(",")]
+            if not roles or any(not role for role in roles):
+                raise KeycloakError(f"{path}:{line_number}: provide one or more comma-separated roles.")
+            unsupported = sorted(set(roles) - POS_ROLES)
+            if unsupported:
+                raise KeycloakError(
+                    f"{path}:{line_number}: unsupported POS role(s): {', '.join(unsupported)}. "
+                    f"Allowed roles: {', '.join(sorted(POS_ROLES))}."
+                )
+            if len(roles) != len(set(roles)):
+                raise KeycloakError(f"{path}:{line_number}: duplicate role assignment.")
+            if username.casefold() in seen:
+                raise KeycloakError(f"{path}:{line_number}: duplicate username {username!r} in input.")
+            seen.add(username.casefold())
+            users.append(
+                {"username": username, "email": email, "firstName": first_name,
+                 "lastName": last_name, "roles": roles}
             )
-        username, email, first_name, last_name, raw_roles = [column.strip() for column in columns]
-        if not USERNAME_RE.fullmatch(username):
-            raise KeycloakError(f"{path}:{line_number}: invalid username {username!r}.")
-        if any("\n" in value or "\r" in value for value in (email, first_name, last_name)):
-            raise KeycloakError(f"{path}:{line_number}: fields cannot contain newlines.")
-        roles = [role.strip().upper() for role in raw_roles.split(",")]
-        if not roles or any(not role for role in roles):
-            raise KeycloakError(f"{path}:{line_number}: provide one or more comma-separated roles.")
-        unsupported = sorted(set(roles) - POS_ROLES)
-        if unsupported:
-            raise KeycloakError(
-                f"{path}:{line_number}: unsupported POS role(s): {', '.join(unsupported)}. "
-                f"Allowed roles: {', '.join(sorted(POS_ROLES))}."
-            )
-        if len(roles) != len(set(roles)):
-            raise KeycloakError(f"{path}:{line_number}: duplicate role assignment.")
-        if username.casefold() in seen:
-            raise KeycloakError(f"{path}:{line_number}: duplicate username {username!r} in input.")
-        seen.add(username.casefold())
-        users.append(
-            {"username": username, "email": email, "firstName": first_name,
-             "lastName": last_name, "roles": roles}
-        )
     if not users:
         raise KeycloakError(f"{path}: no staff users found.")
     return users
@@ -161,7 +168,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Provision POS staff users and assign only their requested POS realm roles."
     )
-    parser.add_argument("users_file", type=Path, help="TSV file with username, email, first name, last name, roles")
+    parser.add_argument("users_file", type=Path, help="CSV or TSV file with username, email, first name, last name, roles")
     parser.add_argument("--url", default=os.getenv("KEYCLOAK_URL", "http://localhost:8081"),
                         help="Keycloak base URL (default: KEYCLOAK_URL or http://localhost:8081)")
     parser.add_argument("--realm", default=os.getenv("KEYCLOAK_REALM", "pos"),

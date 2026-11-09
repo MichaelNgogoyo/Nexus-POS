@@ -192,7 +192,7 @@ cd posBackend
 
 | Service | URL |
 |---------|-----|
-| API Base | `http://localhost:8080` |
+| Backend API (direct access) | `http://localhost:8080` |
 | Swagger UI | `http://localhost:8080/swagger-ui/index.html` |
 
 **Backend environment variables** (all have safe development defaults):
@@ -208,7 +208,6 @@ cd posBackend
 | `MINIO_ACCESS_KEY` | `minioadmin` | MinIO access key |
 | `MINIO_SECRET_KEY` | `minioadmin` | MinIO secret key |
 | `MINIO_BUCKET` | `product-images` | MinIO bucket |
-| `CORS_ALLOWED_ORIGINS` | `http://localhost:5173` | Allowed frontend origins |
 | `POS_TAX_RATE` | `0` | Tax rate % (e.g. `16` for 16% VAT) |
 | `POS_SERVICE_CHARGE_RATE` | `0` | Configured service charge percentage |
 
@@ -226,9 +225,10 @@ Create a `.env.local` file with:
 VITE_KEYCLOAK_URL=http://localhost:8081
 VITE_KEYCLOAK_REALM=pos
 VITE_KEYCLOAK_CLIENT_ID=pos-client
-VITE_API_BASE_URL=http://localhost:8080
 VITE_REDIRECT_URI=http://localhost:5173
 ```
+
+The frontend calls the API through its own origin. Vite proxies `/api` to the local Spring Boot server on port `8080`; the production Nginx config proxies `/api` to the backend container. No API origin variable or browser CORS exception is needed for these same-origin requests.
 
 | Service | URL |
 |---------|-----|
