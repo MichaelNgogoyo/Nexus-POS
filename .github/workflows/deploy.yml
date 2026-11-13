@@ -266,6 +266,8 @@ jobs:
 
               keycloak:
                 image: quay.io/keycloak/keycloak:26.2
+                ports:
+                  - "127.0.0.1:8083:8080"
                 command: start --http-enabled=true --proxy-headers=xforwarded --hostname-strict=false --http-relative-path=/auth
                 environment:
                   KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN}
