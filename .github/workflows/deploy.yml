@@ -110,7 +110,7 @@ jobs:
         run: |
           OWNER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           docker build \
-            --build-arg VITE_KEYCLOAK_URL="https://${{ env.APP_DOMAIN }}/auth" \
+            --build-arg VITE_KEYCLOAK_URL="https://keycloak.apperstar.com/auth" \
             --build-arg VITE_KEYCLOAK_REALM="${{ secrets.KEYCLOAK_REALM || 'pos' }}" \
             --build-arg VITE_KEYCLOAK_CLIENT_ID="${{ secrets.KEYCLOAK_CLIENT_ID || 'pos-client' }}" \
             --build-arg VITE_REDIRECT_URI="https://${{ env.APP_DOMAIN }}" \
@@ -191,7 +191,7 @@ jobs:
             export DB_USERNAME="${{ secrets.DB_USERNAME || 'pos_user' }}"
             export DB_PASSWORD="${{ secrets.DB_PASSWORD || 'CHANGE_ME_IN_PRODUCTION' }}"
             export KEYCLOAK_REALM="${{ secrets.KEYCLOAK_REALM || 'pos' }}"
-            export KEYCLOAK_ISSUER_URI="https://${APP_DOMAIN}/auth/realms/${KEYCLOAK_REALM}"
+            export KEYCLOAK_ISSUER_URI="https://keycloak.apperstar.com/auth/realms/${KEYCLOAK_REALM}"
             export KEYCLOAK_CLIENT_ID="${{ secrets.KEYCLOAK_CLIENT_ID || 'pos-client' }}"
             export KEYCLOAK_CLIENT_SECRET="${{ secrets.KEYCLOAK_CLIENT_SECRET || 'CHANGE_ME_FROM_KEYCLOAK_ADMIN' }}"
             export KEYCLOAK_REDIRECT_URI="https://${APP_DOMAIN}"
@@ -360,7 +360,7 @@ jobs:
                 ports:
                   - "127.0.0.1:${FRONTEND_PORT}:80"
                 environment:
-                  VITE_KEYCLOAK_URL: "https://${APP_DOMAIN}/auth"
+                  VITE_KEYCLOAK_URL: "https://keycloak.apperstar.com/auth"
                   VITE_KEYCLOAK_REALM: "${KEYCLOAK_REALM}"
                   VITE_KEYCLOAK_CLIENT_ID: "${KEYCLOAK_CLIENT_ID}"
                   VITE_REDIRECT_URI: "https://${APP_DOMAIN}"
