@@ -60,7 +60,7 @@ minio:
   bucket: ${MINIO_BUCKET:product-images}
 
 cors:
-  allowed-origins: ${CORS_ALLOWED_ORIGINS:https://nexuspos.apperstar.com}
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:https://nexuspos.apperstar.com }
 
 # POS business rules
 pos:

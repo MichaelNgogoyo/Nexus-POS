@@ -6,7 +6,7 @@ RUN apk add --no-cache git ca-certificates && \
 
 FROM alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f
 
-RUN apk add --no-cache ca-certificates su-exec && \
+RUN apk add --no-cache ca-certificates su-exec wget && \
     addgroup -S -g 10001 minio && \
     adduser -S -D -H -u 10001 -G minio minio && \
     mkdir -p /data && chown minio:minio /data

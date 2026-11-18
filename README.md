@@ -238,6 +238,36 @@ The frontend calls the API through its own origin. Vite proxies `/api` to the lo
 
 ---
 
+### Containerized Local Development (Production-like topology)
+
+The local Compose stack builds the backend, frontend, and MinIO image from this repository, then runs them with PostgreSQL and Keycloak. It mirrors the production service boundaries and Nginx API proxy while using the `dev` Spring profile and local-only credentials. It does not deploy or contact the production VPS. Its isolated project name creates new `nexus-pos-local_*` volumes instead of attaching the older `posBackend` PostgreSQL volume (created with PostgreSQL 17); that old volume is left untouched. The new local database starts empty and uses PostgreSQL 16 to match production.
+
+From the repository root:
+
+```bash
+cp posBackend/.env.local.example posBackend/.env.local
+# Edit posBackend/.env.local and replace the local-only passwords.
+docker compose --env-file posBackend/.env.local -f posBackend/docker-compose.yml config --quiet
+docker compose --env-file posBackend/.env.local -f posBackend/docker-compose.yml up -d --build
+```
+
+Open the POS at `http://localhost:3000`. The local Keycloak server is at `http://keycloak.localhost:8081`; its bootstrap admin credentials come from `posBackend/.env.local`. Create the `pos` realm and a public `pos-client` client with standard flow and PKCE (S256) enabled. Set its valid redirect URI to `http://localhost:3000/*` and Web Origin to `http://localhost:3000`. Add the POS roles and test users in that realm. Keycloak realm configuration is not automatically imported by Compose.
+
+Useful commands:
+
+```bash
+docker compose --env-file posBackend/.env.local -f posBackend/docker-compose.yml ps
+docker compose --env-file posBackend/.env.local -f posBackend/docker-compose.yml logs -f backend
+docker compose --env-file posBackend/.env.local -f posBackend/docker-compose.yml up -d --build backend frontend
+docker compose --env-file posBackend/.env.local -f posBackend/docker-compose.yml down
+```
+
+`down` preserves the named database and MinIO volumes. Do not add `-v` unless you intend to delete the local database, Keycloak, and image-store data. This stack pins PostgreSQL and Keycloak to the versions used by the production Compose manifest; MinIO is built from the repository's pinned MinIO source version to avoid an unauthenticated registry dependency. The first build needs internet access to download Maven, npm, and Go build dependencies. Local images use `nexus-pos-*:local` tags. Make sure no other local service is already using ports 3000, 5432, 8081, 9000, or 9001.
+
+The existing root `.env` and `posBackend/.env` are tracked legacy files and may contain credentials. The new local workflow reads only `posBackend/.env.local`; do not copy production credentials into it. Ignore rules prevent adding new `.env` files, but tracked files remain tracked until separately removed from Git history/index and their credentials rotated.
+
+---
+
 ## 🔑 Roles & Permissions
 
 | Role | Access Level |

@@ -1,2 +1,8 @@
 posFrontend/node/
 /docs
+
+# Local credentials and per-developer environment overrides
+.env
+**/.env
+.env.local
+**/.env.local
