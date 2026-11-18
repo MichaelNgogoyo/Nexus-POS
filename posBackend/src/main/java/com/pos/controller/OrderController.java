@@ -13,6 +13,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -98,8 +100,24 @@ public class OrderController {
     }
 
     private String actorId(Authentication authentication) {
-        return authentication.getPrincipal() instanceof org.springframework.security.oauth2.jwt.Jwt jwt
-                ? jwt.getSubject() : authentication.getName();
+        if (authentication == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authenticated staff identity is required");
+        }
+
+        String actor = null;
+        if (authentication.getPrincipal() instanceof Jwt jwt) {
+            actor = jwt.getSubject();
+            if (actor == null || actor.isBlank()) {
+                actor = jwt.getClaimAsString("preferred_username");
+            }
+        }
+        if (actor == null || actor.isBlank()) {
+            actor = authentication.getName();
+        }
+        if (actor == null || actor.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authenticated staff identity is missing");
+        }
+        return actor.trim();
     }
 
     private boolean isManager(Authentication authentication) {
