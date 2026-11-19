@@ -53,7 +53,7 @@ class FlywayJpaSchemaValidationTest {
     @Test
     void flywayCreatesASchemaThatHibernateCanValidate() {
         assertThat(flyway.info().current()).isNotNull();
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("20261030.01");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("20261109.01");
     }
 
     @Test

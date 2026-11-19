@@ -432,7 +432,9 @@ public class RestaurantOrderService {
             if (count < minimum || count > maximum) throw badRequest("Choose the required options for " + group.getName());
         }
         if (selected.stream().anyMatch(modifier -> Boolean.FALSE.equals(modifier.getAvailable()))) throw badRequest("One or more selected modifiers are unavailable");
-        return selected;
+        // Hibernate's managed many-to-many collection is mutable; returning Stream.toList()
+        // here causes merge/flush to fail when it tries to replace the item collection.
+        return new ArrayList<>(selected);
     }
 
     private void validateRoomOrTable(RestaurantOrder order) {

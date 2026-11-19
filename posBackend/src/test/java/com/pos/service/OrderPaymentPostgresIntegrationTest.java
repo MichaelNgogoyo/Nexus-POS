@@ -5,10 +5,15 @@ import com.pos.dto.RestaurantOrderItemRequest;
 import com.pos.dto.RestaurantOrderRequest;
 import com.pos.model.OrderStatus;
 import com.pos.model.OrderType;
+import com.pos.model.Modifier;
+import com.pos.model.ModifierGroup;
 import com.pos.model.Product;
 import com.pos.model.Shift;
 import com.pos.model.ShiftStatus;
+import com.pos.controller.KitchenController;
 import com.pos.repository.KitchenOrderRepository;
+import com.pos.repository.ModifierGroupRepository;
+import com.pos.repository.ModifierRepository;
 import com.pos.repository.ProductRepository;
 import com.pos.repository.RestaurantOrderRepository;
 import com.pos.repository.SalesRepository;
@@ -19,6 +24,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -90,6 +98,15 @@ class OrderPaymentPostgresIntegrationTest {
     KitchenOrderRepository kitchenOrderRepository;
 
     @Autowired
+    ModifierGroupRepository modifierGroupRepository;
+
+    @Autowired
+    ModifierRepository modifierRepository;
+
+    @Autowired
+    KitchenController kitchenController;
+
+    @Autowired
     StockMovementRepository stockMovementRepository;
 
     @Autowired
@@ -154,6 +171,59 @@ class OrderPaymentPostgresIntegrationTest {
                 new OrderPaymentRequest(new BigDecimal("250.00"), "different-payment-key-0001"), "integration-cashier"))
                 .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
                 .hasMessageContaining("already been recorded");
+    }
+
+    @Test
+    void kitchenQueueLoadsModifiersAfterRepositorySessionCloses() {
+        Product product = productRepository.saveAndFlush(Product.builder()
+                .name("Integration modifiable dish")
+                .price(new BigDecimal("100.00"))
+                .active(true)
+                .quantity(5)
+                .build());
+        ModifierGroup group = modifierGroupRepository.saveAndFlush(ModifierGroup.builder()
+                .name("Preparation")
+                .product(product)
+                .modifiers(new java.util.ArrayList<>())
+                .build());
+        Modifier modifier = modifierRepository.saveAndFlush(Modifier.builder().name("Extra avocado")
+                .additionalPrice(new BigDecimal("50.00")).available(true).group(group).build());
+        Long modifierId = modifier.getId();
+        assertThat(modifierId).isNotNull();
+        assertThat(modifierGroupRepository.findByProductId(product.getId())).singleElement()
+                .satisfies(savedGroup -> assertThat(savedGroup.getModifiers()).extracting(Modifier::getId)
+                        .containsExactly(modifierId));
+
+        RestaurantOrderRequest request = new RestaurantOrderRequest(
+                OrderType.TAKEAWAY,
+                "integration-kitchen-modifier-key-01",
+                null,
+                null,
+                null,
+                "Kitchen modifier check",
+                List.of(new RestaurantOrderItemRequest(product.getId(), 1, "Well done",
+                        List.of(new RestaurantOrderItemRequest.ModifierReference(modifierId)))));
+        RestaurantOrderService.CreateResult created = orderService.createAndSubmitOrder(request, "integration-cashier");
+        assertThat(created.order().items().get(0).modifiers()).extracting(com.pos.dto.RestaurantOrderResponse.ModifierResponse::name)
+                .containsExactly("Extra avocado");
+
+        var originalAuthentication = SecurityContextHolder.getContext().getAuthentication();
+        try {
+            SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                    "integration-kitchen", "", List.of(new SimpleGrantedAuthority("ROLE_CASHIER"))));
+            var tickets = kitchenController.getAllKitchenOrders(null, false);
+            var ticket = tickets.stream().filter(candidate -> candidate.order() != null
+                    && candidate.order().id().equals(created.order().id())).findFirst().orElseThrow();
+
+            assertThat(ticket.order().items().get(0).notes()).isEqualTo("Well done");
+            assertThat(ticket.order().items().get(0).modifiers()).extracting(com.pos.dto.KitchenTicketResponse.ModifierSummary::name)
+                    .containsExactly("Extra avocado");
+        } finally {
+            SecurityContextHolder.clearContext();
+            if (originalAuthentication != null) {
+                SecurityContextHolder.getContext().setAuthentication(originalAuthentication);
+            }
+        }
     }
 
     private List<Future<com.pos.model.Sales>> settleConcurrently(Long orderId, OrderPaymentRequest request) throws InterruptedException {

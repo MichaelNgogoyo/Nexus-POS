@@ -131,7 +131,15 @@ public class ShiftController {
     }
 
     private String subject(Authentication authentication) {
-        return authentication.getPrincipal() instanceof Jwt jwt ? jwt.getSubject() : authentication.getName();
+        if (authentication == null) return null;
+        if (authentication.getPrincipal() instanceof Jwt jwt) {
+            String subject = jwt.getSubject();
+            if (subject != null && !subject.isBlank()) return subject;
+            String username = jwt.getClaimAsString("preferred_username");
+            if (username != null && !username.isBlank()) return username;
+        }
+        String name = authentication.getName();
+        return name == null || name.isBlank() ? null : name;
     }
 
     private boolean requireManager(Authentication authentication) {
@@ -140,7 +148,11 @@ public class ShiftController {
     }
 
     private void requireOwnerOrManager(String cashierId, Authentication authentication) {
-        if (!requireManager(authentication) && !subject(authentication).equals(cashierId)) {
+        String actor = subject(authentication);
+        if (actor == null) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Authenticated cashier identity is unavailable");
+        }
+        if (!requireManager(authentication) && !actor.equals(cashierId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Cashiers may only access their own shift");
         }
     }

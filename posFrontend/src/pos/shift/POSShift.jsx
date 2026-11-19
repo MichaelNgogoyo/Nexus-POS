@@ -97,7 +97,7 @@ export default function POSShift() {
                     <p>Enter the cash float counted in the drawer before service.</p>
                     <label>Opening cash balance<input inputMode="decimal" type="number" min="0" step="0.01" value={openingAmount} onChange={(event) => setOpeningAmount(event.target.value)} placeholder="0.00" /></label>
                     {openMutation.isError && <p className="pos-error" role="alert">Shift could not be opened. {openMutation.error?.response?.data?.message || 'Try again.'}</p>}
-                    <button className="pos-primary-action" disabled={!cashierId || openingAmount === '' || Number(openingAmount) < 0 || openMutation.isPending} onClick={() => openMutation.mutate()}>{openMutation.isPending ? 'Opening…' : 'Open shift'}</button>
+                    <button className="pos-primary-action" disabled={openingAmount === '' || Number(openingAmount) < 0 || openMutation.isPending} onClick={() => openMutation.mutate()}>{openMutation.isPending ? 'Opening…' : 'Open shift'}</button>
                 </div>
             ) : (
                 <div className="pos-shift-card is-open">

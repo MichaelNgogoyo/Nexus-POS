@@ -132,7 +132,7 @@ class ShiftControllerAuthorizationTest {
         mockMvc.perform(post("/api/shifts/open")
                         .with(user("cashier").roles("CASHIER"))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""{"openingBalance":100.00}"""))
+                        .content("{\"openingBalance\":100.00}"))
                 .andExpect(status().isOk());
 
         verify(shiftRepository).findByCashierIdAndStatus("cashier", ShiftStatus.OPEN);

@@ -34,6 +34,7 @@ public class KitchenController {
     private final AuditService auditService;
 
     @GetMapping("/orders")
+    @Transactional(readOnly = true)
     public List<KitchenTicketResponse> getAllKitchenOrders(
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "false") boolean includeHistory) {
