@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useKeycloak } from '@react-keycloak/web';
-import { createSale, getCurrentShift, getSaleReceipt, getTaxRate } from '../../services/api.js';
+import { createSale, getCurrentShift, getSaleReceiptDetails, getTaxRate } from '../../services/api.js';
 import { useCart } from '../../context/CartContext.jsx';
 import PaymentMethodAvailability from './PaymentMethodAvailability.jsx';
+import POSReceipt from './POSReceipt.jsx';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import LocalAtmRoundedIcon from '@mui/icons-material/LocalAtmRounded';
@@ -68,9 +69,14 @@ export default function PaymentModal({ orderType, tableId, guestName, orderNotes
             queryClient.invalidateQueries({ queryKey: ['current-shift', keycloak?.tokenParsed?.sub || keycloak?.subject] });
         },
     });
-    const receiptMutation = useMutation({ mutationFn: async () => (await getSaleReceipt(sale.id)).data });
+    const receiptQuery = useQuery({
+        queryKey: ['sale-receipt', sale?.id],
+        queryFn: async () => (await getSaleReceiptDetails(sale.id)).data,
+        enabled: Boolean(sale?.id),
+        retry: 1,
+    });
 
-    if (sale) return <div className="pos-dialog-backdrop"><section className="pos-dialog payment-dialog" role="dialog" aria-modal="true" aria-labelledby="payment-success-title"><div className="payment-success-icon"><CheckCircleRoundedIcon /></div><h2 id="payment-success-title">Payment recorded</h2><p>Sale #{sale.id} · {sale.orderNumber ? `Order ${sale.orderNumber} · ` : ''}{money(sale.totalAmount)} received</p>{receiptMutation.data && <pre className="receipt-print-area">{receiptMutation.data}</pre>}{receiptMutation.isError && <p className="hotel-error" role="alert">Receipt could not be loaded. {receiptMutation.error?.response?.data?.message || 'Try again.'}</p>}<footer className="payment-success-actions"><button className="pos-secondary-action" disabled={receiptMutation.isPending} onClick={() => receiptMutation.mutate()}>{receiptMutation.isPending ? 'Loading receipt…' : receiptMutation.data ? 'Reload receipt' : 'Load receipt'}</button>{receiptMutation.data && <button className="pos-secondary-action" onClick={() => window.print()}>Print receipt</button>}<button className="pos-primary-action" onClick={onClose}>Done</button></footer></section></div>;
+    if (sale) return <div className="pos-dialog-backdrop"><section className="pos-dialog payment-dialog payment-success-dialog" role="dialog" aria-modal="true" aria-labelledby="payment-success-title"><div className="payment-success-icon"><CheckCircleRoundedIcon /></div><h2 id="payment-success-title">Payment recorded</h2><p>Sale #{sale.id} · {sale.orderNumber ? `Order ${sale.orderNumber} · ` : ''}{money(sale.totalAmount)} received</p>{receiptQuery.isLoading && <p className="hotel-state">Preparing receipt…</p>}{receiptQuery.data && <POSReceipt receipt={receiptQuery.data} />}{receiptQuery.isError && <p className="hotel-error" role="alert">Receipt could not be loaded. {receiptQuery.error?.response?.data?.message || 'Try again.'} <button type="button" onClick={() => receiptQuery.refetch()}>Retry</button></p>}<footer className="payment-success-actions">{receiptQuery.data && <button className="pos-secondary-action" onClick={() => window.print()}>Print receipt</button>}<button className="pos-primary-action" onClick={onClose}>Done</button></footer></section></div>;
 
     return (
         <div className="pos-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !paymentMutation.isPending) onClose(); }}>

@@ -2,6 +2,7 @@ package com.pos.controller;
 
 import com.pos.dto.SaleRequest;
 import com.pos.dto.SaleReturnRequest;
+import com.pos.dto.SaleReceiptResponse;
 import com.pos.model.Sales;
 import com.pos.service.impl.SalesService;
 import jakarta.validation.Valid;
@@ -16,8 +17,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
+import java.util.List;
 
 @RestController
 @RequestMapping({"/api/sale", "/sale"})
@@ -96,6 +97,36 @@ public class SalesController {
         return ResponseEntity.ok()
                 .contentType(org.springframework.http.MediaType.TEXT_PLAIN)
                 .body(sb.toString());
+    }
+
+    @GetMapping("/{id}/receipt/details")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER','CASHIER')")
+    public ResponseEntity<SaleReceiptResponse> getSaleReceiptDetails(@PathVariable Long id, Authentication authentication) {
+        Sales sale = service.viewSale(id);
+        requireReceiptAccess(sale, authentication);
+        List<SaleReceiptResponse.Item> items = sale.getSaleItems().stream().map(item -> {
+            BigDecimal lineTotal = item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
+            String name = item.getProduct() == null ? "Unknown item" : item.getProduct().getName();
+            List<String> modifiers = item.getModifiers() == null ? List.of()
+                    : item.getModifiers().stream().map(com.pos.model.Modifier::getName).toList();
+            return new SaleReceiptResponse.Item(name, item.getPrice(), item.getQuantity(), lineTotal,
+                    item.getNotes(), modifiers);
+        }).toList();
+        return ResponseEntity.ok(new SaleReceiptResponse(
+                sale.getId(), sale.getOrderNumber(), sale.getCreatedAt(), sale.getCashierId(), sale.getPaymentMethod(),
+                sale.getOrderType() == null ? null : sale.getOrderType().name(), sale.getTableId(), sale.getGuestName(),
+                sale.getSubtotalAmount(), null, sale.getTaxAmount(), sale.getServiceChargeAmount(), sale.getTotalAmount(),
+                sale.getAmountTendered(), sale.getChangeGiven(), items));
+    }
+
+    private void requireReceiptAccess(Sales sale, Authentication authentication) {
+        boolean manager = authentication.getAuthorities().stream().map(GrantedAuthority::getAuthority)
+                .anyMatch(role -> role.equals("ROLE_ADMIN") || role.equals("ROLE_MANAGER"));
+        boolean owner = authentication.getName().equals(sale.getCashierId())
+                || (authentication.getPrincipal() instanceof Jwt jwt && jwt.getSubject().equals(sale.getCashierId()));
+        if (!manager && !owner) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Cashiers may only access their own receipts");
+        }
     }
 
     @PostMapping("/{id}/return")

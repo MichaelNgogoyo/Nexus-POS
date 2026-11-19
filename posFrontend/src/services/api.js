@@ -81,6 +81,7 @@ export const viewSale = (saleId) => {
 };
 
 export const getSaleReceipt = (saleId) => apiClient.get(`/api/sale/${saleId}/receipt`, { responseType: 'text' });
+export const getSaleReceiptDetails = (saleId) => apiClient.get(`/api/sale/${saleId}/receipt/details`);
 
 /**
  * Deletes a sale by its ID.
@@ -210,6 +211,12 @@ export const getProductStockMovements = (productId) => {
 export const listCategories = () => apiClient.get('/api/category');
 export const createCategory = (name) => apiClient.post('/api/category', null, { params: { name } });
 export const updateCategory = (id, name) => apiClient.put(`/api/category/${id}`, null, { params: { name } });
+export const uploadCategoryImage = (id, file) => {
+    const form = new FormData();
+    form.append('file', file);
+    return apiClient.post(`/api/category/${id}/image`, form);
+};
+export const getCategoryImageUrl = (id) => `${API_BASE_URL}/api/category/${id}/image`;
 export const deleteCategory = (id) => apiClient.delete(`/api/category/${id}`);
 // Backward compatibility alias
 export const getCategories = listCategories;

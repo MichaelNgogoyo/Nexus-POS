@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { listCategories, createCategory, deleteCategory } from '../../services/api';
+import { listCategories, createCategory, deleteCategory, getCategoryImageUrl, uploadCategoryImage } from '../../services/api';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import DeleteRoundedIcon from '@mui/icons-material/DeleteRounded';
 
@@ -20,6 +20,11 @@ export default function Categories() {
 
   const delMutation = useMutation({
     mutationFn: (id) => deleteCategory(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['categories'] }),
+  });
+
+  const imageMutation = useMutation({
+    mutationFn: ({ id, file }) => uploadCategoryImage(id, file),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['categories'] }),
   });
 
@@ -49,13 +54,17 @@ export default function Categories() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
           {categories.map(cat => (
-            <div key={cat.id} className="flex items-center justify-between px-4 py-3 bg-bg-secondary rounded-xl border border-border-primary">
-              <span className="text-text-primary font-medium">{cat.name}</span>
+            <div key={cat.id} className="flex items-center gap-3 px-3 py-3 bg-bg-secondary rounded-xl border border-border-primary">
+              {cat.imageUrl || cat.imageURL ? <img src={getCategoryImageUrl(cat.id)} alt="" className="w-14 h-14 rounded-lg object-cover bg-bg-primary" /> : <div className="w-14 h-14 rounded-lg bg-bg-primary text-text-muted grid place-items-center text-xs">No image</div>}
+              <div className="min-w-0 flex-1"><span className="block text-text-primary font-medium truncate">{cat.name}</span><label className="inline-flex mt-1 cursor-pointer text-xs font-semibold text-brand-primary hover:underline">{imageMutation.isPending ? 'Uploading…' : cat.imageUrl || cat.imageURL ? 'Change image' : 'Add image'}<input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={imageMutation.isPending} onChange={(event) => { const file = event.target.files?.[0]; if (file) imageMutation.mutate({ id: cat.id, file }); event.target.value = ''; }} /></label></div>
               <button
+                type="button"
                 onClick={() => delMutation.mutate(cat.id)}
-                className="p-1.5 rounded-lg text-text-muted hover:text-red-500 hover:bg-red-500/10 transition-all"
+                disabled={delMutation.isPending}
+                aria-label={`Delete ${cat.name}`}
+                className="p-2 rounded-lg text-text-muted hover:text-red-500 hover:bg-red-500/10 transition-all"
               >
-                <DeleteRoundedIcon sx={{ fontSize: 16 }} />
+                <DeleteRoundedIcon sx={{ fontSize: 18 }} />
               </button>
             </div>
           ))}
@@ -64,6 +73,7 @@ export default function Categories() {
           )}
         </div>
       )}
+      {imageMutation.isError && <p className="mt-3 text-sm text-red-600" role="alert">Category image upload failed. {imageMutation.error?.response?.data?.message || 'Use a JPEG, PNG, or WebP image under 5 MB.'}</p>}
     </div>
   );
 }

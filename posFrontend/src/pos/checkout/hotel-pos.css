@@ -479,6 +479,84 @@
 .dark .payment-summary,.dark .receipt-print-area { border-color: var(--food-border); background: #11171e; color: #f3f5f8; }
 .dark .foodpos-more-menu>a,.dark .foodpos-more-menu>button { background: #1d252f; color: var(--food-ink); }
 
+/* POS usability refinements: sticky, illustrated category rail and clear inline modifiers. */
+.foodpos-menu-layout .foodpos-categories { position: sticky; top: 88px; z-index: 4; align-self: start; }
+.foodpos-menu-layout .category-icon { width: 34px; height: 34px; overflow: hidden; border-radius: 9px; color: #6b6a63; }
+.foodpos-category-image { display: block; width: 100%; height: 100%; object-fit: cover; }
+.foodpos-menu-layout .foodpos-categories button span:last-child { overflow-wrap: anywhere; font-size: 11px; font-weight: 700; }
+.foodpos-cart-row { border-bottom: 1px solid var(--food-border); }
+.foodpos-cart-row:last-child { border-bottom: 0; }
+.foodpos-line-options-toggle { min-height: 34px; margin-top: 5px; padding: 0; border: 0; background: transparent; color: #8b4d20; font-size: 11px; font-weight: 750; text-align: left; text-decoration: underline; text-underline-offset: 2px; }
+.foodpos-required-options { display: block; color: #a23e32; font-size: 10px; font-weight: 750; }
+.foodpos-cart-line-customizer { display: grid; gap: 12px; margin: 0 0 12px; padding: 12px; border: 1px solid var(--food-border); border-radius: 12px; background: #f8f8f5; }
+.foodpos-cart-line-customizer fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.foodpos-cart-line-customizer legend { display: flex; align-items: center; gap: 8px; color: var(--food-ink); font-size: 12px; font-weight: 800; }
+.foodpos-cart-line-customizer legend span { color: #a23e32; font-size: 10px; }
+.foodpos-cart-line-customizer fieldset p { margin: 3px 0 7px; color: var(--food-muted); font-size: 10px; }
+.foodpos-cart-line-customizer fieldset>div { display: grid; gap: 6px; }
+.foodpos-cart-line-customizer fieldset button { display: flex; min-height: 42px; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 10px; border: 1px solid var(--food-border); border-radius: 9px; background: var(--food-surface); color: var(--food-ink); text-align: left; }
+.foodpos-cart-line-customizer fieldset button.selected { border-color: #95643e; background: #f2e8dd; }
+.foodpos-cart-line-customizer fieldset button strong { white-space: nowrap; font-size: 11px; }
+.foodpos-save-options { justify-self: end; min-height: 42px; padding: 0 16px; }
+.foodpos-checkout-blocker { margin-top: 8px; padding: 9px 11px; border: 1px solid #e4c57f; border-radius: 9px; background: #fff8e7; color: #684d18; font-size: 11px; line-height: 1.4; }
+.foodpos-added-announcement { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.pos-table-page-actions { display: flex; align-items: center; gap: 10px; }
+.table-create-form { display: grid; gap: 14px; margin-top: 16px; }
+.table-create-form label { display: grid; gap: 6px; color: var(--food-ink); font-size: 12px; font-weight: 750; }
+.table-create-form input { min-height: 46px; padding: 0 12px; border: 1px solid var(--food-border); border-radius: 10px; background: var(--food-surface); color: var(--food-ink); font: inherit; }
+.table-create-form footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; }
+.dark .foodpos-cart-line-customizer { border-color: var(--food-border); background: #19212a; }
+.dark .foodpos-cart-line-customizer legend,.dark .foodpos-cart-line-customizer fieldset button { color: var(--food-ink); }
+.dark .foodpos-cart-line-customizer fieldset button.selected { border-color: #71849a; background: #344253; }
+.dark .foodpos-checkout-blocker { border-color: #75603b; background: #332c20; color: #f1d99e; }
+.dark .foodpos-line-options-toggle { color: #f2bd86; }
+.dark .foodpos-required-options { color: #ffaaa0; }
+.dark .table-create-form label { color: var(--food-ink); }
+.dark .table-create-form input { border-color: var(--food-border); background: #242d37; color: var(--food-ink); }
+.dark .foodpos-category-image { background: #2a333e; }
+
+.payment-success-dialog { width: min(640px, 100%); }
+.pos-receipt-paper { width: min(100%, 430px); margin: 16px auto 4px; padding: 22px 24px; border: 1px solid #e2e5e9; border-radius: 8px; background: #fff; color: #26313d; box-shadow: 0 3px 14px rgb(19 36 53 / 7%); font-size: 12px; }
+.pos-receipt-header { display: grid; justify-items: center; gap: 5px; padding-bottom: 15px; border-bottom: 1px dashed #d9dee4; text-align: center; }
+.pos-receipt-brand-mark { display: grid; width: 36px; height: 36px; place-items: center; border: 2px solid #173a59; border-radius: 50%; color: #173a59; font-family: Georgia,serif; font-size: 22px; font-weight: 800; }
+.pos-receipt-header h3 { margin: 0; color: #173a59; font-size: 17px; }
+.pos-receipt-header p { margin: 0; color: #66717e; font-size: 11px; }
+.pos-receipt-header>strong { margin-top: 7px; letter-spacing: .08em; }
+.pos-receipt-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; padding: 13px 0; border-bottom: 1px dashed #d9dee4; }
+.pos-receipt-meta span { display: grid; gap: 2px; color: #66717e; font-size: 10px; }
+.pos-receipt-meta strong { overflow-wrap: anywhere; color: #293544; font-size: 11px; font-weight: 650; }
+.pos-receipt-columns,.pos-receipt-item { display: grid; grid-template-columns: minmax(0,1fr) auto 28px auto; gap: 8px; align-items: start; }
+.pos-receipt-columns { padding: 10px 0 7px; border-bottom: 1px dashed #d9dee4; color: #293544; font-weight: 800; }
+.pos-receipt-item { padding: 8px 0; color: #66717e; }
+.pos-receipt-item>span:not(:first-child),.pos-receipt-item>strong,.pos-receipt-columns>span:not(:first-child) { text-align: right; white-space: nowrap; }
+.pos-receipt-item-name { color: #293544; }
+.pos-receipt-item-name small { display: block; margin-top: 3px; color: #7b8490; font-size: 9px; }
+.pos-receipt-empty { color: #7b8490; text-align: center; }
+.pos-receipt-totals { display: grid; gap: 9px; padding: 12px 0; border-top: 1px dashed #d9dee4; }
+.pos-receipt-totals>div { display: flex; justify-content: space-between; gap: 12px; color: #66717e; }
+.pos-receipt-totals strong { color: #46515d; font-weight: 600; }
+.pos-receipt-totals .pos-receipt-grand-total { margin-top: 3px; padding-top: 11px; border-top: 1px solid #e2e5e9; color: #173a59; font-size: 15px; font-weight: 800; }
+.pos-receipt-grand-total strong { color: #173a59; font-size: 17px; font-weight: 850; }
+.pos-receipt-footer { padding-top: 12px; border-top: 1px dashed #d9dee4; color: #66717e; text-align: center; }
+.pos-receipt-footer p { margin: 0 0 5px; color: #293544; font-weight: 700; }
+.pos-receipt-footer small { font-size: 10px; }
+.dark .pos-receipt-paper { border-color: #d9dee4; background: #fff; color: #26313d; }
+
+@media (max-width: 767px) {
+  .foodpos-menu-layout .foodpos-categories { position: sticky; top: 60px; z-index: 6; max-height: none; padding: 6px 2px 8px; background: var(--food-canvas); }
+  .foodpos-menu-layout .foodpos-categories button { min-height: 49px; }
+  .pos-receipt-paper { padding: 17px 15px; }
+}
+@media print {
+  @page { size: 80mm auto; margin: 4mm; }
+  body * { visibility: hidden !important; }
+  .pos-receipt-paper,.pos-receipt-paper * { visibility: visible !important; }
+  .pos-receipt-paper { position: absolute; inset: 0 auto auto 0; width: 72mm; max-width: none; margin: 0; padding: 0; border: 0; border-radius: 0; box-shadow: none; font-size: 10px; }
+  .pos-receipt-header h3 { font-size: 15px; }
+  .pos-receipt-meta { gap: 5px 8px; }
+  .pos-receipt-item,.pos-receipt-columns { gap: 5px; }
+}
+
 .foodpos-shift-notice,.payment-shift-notice { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid #e5c885; border-radius: 10px; background: #fff8e8; color: #624719; font-size: 12px; }
 .foodpos-shift-notice button { min-height: 40px; padding: 0 12px; border: 0; border-radius: 8px; background: #252821; color: #fff; font-weight: 700; }
 .payment-shift-notice { margin: 12px 0; }

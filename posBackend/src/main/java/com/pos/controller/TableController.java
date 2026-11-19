@@ -1,12 +1,15 @@
 package com.pos.controller;
 
 import com.pos.dto.TableStatusRequest;
+import com.pos.dto.CreateTableRequest;
 import com.pos.model.RestaurantTable;
+import com.pos.model.TableStatus;
 import com.pos.repository.RestaurantTableRepository;
 import com.pos.service.TableService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -36,8 +39,14 @@ public class TableController {
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
-    public ResponseEntity<RestaurantTable> createTable(@RequestBody RestaurantTable table) {
-        return ResponseEntity.ok(tableRepository.save(table));
+    public ResponseEntity<RestaurantTable> createTable(@Valid @RequestBody CreateTableRequest request) {
+        RestaurantTable table = RestaurantTable.builder()
+                .name(request.name().trim())
+                .floor(request.floor() == null || request.floor().isBlank() ? null : request.floor().trim())
+                .capacity(request.capacity())
+                .status(TableStatus.AVAILABLE)
+                .build();
+        return ResponseEntity.status(HttpStatus.CREATED).body(tableRepository.save(table));
     }
 
     @PutMapping("/{id}")

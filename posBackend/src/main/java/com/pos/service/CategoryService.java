@@ -4,12 +4,14 @@ import com.pos.model.Category;
 import com.pos.model.Product;
 import com.pos.repository.CategoryRepository;
 import com.pos.repository.ProductRepository;
+import com.pos.service.MinIOService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -21,6 +23,7 @@ public class CategoryService {
 
     private final CategoryRepository categoryRepository;
     private final ProductRepository productRepository;
+    private final MinIOService minIOService;
 
     private static final String UNCATEGORIZED_NAME = "Uncategorized";
 
@@ -57,6 +60,23 @@ public class CategoryService {
         });
         category.setName(name.trim());
         return categoryRepository.save(category);
+    }
+
+    public Category updateImage(Long id, MultipartFile image) throws Exception {
+        if (image == null || image.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Category image is required");
+        }
+        Category category = get(id);
+        category.setImageUrl(minIOService.uploadFile(image));
+        return categoryRepository.save(category);
+    }
+
+    public byte[] getImage(Long id) throws Exception {
+        Category category = get(id);
+        if (category.getImageUrl() == null || category.getImageUrl().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Category image not found");
+        }
+        return minIOService.getFile(category.getImageUrl());
     }
 
     public void delete(Long id) {

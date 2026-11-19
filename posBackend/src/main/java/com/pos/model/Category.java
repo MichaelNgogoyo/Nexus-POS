@@ -18,6 +18,9 @@ public class Category {
     @Column(unique = true, nullable = false)
     private String name;
 
+    @Column(name = "image_url", length = 255)
+    private String imageUrl;
+
     @Builder.Default
     private int productCount = 0;
 }
