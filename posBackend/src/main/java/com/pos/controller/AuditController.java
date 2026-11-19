@@ -14,7 +14,7 @@ import org.springframework.web.server.ResponseStatusException;
 @RestController
 @RequestMapping("/api/audit")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+@PreAuthorize("hasRole('SUPER_ADMIN')")
 public class AuditController {
 
     private final AuditLogRepository auditLogRepository;

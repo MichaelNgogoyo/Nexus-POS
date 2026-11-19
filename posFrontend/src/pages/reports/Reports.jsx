@@ -5,6 +5,7 @@ import {
   getLowStockProducts,
   getAllProducts,
   getAllSales,
+  getAnalytics,
 } from '../../services/api.js';
 
 import OverviewTab from './tabs/OverviewTab.jsx';
@@ -12,9 +13,10 @@ import SalesTab from './tabs/SalesTab.jsx';
 import ProductsTab from './tabs/ProductsTab.jsx';
 import PaymentsTab from './tabs/PaymentsTab.jsx';
 import InventoryTab from './tabs/InventoryTab.jsx';
-import InsightsTab from './tabs/InsightsTab.jsx';
+import AnalyticsTab from './tabs/AnalyticsTab.jsx';
 
 import { exportToCSV } from './utils/exportUtils.js';
+import { buildAnalyticsExportRows } from './utils/analyticsUtils.js';
 
 import InsightsRounded from '@mui/icons-material/InsightsRounded';
 import DashboardRounded from '@mui/icons-material/DashboardRounded';
@@ -43,9 +45,15 @@ const DATE_RANGES = [
   { label: 'Year', value: '1Y' },
 ];
 
+const localDate = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+const today = () => localDate(new Date());
+const daysAgo = (days) => { const date = new Date(); date.setDate(date.getDate() - days); return localDate(date); };
+
 function Reports() {
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('insights');
   const [dateRange, setDateRange] = useState('30D');
+  const [fromDate, setFromDate] = useState(() => daysAgo(29));
+  const [toDate, setToDate] = useState(() => today());
   const [exportOpen, setExportOpen] = useState(false);
   const exportRef = useRef(null);
 
@@ -77,6 +85,14 @@ function Reports() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const analyticsQuery = useQuery({
+    queryKey: ['analytics', fromDate, toDate],
+    queryFn: () => getAnalytics({ from: fromDate, to: toDate }),
+    select: (res) => res.data,
+    enabled: activeTab === 'insights' && Boolean(fromDate) && Boolean(toDate) && fromDate <= toDate,
+    staleTime: 60 * 1000,
+  });
+
   // salesRaw may be a Spring Page (with .content) or a plain array
   const products = Array.isArray(productsRaw) ? productsRaw : [];
   const sales = Array.isArray(salesRaw) ? salesRaw : (salesRaw?.content ?? []);
@@ -96,6 +112,10 @@ function Reports() {
 
   const handleExport = (type) => {
     setExportOpen(false);
+    if (activeTab === 'insights') {
+      if (type === 'csv' || type === 'excel') exportToCSV(buildAnalyticsExportRows(analyticsQuery.data), 'nexus-pos-analytics');
+      return;
+    }
     const summaryExport = summary?.dailyStats?.map((d) => ({
       Date: d.day,
       Revenue: d.revenue,
@@ -106,12 +126,25 @@ function Reports() {
     else if (type === 'excel') exportToCSV(summaryExport, 'bi-report-summary');
   };
 
+  const selectRange = (range) => {
+    const days = range === '1D' ? 1 : range === '7D' ? 7 : range === '90D' ? 90 : range === '1Y' ? 365 : 30;
+    setDateRange(range);
+    setToDate(today());
+    setFromDate(daysAgo(days - 1));
+  };
+
   const sharedProps = {
     summary,
     products,
     sales,
     lowStock: lowStock ?? [],
     dateRange,
+    fromDate,
+    toDate,
+    analytics: analyticsQuery.data,
+    analyticsLoading: analyticsQuery.isLoading,
+    analyticsError: analyticsQuery.isError,
+    refetchAnalytics: analyticsQuery.refetch,
     isLoading,
   };
 
@@ -135,13 +168,13 @@ function Reports() {
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {/* Date Range */}
             <div className="flex items-center gap-1 bg-bg-secondary rounded-xl border border-border-primary p-1">
               {DATE_RANGES.map((r) => (
                 <button
                   key={r.value}
-                  onClick={() => setDateRange(r.value)}
+                  onClick={() => selectRange(r.value)}
                   className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all ${
                     dateRange === r.value
                       ? 'bg-brand-primary text-white shadow-sm'
@@ -152,6 +185,15 @@ function Reports() {
                 </button>
               ))}
             </div>
+            {activeTab === 'insights' && (
+              <div className="flex items-center gap-1.5 text-xs text-text-muted">
+                <label className="sr-only" htmlFor="analytics-from">From date</label>
+                <input id="analytics-from" aria-label="From date" type="date" value={fromDate} max={toDate} onChange={(event) => { setDateRange('CUSTOM'); setFromDate(event.target.value); }} className="bg-bg-secondary border border-border-primary rounded-lg px-2 py-1.5 text-text-primary" />
+                <span>to</span>
+                <label className="sr-only" htmlFor="analytics-to">To date</label>
+                <input id="analytics-to" aria-label="To date" type="date" value={toDate} min={fromDate} max={today()} onChange={(event) => { setDateRange('CUSTOM'); setToDate(event.target.value); }} className="bg-bg-secondary border border-border-primary rounded-lg px-2 py-1.5 text-text-primary" />
+              </div>
+            )}
 
             {/* Export Dropdown */}
             <div className="relative" ref={exportRef}>
@@ -169,7 +211,7 @@ function Reports() {
                     onClick={() => handleExport('excel')}
                     className="w-full text-left px-4 py-2.5 text-sm text-text-primary hover:bg-bg-tertiary transition-colors"
                   >
-                    📊 Spreadsheet CSV
+                    📊 CSV for spreadsheets
                   </button>
                   <button
                     onClick={() => handleExport('csv')}
@@ -220,7 +262,7 @@ function Reports() {
           <InventoryTab {...sharedProps} />
         )}
         {activeTab === 'insights' && (
-          <InsightsTab {...sharedProps} />
+          <AnalyticsTab {...sharedProps} />
         )}
       </div>
     </div>

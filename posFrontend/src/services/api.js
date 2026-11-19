@@ -39,7 +39,7 @@ apiClient.interceptors.response.use(
             return Promise.reject(error);
         }
 
-        if (error?.config?.suppressToastStatuses?.includes(status)) {
+        if (error?.config?.suppressToast || error?.config?.suppressToastStatuses?.includes(status)) {
             return Promise.reject(error);
         }
 
@@ -81,6 +81,7 @@ export const viewSale = (saleId) => {
 };
 
 export const getSaleReceipt = (saleId) => apiClient.get(`/api/sale/${saleId}/receipt`, { responseType: 'text' });
+export const getSaleReceiptDetails = (saleId) => apiClient.get(`/api/sale/${saleId}/receipt/details`);
 
 /**
  * Deletes a sale by its ID.
@@ -153,7 +154,7 @@ export const updateProduct = (productId, productData) => {
     return apiClient.put(`/api/product/${productId}`, productData);
 };
 
-export const updateProductWithImage = (productId, {name, price, active, discount, quantity, category, file}) => {
+export const updateProductWithImage = (productId, {name, price, active, discount, quantity, category, kitchenStation, file}) => {
     const formData = new FormData();
     formData.append("name", name);
     formData.append("price", price);
@@ -161,6 +162,7 @@ export const updateProductWithImage = (productId, {name, price, active, discount
     formData.append("discount", discount);
     formData.append("quantity", quantity);
     formData.append("category", category ?? "");
+    formData.append("kitchenStation", kitchenStation || "MAIN");
     if (file) {
         formData.append("file", file);
     }
@@ -209,6 +211,12 @@ export const getProductStockMovements = (productId) => {
 export const listCategories = () => apiClient.get('/api/category');
 export const createCategory = (name) => apiClient.post('/api/category', null, { params: { name } });
 export const updateCategory = (id, name) => apiClient.put(`/api/category/${id}`, null, { params: { name } });
+export const uploadCategoryImage = (id, file) => {
+    const form = new FormData();
+    form.append('file', file);
+    return apiClient.post(`/api/category/${id}/image`, form);
+};
+export const getCategoryImageUrl = (id) => `${API_BASE_URL}/api/category/${id}/image`;
 export const deleteCategory = (id) => apiClient.delete(`/api/category/${id}`);
 // Backward compatibility alias
 export const getCategories = listCategories;
@@ -222,6 +230,9 @@ export const getApiBaseUrl = () => API_BASE_URL;
 /** GET /api/report/summary — all dashboard KPIs, chart data, recent sales, top products */
 export const getDashboardSummary = () => apiClient.get('/api/report/summary');
 
+/** GET /api/report/analytics?from=YYYY-MM-DD&to=YYYY-MM-DD — bounded management analytics */
+export const getAnalytics = (params) => apiClient.get('/api/report/analytics', { params });
+
 /** GET /api/report/low-stock — products at or below their low-stock threshold */
 export const getLowStockProducts = () => apiClient.get('/api/report/low-stock');
 
@@ -231,7 +242,7 @@ export const getTaxRate = () => apiClient.get('/api/config/tax-rate');
 // ========================================
 // Restaurant Tables API
 // ========================================
-export const getAllTables = () => apiClient.get('/api/tables');
+export const getAllTables = (config = {}) => apiClient.get('/api/tables', config);
 export const createTable = (data) => apiClient.post('/api/tables', data);
 export const updateTableStatus = (id, status) => apiClient.put(`/api/tables/${id}/status`, { status });
 
@@ -251,14 +262,18 @@ export const addOrderItem = (orderId, item) => apiClient.post(`/api/orders/${ord
 // ========================================
 // Kitchen API
 // ========================================
-export const getKitchenOrders = ({ includeHistory = false } = {}) => apiClient.get('/api/kitchen/orders', { params: { includeHistory } });
+export const getKitchenStations = () => apiClient.get('/api/kitchen/stations', { suppressToast: true });
+export const getKitchenOrders = ({ includeHistory = false, station } = {}) => apiClient.get('/api/kitchen/orders', {
+    params: { includeHistory, ...(station ? { station } : {}) },
+    suppressToast: true,
+});
 export const advanceKitchenStatus = (id, status) => apiClient.put(`/api/kitchen/orders/${id}/status`, { status });
 
 // ========================================
 // Shift API
 // ========================================
 export const getCurrentShift = (cashierId) => apiClient.get('/api/shifts/current', {
-    params: { cashierId },
+    ...(cashierId ? { params: { cashierId } } : {}),
     suppressToastStatuses: [404],
 });
 export const openShift = (data) => apiClient.post('/api/shifts/open', data);
@@ -298,6 +313,18 @@ export const getAuditLog = (page = 0, size = 20) => apiClient.get('/api/audit', 
 
 export const getCombos = () => apiClient.get('/api/combos');
 export const getModifierGroups = (productId) => apiClient.get('/api/modifier-groups', { params: { productId } });
+
+export const getMyProfile = () => apiClient.get('/api/me/profile');
+export const saveMyAppearance = (settings) => apiClient.put('/api/me/profile/appearance', settings);
+export const uploadMyAvatar = (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return apiClient.post('/api/me/profile/avatar', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+};
+export const getMyAvatar = () => apiClient.get('/api/me/profile/avatar', { responseType: 'blob', suppressToastStatuses: [404] });
+export const deleteMyAvatar = () => apiClient.delete('/api/me/profile/avatar');
+export const getPlatformSettings = () => apiClient.get('/api/platform/settings');
+export const updatePlatformSettings = (settings) => apiClient.put('/api/platform/settings', settings);
 
 
 const api = {

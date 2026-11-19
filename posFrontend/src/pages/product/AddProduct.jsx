@@ -20,7 +20,8 @@ function AddProduct() {
         status: "",
         discount: "",
         quantity: "",
-        category: ""
+        category: "",
+        kitchenStation: "MAIN"
     });
 
     const [image, setImage] = useState(null);
@@ -111,6 +112,7 @@ function AddProduct() {
             formData.append("discount", discount.toString());
             formData.append("quantity", quantity.toString());
             formData.append("category", chosenCategory || "");
+            formData.append("kitchenStation", products.kitchenStation || "MAIN");
 
             if (image) {
                 formData.append("file", image);
@@ -120,7 +122,7 @@ function AddProduct() {
 
             if (response.status === 200 || response.status === 201) {
                 alert("Product Saved!");
-                setProducts({name: "", price: "", status: "", discount: "", quantity: "", category: ""});
+                setProducts({name: "", price: "", status: "", discount: "", quantity: "", category: "", kitchenStation: "MAIN"});
                 setNewCategory("");
                 setImage(null);
                 navigate(ROUTES.PRODUCTS);
@@ -225,6 +227,20 @@ function AddProduct() {
                                     className="w-full rounded-xl border border-border-secondary bg-bg-tertiary px-4 py-3 text-text-primary placeholder:text-text-muted shadow-sm focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
                                 />
                             </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-sm font-semibold text-text-secondary">Kitchen station</label>
+                            <input
+                                type="text"
+                                name="kitchenStation"
+                                value={products.kitchenStation}
+                                onChange={handleChange}
+                                maxLength={60}
+                                placeholder="e.g. MAIN, GRILL, BAR"
+                                className="w-full rounded-xl border border-border-secondary bg-bg-tertiary px-4 py-3 text-text-primary placeholder:text-text-muted shadow-sm focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
+                            />
+                            <p className="text-xs text-text-muted">Kitchen tickets for this product go to the named station.</p>
                         </div>
 
                         <div className="space-y-2">

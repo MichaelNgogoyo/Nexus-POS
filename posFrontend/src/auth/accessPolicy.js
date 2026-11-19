@@ -2,15 +2,15 @@ export const ROLE_PERMISSIONS = Object.freeze({
   ADMIN: [
     'view_dashboard', 'view_products', 'edit_products', 'view_inventory',
     'view_sales', 'view_tables', 'view_orders', 'view_kitchen', 'view_customers',
-    'view_shift', 'view_reservations', 'view_reports', 'manage_users',
-    'manage_categories', 'view_finance', 'view_procurement', 'manage_settings',
-    'view_audit', 'view_suppliers', 'view_purchase_orders',
+    'view_shift', 'view_reservations', 'view_reports',
+    'manage_categories', 'view_finance', 'view_procurement',
+    'view_suppliers', 'view_purchase_orders',
   ],
   MANAGER: [
     'view_dashboard', 'view_products', 'edit_products', 'view_inventory',
     'view_sales', 'view_tables', 'view_orders', 'view_kitchen', 'view_customers',
     'view_shift', 'view_reservations', 'view_reports', 'manage_categories',
-    'view_finance', 'view_procurement', 'manage_settings', 'view_audit',
+    'view_finance', 'view_procurement',
     'view_suppliers', 'view_purchase_orders',
   ],
   CASHIER: [
@@ -21,6 +21,13 @@ export const ROLE_PERMISSIONS = Object.freeze({
   STOCK_CLERK: ['view_products', 'view_inventory', 'view_procurement', 'view_suppliers', 'view_purchase_orders'],
   PROCUREMENT_OFFICER: ['view_procurement', 'view_purchase_orders'],
   USER: [],
+  SUPER_ADMIN: [
+    'view_dashboard', 'view_products', 'edit_products', 'view_inventory',
+    'view_sales', 'view_tables', 'view_orders', 'view_kitchen', 'view_customers',
+    'view_shift', 'view_reservations', 'view_reports', 'manage_users',
+    'manage_categories', 'view_finance', 'view_procurement', 'manage_settings',
+    'view_audit', 'view_suppliers', 'view_purchase_orders', 'manage_platform',
+  ],
 });
 
 export function normalizeRole(role) {
@@ -38,6 +45,7 @@ export function permissionsForRoles(roles = []) {
 
 export function landingRouteForRoles(roles = []) {
   const normalized = new Set(roles.map(normalizeRole));
+  if (normalized.has('SUPER_ADMIN')) return '/super-admin';
   if (normalized.has('ADMIN') || normalized.has('MANAGER')) return '/admin/dashboard';
   if (normalized.has('CASHIER')) return '/pos/checkout';
   if (normalized.has('KITCHEN')) return '/pos/kitchen';

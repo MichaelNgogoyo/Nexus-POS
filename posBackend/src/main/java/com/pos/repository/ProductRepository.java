@@ -12,6 +12,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import jakarta.persistence.LockModeType;
+import java.math.BigDecimal;
 
 @Repository
 public interface ProductRepository extends JpaRepository<Product, Long> {
@@ -39,5 +40,19 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     @Query("SELECT p FROM Product p WHERE p.active = true AND p.quantity <= p.lowStockThreshold ORDER BY p.quantity ASC")
     List<Product> findLowStockProducts();
 
+    @Query("SELECT p FROM Product p WHERE p.active = true AND p.quantity <= p.lowStockThreshold ORDER BY p.quantity ASC")
+    List<Product> findLowStockProducts(Pageable pageable);
+
+    @Query("SELECT COUNT(p) FROM Product p WHERE p.active = true AND p.quantity <= p.lowStockThreshold")
+    long countLowStockProducts();
+
+    @Query("SELECT COALESCE(SUM(CASE WHEN p.costPrice IS NOT NULL AND p.quantity > 0 THEN p.costPrice * p.quantity ELSE 0 END), 0), " +
+            "COALESCE(SUM(CASE WHEN p.costPrice IS NOT NULL AND p.quantity > 0 THEN p.quantity ELSE 0 END), 0), " +
+            "COALESCE(SUM(CASE WHEN p.quantity > 0 THEN p.quantity ELSE 0 END), 0) FROM Product p WHERE p.active = true")
+    Object[] analyticsInventoryTotals();
+
     long countByActiveTrue();
+
+    @Query("SELECT DISTINCT p.kitchenStation FROM Product p WHERE p.active = true ORDER BY p.kitchenStation")
+    List<String> findActiveKitchenStations();
 }

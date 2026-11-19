@@ -15,7 +15,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 
 @RestController
 @RequestMapping("/api")
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasRole('SUPER_ADMIN')")
 public class UserController {
 
     @Autowired

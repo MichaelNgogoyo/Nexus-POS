@@ -66,10 +66,11 @@ public class SecurityConfig {
                                 "/", "/index.html", "/api/public/**", "/assets/**",
                                 "/static/**", "/shop.svg", "/favicon.ico",
                                 "/api/product/*/image",
+                                "/api/category/*/image",
                                 "/api/config/**", "/actuator/health/**", "/actuator/info"
                         ).permitAll()
-                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").hasRole("ADMIN")
-                        .requestMatchers("/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").hasRole("SUPER_ADMIN")
+                        .requestMatchers("/admin/**").hasRole("SUPER_ADMIN")
                         .requestMatchers("/user/**").hasAnyRole("USER", "ADMIN","CASHIER","KITCHEN","PROCUREMENT","STOCK")
                         .anyRequest().authenticated()
                 )

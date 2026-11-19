@@ -25,6 +25,7 @@ POS_ROLES = {
     "KITCHEN",
     "STOCK_CLERK",
     "PROCUREMENT_OFFICER",
+    "SUPER_ADMIN",
 }
 USERNAME_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 

@@ -13,14 +13,14 @@ spring:
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/pos_db}
     username: ${DB_USERNAME:pos_user}
-    password: ${DB_PASSWORD:password}
+    password: ${DB_PASSWORD:local-postgres-change-me}
     driver-class-name: org.postgresql.Driver
 
   security:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8081/realms/pos}
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://keycloak.localhost:8081/realms/pos}
       client:
         registration:
           pos-client:
@@ -33,10 +33,10 @@ spring:
 
         provider:
           pos-keycloak:
-            issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8081/realms/pos}
-            authorization-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8081/realms/pos}/protocol/openid-connect/auth
-            token-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8081/realms/pos}/protocol/openid-connect/token
-            user-info-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8081/realms/pos}/protocol/openid-connect/userinfo
+            issuer-uri: ${KEYCLOAK_ISSUER_URI:http://keycloak.localhost:8081/realms/pos}
+            authorization-uri: ${KEYCLOAK_ISSUER_URI:http://keycloak.localhost:8081/realms/pos}/protocol/openid-connect/auth
+            token-uri: ${KEYCLOAK_ISSUER_URI:http://keycloak.localhost:8081/realms/pos}/protocol/openid-connect/token
+            user-info-uri: ${KEYCLOAK_ISSUER_URI:http://keycloak.localhost:8081/realms/pos}/protocol/openid-connect/userinfo
             user-name-attribute: preferred_username
 
   jpa:

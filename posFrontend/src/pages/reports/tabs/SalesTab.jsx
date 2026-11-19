@@ -137,8 +137,8 @@ export default function SalesTab({ summary, isLoading }) {
             accent: 'border-l-4 border-l-violet-500',
           },
           {
-            label: 'Tax Collected', value: fmt(revenue * 0.16),
-            sub: '16% VAT est.', accent: 'border-l-4 border-l-amber-500',
+            label: 'Tax Collected', value: '—',
+            sub: 'Use Analytics for recorded tax totals', accent: 'border-l-4 border-l-amber-500',
           },
         ].map((kpi) => (
           <div key={kpi.label} className={`bg-bg-secondary rounded-2xl border border-border-primary p-4 ${kpi.accent}`}>

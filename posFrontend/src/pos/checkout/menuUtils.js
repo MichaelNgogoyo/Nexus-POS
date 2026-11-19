@@ -13,14 +13,18 @@ export function getMenuCategories(apiCategories = [], products = []) {
   for (const category of Array.isArray(apiCategories) ? apiCategories : []) {
     const name = typeof category === 'string' ? category : category?.name;
     if (!name) continue;
-    categories.set(categoryKey(category), { id: categoryKey(category), name });
+    categories.set(categoryKey(category), {
+      id: categoryKey(category),
+      name,
+      imageUrl: category?.imageUrl || category?.imageURL || null,
+    });
   }
   for (const product of products) {
     const category = product?.category;
     const name = typeof category === 'string' ? category : category?.name;
     if (!name) continue;
     const key = categoryKey(category);
-    if (!categories.has(key)) categories.set(key, { id: key, name });
+    if (!categories.has(key)) categories.set(key, { id: key, name, imageUrl: category?.imageUrl || category?.imageURL || null });
   }
   return [{ id: ALL_CATEGORIES, name: 'All dishes' }, ...categories.values()];
 }

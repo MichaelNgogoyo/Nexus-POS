@@ -286,8 +286,12 @@ class SalesServiceIdempotencyTest {
         assertThat(orderCaptor.getAllValues().get(0).getItems().get(0).getNotes()).isEqualTo("No cream");
         assertThat(orderCaptor.getAllValues().get(0).getItems().get(0).getUnitPrice()).isEqualByComparingTo("55.55");
         assertThat(orderCaptor.getAllValues().get(1).getSaleId()).isEqualTo(91L);
-        verify(kitchenOrderRepository).save(argThat((KitchenOrder ticket) -> ticket.getOrder().getId().equals(501L)
-                && ticket.getOrder().getItems().get(0).getKitchenStatus() == com.pos.model.KitchenStatus.PENDING));
+        verify(kitchenOrderRepository).saveAll(argThat(tickets -> {
+            List<KitchenOrder> savedTickets = java.util.stream.StreamSupport.stream(tickets.spliterator(), false).toList();
+            return savedTickets.size() == 1 && savedTickets.get(0).getOrder().getId().equals(501L)
+                    && savedTickets.get(0).getKitchenStation().equals("MAIN")
+                    && savedTickets.get(0).getOrder().getItems().get(0).getKitchenStatus() == com.pos.model.KitchenStatus.PENDING;
+        }));
     }
 
     @Test

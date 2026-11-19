@@ -9,6 +9,7 @@ const money = (amount) => `KSh ${Number(amount || 0).toLocaleString('en-KE', { m
 export default function FoodProductCard({ product, count = 0, featured = false, onSelect }) {
   const [imageFailed, setImageFailed] = useState(false);
   const available = isMenuProductAvailable(product);
+  const categoryName = typeof product.category === 'string' ? product.category : product.category?.name;
 
   return (
     <button
@@ -29,13 +30,15 @@ export default function FoodProductCard({ product, count = 0, featured = false, 
         )}
         {imageFailed || product.id == null ? <span className="food-image-fallback"><RestaurantMenuRoundedIcon /></span> : null}
         {!available && <span className="food-unavailable-label">Unavailable</span>}
-        {count > 0 && <span className="food-product-count">{count} in order</span>}
-        {available && <span className="food-product-add" aria-hidden="true"><AddRoundedIcon /></span>}
       </span>
       <span className="food-product-info">
+        {categoryName && <span className="food-product-category">{categoryName}</span>}
         <span className="food-product-name">{product.name}</span>
-        {product.description && <span className="food-product-description">{product.description}</span>}
-        <span className="food-product-price">{money(product.price)}</span>
+        <span className="food-product-card-bottom">
+          <span className="food-product-price">{money(product.price)}</span>
+          {count > 0 && <span className="food-product-count-inline">{count} added</span>}
+          {available && <span className="food-product-add-label" aria-hidden="true"><AddRoundedIcon /></span>}
+        </span>
       </span>
     </button>
   );

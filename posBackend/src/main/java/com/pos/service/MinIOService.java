@@ -2,6 +2,7 @@ package com.pos.service;
 
 import io.minio.GetObjectArgs;
 import io.minio.MinioClient;
+import io.minio.RemoveObjectArgs;
 import io.minio.PutObjectArgs;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -44,6 +45,23 @@ public class MinIOService {
         );
 
         return objectName;
+    }
+
+    public void uploadFile(String objectName, MultipartFile file, String contentType) throws Exception {
+        if (objectName == null || objectName.isBlank() || file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("object name and file are required");
+        }
+        minioClient.putObject(PutObjectArgs.builder()
+                .bucket(bucketName)
+                .object(objectName)
+                .stream(file.getInputStream(), file.getSize(), -1)
+                .contentType(contentType)
+                .build());
+    }
+
+    public void deleteFile(String objectName) throws Exception {
+        if (objectName == null || objectName.isBlank()) return;
+        minioClient.removeObject(RemoveObjectArgs.builder().bucket(bucketName).object(objectName).build());
     }
 
     public byte[] getFile(String objectName) throws Exception {

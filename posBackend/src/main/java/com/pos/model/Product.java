@@ -40,6 +40,11 @@ public class Product {
     private boolean available = true;
     private String imageURL;
 
+    /** Kitchen destination used when new order items are submitted. */
+    @Builder.Default
+    @Column(name = "kitchen_station", nullable = false, length = 60)
+    private String kitchenStation = "MAIN";
+
     private double discount;
     private int quantity;
 

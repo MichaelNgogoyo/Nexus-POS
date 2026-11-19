@@ -3,9 +3,9 @@ import {Navigate, useLocation} from "react-router-dom";
 import {usePermissions} from "./permissions";
 import {ROUTES} from "../routes.js";
 
-function RequireAuth({children, requiredPermission, requiredAnyPermissions = []}) {
+function RequireAuth({children, requiredPermission, requiredRole, requiredAnyPermissions = []}) {
     const {keycloak, initialized} = useKeycloak();
-    const {can} = usePermissions();
+    const {can, roles} = usePermissions();
     const location = useLocation();
 
     if (!initialized || keycloak?.authenticated === undefined) {
@@ -17,8 +17,9 @@ function RequireAuth({children, requiredPermission, requiredAnyPermissions = []}
     }
 
     const hasSinglePermission = !requiredPermission || can(requiredPermission);
+    const hasRequiredRole = !requiredRole || roles.includes(String(requiredRole).toUpperCase());
     const hasAnyPermission = requiredAnyPermissions.length === 0 || requiredAnyPermissions.some(can);
-    if (!hasSinglePermission || !hasAnyPermission) {
+    if (!hasSinglePermission || !hasRequiredRole || !hasAnyPermission) {
         return (
             <div className="min-h-screen flex items-center justify-center px-6 text-center">
                 <div className="space-y-2">

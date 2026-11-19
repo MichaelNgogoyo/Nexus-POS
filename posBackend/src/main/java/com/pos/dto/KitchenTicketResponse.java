@@ -9,6 +9,7 @@ import java.util.List;
 /** Kitchen-only projection: deliberately excludes customer identity, cashier data, and monetary values. */
 public record KitchenTicketResponse(
         Long id,
+        String kitchenStation,
         KitchenStatus status,
         LocalDateTime receivedAt,
         LocalDateTime startedAt,

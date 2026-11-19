@@ -111,6 +111,35 @@ class ShiftControllerAuthorizationTest {
     }
 
     @Test
+    void cashierCanReadTheirCurrentShiftWithoutSupplyingIdentity() throws Exception {
+        when(shiftRepository.findByCashierIdAndStatus("cashier", ShiftStatus.OPEN)).thenReturn(Optional.empty());
+
+        mockMvc.perform(get("/api/shifts/current").with(user("cashier").roles("CASHIER")))
+                .andExpect(status().isNotFound());
+
+        verify(shiftRepository).findByCashierIdAndStatus("cashier", ShiftStatus.OPEN);
+    }
+
+    @Test
+    void cashierCanOpenTheirOwnShiftWithoutSupplyingIdentity() throws Exception {
+        when(shiftRepository.findByCashierIdAndStatus("cashier", ShiftStatus.OPEN)).thenReturn(Optional.empty());
+        when(shiftRepository.saveAndFlush(any(Shift.class))).thenAnswer(invocation -> {
+            Shift shift = invocation.getArgument(0);
+            shift.setId(13L);
+            return shift;
+        });
+
+        mockMvc.perform(post("/api/shifts/open")
+                        .with(user("cashier").roles("CASHIER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"openingBalance\":100.00}"))
+                .andExpect(status().isOk());
+
+        verify(shiftRepository).findByCashierIdAndStatus("cashier", ShiftStatus.OPEN);
+        verify(auditService).log("cashier", "SHIFT_OPENED", "Shift", "13", null, "OPEN");
+    }
+
+    @Test
     void concurrentShiftOpenReturnsConflictWhenUniqueConstraintWinsRace() throws Exception {
         when(shiftRepository.findByCashierIdAndStatus("cashier", ShiftStatus.OPEN))
                 .thenReturn(Optional.empty(), Optional.of(Shift.builder().id(12L).status(ShiftStatus.OPEN).build()));
