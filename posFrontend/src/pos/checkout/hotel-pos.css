@@ -756,6 +756,9 @@
 .dark .foodpos-shift-indicator { border-color: var(--food-border); background: var(--food-surface); color: var(--food-ink); }
 .dark .foodpos-shift-indicator.is-open { border-color: #3e7050; background: #1e3727; color: #b9e6c6; }
 .dark .food-product-category,.dark .food-product-count-inline { color: #b7c0ca; }
+.dark .food-product-card { border-color: var(--food-border); background: var(--food-surface); color: var(--food-ink); }
+.dark .food-product-info { background: var(--food-surface); }
+.dark .food-product-category { color: #b7c0ca; }
 .dark .food-product-name,.dark .food-product-price { color: #f2f4f7; }
 .dark .food-product-add-label { background: #d9e2ea; color: #173a5a; }
 .dark .foodpos-pay-now-action { border-color: var(--food-border); background: #242d37; color: var(--food-ink); }
