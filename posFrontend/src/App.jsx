@@ -5,6 +5,9 @@ import { ROUTES } from './routes.js';
 import RequireAuth from './auth/RequireAuth.jsx';
 import { usePermissions } from './auth/permissions.js';
 import { landingRouteForRoles } from './auth/accessPolicy.js';
+import { useEffect } from 'react';
+import { applyTheme } from './theme/theme.js';
+import { getMyProfile } from './services/api.js';
 import POSLayout from './pos/POSLayout.jsx';
 import AdminLayout from './admin/AdminLayout.jsx';
 import Error from './components/Error.jsx';
@@ -20,8 +23,9 @@ const Categories = lazy(() => import('./pages/category/Categories.jsx'));
 const Inventory = lazy(() => import('./pages/inventory/Inventory.jsx'));
 const Reports = lazy(() => import('./pages/reports/Reports.jsx'));
 const UserManagement = lazy(() => import('./pages/users/UserManagement.jsx'));
-const Settings = lazy(() => import('./pages/settings/Settings.jsx'));
 const AuditLog = lazy(() => import('./pages/admin/AuditLog.jsx'));
+const ProfileSettings = lazy(() => import('./pages/settings/ProfileSettings.jsx'));
+const SuperAdminDashboard = lazy(() => import('./pages/admin/SuperAdminDashboard.jsx'));
 
 // Finance pages
 const Expenses = lazy(() => import('./pages/finance/Expenses.jsx'));
@@ -74,12 +78,34 @@ function FinanceLanding() {
     return <Navigate to={can('view_finance') ? ROUTES.FINANCE_EXPENSES : ROUTES.FINANCE_PURCHASES} replace />;
 }
 
+function ProfileThemeSync() {
+    const { keycloak } = useKeycloak();
+    const subject = keycloak?.authenticated ? keycloak?.tokenParsed?.sub : null;
+
+    useEffect(() => {
+        let active = true;
+        if (subject) {
+            getMyProfile().then(({ data }) => {
+                if (active && keycloak?.tokenParsed?.sub === subject) {
+                    applyTheme({ preset: data.themePreset, mode: data.themeMode });
+                }
+            }).catch(() => {});
+        }
+        return () => { active = false; };
+    }, [subject, keycloak]);
+    return null;
+}
+
 function App() {
     return (
+        <>
+        <ProfileThemeSync />
         <Suspense fallback={<Loader />}>
             <Routes>
                 <Route path={ROUTES.LOGIN} element={<Login />} />
                 <Route path={ROUTES.REGISTER} element={<Register />} />
+                <Route path={ROUTES.PROFILE} element={<RequireAuth><ProfileSettings /></RequireAuth>} />
+                <Route path={ROUTES.SUPER_ADMIN} element={<RequireAuth requiredPermission="manage_platform"><SuperAdminDashboard /></RequireAuth>} />
 
                 {/* POS Mode */}
                 <Route path="/pos" element={<RequireAuth requiredAnyPermissions={['view_sales', 'view_kitchen']}><POSLayout /></RequireAuth>}>
@@ -104,7 +130,7 @@ function App() {
                     <Route path="inventory" element={<RequireAuth requiredPermission="view_inventory"><Inventory /></RequireAuth>} />
                     <Route path="reports" element={<RequireAuth requiredPermission="view_reports"><Reports /></RequireAuth>} />
                     <Route path="users" element={<RequireAuth requiredPermission="manage_users"><UserManagement /></RequireAuth>} />
-                    <Route path="settings" element={<RequireAuth requiredPermission="manage_settings"><Settings /></RequireAuth>} />
+                    <Route path="settings" element={<RequireAuth requiredPermission="manage_platform"><SuperAdminDashboard /></RequireAuth>} />
                     <Route path="audit" element={<RequireAuth requiredPermission="view_audit"><AuditLog /></RequireAuth>} />
                 </Route>
 
@@ -125,13 +151,14 @@ function App() {
                 <Route path="/transactions" element={<Navigate to="/admin/reports" replace />} />
                 <Route path="/inventory" element={<Navigate to="/admin/inventory" replace />} />
                 <Route path="/reports" element={<Navigate to="/admin/reports" replace />} />
-                <Route path="/settings" element={<Navigate to="/admin/settings" replace />} />
+                <Route path="/settings" element={<Navigate to={ROUTES.PROFILE} replace />} />
                 <Route path="/categories" element={<Navigate to="/admin/categories" replace />} />
                 <Route path="/users" element={<Navigate to="/admin/users" replace />} />
                 <Route path={ROUTES.ERROR} element={<Error />} />
                 <Route path="*" element={<Error />} />
             </Routes>
         </Suspense>
+        </>
     );
 }
 

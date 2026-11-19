@@ -20,19 +20,23 @@ The frontend now normalizes role names and maps the active operational roles to 
 
 | Keycloak role | Default workspace | Access |
 | --- | --- | --- |
-| `ADMIN` | Admin dashboard | Full application administration |
+| `ADMIN` | Admin dashboard | Restaurant operations and administration; no platform settings, user provisioning, or audit access |
 | `MANAGER` | Admin dashboard | Operations, catalogue, reporting, finance, audit |
 | `CASHIER` | POS checkout | Tables, orders, checkout, guest and shift workflows |
 | `KITCHEN` | Kitchen display | Kitchen tickets only |
 | `STOCK_CLERK` | Inventory | Product and inventory workflows |
 | `PROCUREMENT_OFFICER` | Purchases | Procurement and purchase orders |
+| `SUPER_ADMIN` | Super Admin console | Platform appearance defaults, user provisioning, audit access, and Keycloak administration link |
+| `SUPER_ADMIN` | Super Admin console | Platform defaults, application user provisioning, audit access, and a link to Keycloak administration |
 | `USER` | No workspace | Base Keycloak role only |
 
-The backend remains the authority for API access through Spring Security role checks. The frontend route and navigation permissions only improve the staff experience; they are not a security boundary.
+The backend remains the authority for API access through Spring Security role checks. The frontend route and navigation permissions only improve the staff experience; they are not a security boundary. Assign `SUPER_ADMIN` only to trusted platform operators. `ADMIN` and `MANAGER` do not inherit this role.
 
 ## Provision POS staff from a terminal
 
-Use [`scripts/keycloak/provision_staff.py`](../scripts/keycloak/provision_staff.py) to create staff accounts in the `pos` realm and assign application roles. It creates missing canonical POS roles (`ADMIN`, `MANAGER`, `CASHIER`, `KITCHEN`, `STOCK_CLERK`, and `PROCUREMENT_OFFICER`), generates a one-time temporary password per new account, and requires each new user to change that password at first sign-in. It never assigns Keycloak `realm-management` roles. Existing accounts are left unchanged.
+Use [`scripts/keycloak/provision_staff.py`](../scripts/keycloak/provision_staff.py) to create staff accounts in the `pos` realm and assign application roles. It creates missing canonical POS roles (`ADMIN`, `MANAGER`, `CASHIER`, `KITCHEN`, `STOCK_CLERK`, `PROCUREMENT_OFFICER`, and `SUPER_ADMIN`), generates a one-time temporary password per new account, and requires each new user to change that password at first sign-in. It never assigns Keycloak `realm-management` roles. Existing accounts are left unchanged. Assign `SUPER_ADMIN` only to trusted platform operators; ordinary restaurant administrators should receive `ADMIN`.
+
+For an existing user, sign into the Keycloak Admin Console, switch to the `pos` realm, create the `SUPER_ADMIN` realm role if it does not exist, then open the trusted operator's user record → **Role mapping** → **Assign role** → select the `SUPER_ADMIN` realm role. The application requires this role in the access token; giving the user only `ADMIN` does not grant platform access. Do not assign `realm-management` roles to make the POS Super Admin screen work.
 
 Create a CSV or tab-separated file with these five columns: `username`, `email`, `first name`, `last name`, and role(s). Use one role for each staff member unless the person truly needs multiple role permissions. For example:
 
@@ -55,13 +59,13 @@ python3 scripts/keycloak/provision_staff.py scripts/keycloak/test_staff.csv --ur
 
 CSV files use commas; TSV files use tabs. The first command performs an authenticated dry run. The second asks for the Keycloak admin password without echoing it, shows the planned changes, and requires typing `CREATE pos` before it writes anything. The default Keycloak URL is `http://localhost:8081`; override it with `--url https://keycloak.example.com`. Use `--realm` and `--admin-realm` if your deployment uses different realm names. The script defaults the admin username to `admin`; it prompts if that account name is different. Do not put the admin password in the command line or in the input file.
 
-Generated temporary passwords are written to a new file under `~/.local/share/nexus-pos/` with mode `600`. Deliver each password to its staff member through a secure channel, then delete that file. Assign `ADMIN` only to staff who need full POS administration. This script creates application users; it does not promote users to Keycloak administrators or edit existing users' role assignments.
+Generated temporary passwords are written to a new file under `~/.local/share/nexus-pos/` with mode `600`. Deliver each password to its staff member through a secure channel, then delete that file. Assign `ADMIN` only to restaurant administrators who need operational administration; reserve `SUPER_ADMIN` for platform operators. This script creates application users; it does not promote users to Keycloak administrators or edit existing users' role assignments.
 
 ## Changes required in staging and production
 
 1. On `pos-client`, add an OIDC **Audience** protocol mapper. Set custom audience to `pos-client`, include it in access tokens, and leave it out of ID tokens. Keep the backend audience validator enabled.
 2. Keep the client public with standard flow and PKCE `S256`; leave direct access grants disabled. Restrict redirect URIs and web origins to the exact HTTPS application origin. Remove `*` and development origins such as `localhost:3000`, `localhost:5173`, and `localhost:8080` from production.
-3. Use one canonical uppercase role for each application role: `ADMIN`, `MANAGER`, `CASHIER`, `KITCHEN`, and `STOCK_CLERK`. Migrate users off the duplicate `Manager`/`manager` roles before removing the old roles.
+3. Use one canonical uppercase role for each application role: `SUPER_ADMIN`, `ADMIN`, `MANAGER`, `CASHIER`, `KITCHEN`, and `STOCK_CLERK`. Migrate users off the duplicate `Manager`/`manager` roles before removing the old roles. Grant `SUPER_ADMIN` only to platform operators; regular restaurant admins use `ADMIN`.
 4. Remove all `realm-management` client roles from application users. Keep only the minimum POS realm role each staff member needs; for example, a manager account should have `MANAGER`, and a cashier account should have `CASHIER`.
 5. Provision individual staff accounts in the `pos` realm. Do not use the Keycloak master administrator account as a cashier login. Create cashier, kitchen, and stock-clerk accounts as needed; those users do not currently exist in the inspected realm.
 6. Enable Keycloak brute-force protection and choose a lockout policy before production. It is disabled in the inspected local realm.

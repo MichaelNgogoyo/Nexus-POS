@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, Suspense, lazy } from 'react';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { NavLink, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, NavLink, useNavigate, useSearchParams } from 'react-router-dom';
 import { useKeycloak } from '@react-keycloak/web';
 import {
   getAllProducts, getAllTables, getCurrentShift, getDashboardSummary, getModifierGroups,
@@ -357,7 +357,7 @@ export default function POSCheckout() {
             {themeState.mode === 'dark' ? <LightModeRoundedIcon aria-hidden="true" /> : <DarkModeRoundedIcon aria-hidden="true" />}
             <span>{themeState.mode === 'dark' ? 'Light' : 'Dark'}</span>
           </button>
-          <div className="foodpos-staff-badge"><span className="foodpos-staff-avatar">{staffName.slice(0, 1).toUpperCase()}</span><span>{staffName}</span></div>
+          <Link className="foodpos-staff-badge" to="/profile" title="Open staff profile and appearance settings"><span className="foodpos-staff-avatar">{staffName.slice(0, 1).toUpperCase()}</span><span>{staffName}</span></Link>
         </header>
         <span className="foodpos-added-announcement" role="status" aria-live="polite">{addedAnnouncement}</span>
 

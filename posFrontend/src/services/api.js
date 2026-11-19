@@ -314,6 +314,18 @@ export const getAuditLog = (page = 0, size = 20) => apiClient.get('/api/audit', 
 export const getCombos = () => apiClient.get('/api/combos');
 export const getModifierGroups = (productId) => apiClient.get('/api/modifier-groups', { params: { productId } });
 
+export const getMyProfile = () => apiClient.get('/api/me/profile');
+export const saveMyAppearance = (settings) => apiClient.put('/api/me/profile/appearance', settings);
+export const uploadMyAvatar = (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return apiClient.post('/api/me/profile/avatar', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+};
+export const getMyAvatar = () => apiClient.get('/api/me/profile/avatar', { responseType: 'blob', suppressToastStatuses: [404] });
+export const deleteMyAvatar = () => apiClient.delete('/api/me/profile/avatar');
+export const getPlatformSettings = () => apiClient.get('/api/platform/settings');
+export const updatePlatformSettings = (settings) => apiClient.put('/api/platform/settings', settings);
+
 
 const api = {
     createSale,

@@ -95,6 +95,18 @@ function NavBar() {
                             >
                                 Settings
                             </Link>}
+                            {can("manage_platform") && <Link
+                                className="px-3 py-2 text-text-secondary hover:text-brand-primary transition-all duration-250 font-medium hover:bg-bg-secondary rounded-lg"
+                                to={ROUTES.SUPER_ADMIN}
+                            >
+                                Super Admin
+                            </Link>}
+                            <Link
+                                className="px-3 py-2 text-text-secondary hover:text-brand-primary transition-all duration-250 font-medium hover:bg-bg-secondary rounded-lg"
+                                to={ROUTES.PROFILE}
+                            >
+                                Profile
+                            </Link>
 
                             {/* Global Search trigger */}
                             <button

@@ -10,6 +10,7 @@ import ShoppingCartRoundedIcon from '@mui/icons-material/ShoppingCartRounded';
 import LocalShippingRoundedIcon from '@mui/icons-material/LocalShippingRounded';
 import HistoryRoundedIcon from '@mui/icons-material/HistoryRounded';
 import WarehouseRoundedIcon from '@mui/icons-material/WarehouseRounded';
+import AdminPanelSettingsRoundedIcon from '@mui/icons-material/AdminPanelSettingsRounded';
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
 import { usePermissions } from '../auth/permissions.js';
 
@@ -73,15 +74,13 @@ export default function AdminLayout() {
 
               {can('view_audit') && <SectionLabel label="Admin" />}
               {can('view_audit') && <SideLink to={ROUTES.ADMIN_AUDIT} icon={HistoryRoundedIcon} iconClass="text-text-muted">Audit Log</SideLink>}
+              {can('manage_platform') && <SideLink to={ROUTES.SUPER_ADMIN} icon={AdminPanelSettingsRoundedIcon} iconClass="text-brand-primary">Super Admin</SideLink>}
             </div>
 
             {can('manage_settings') && <div className="mt-auto pt-4 border-t border-border-primary space-y-1">
               <SideLink to={ROUTES.SETTINGS} icon={SettingsRoundedIcon} iconClass="text-text-muted">Settings</SideLink>
             </div>}
           </nav>
-          <a href="/image-credits.csv" target="_blank" rel="noreferrer" className="px-5 py-3 text-xs text-text-muted hover:text-brand-primary">
-            Food photo credits
-          </a>
         </aside>
 
         <main className="admin-content flex-grow ml-64 p-6 bg-bg-primary min-h-[calc(100vh-4rem)]">

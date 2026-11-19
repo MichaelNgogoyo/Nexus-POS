@@ -4,6 +4,7 @@ import com.pos.model.Category;
 import com.pos.model.Product;
 import com.pos.repository.CategoryRepository;
 import com.pos.repository.ProductRepository;
+import com.pos.service.MinIOService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,11 +32,14 @@ class CategoryServiceTest {
     @Mock
     private ProductRepository productRepository;
 
+    @Mock
+    private MinIOService minIOService;
+
     private CategoryService service;
 
     @BeforeEach
     void setUp() {
-        service = new CategoryService(categoryRepository, productRepository);
+        service = new CategoryService(categoryRepository, productRepository, minIOService);
     }
 
     @Test

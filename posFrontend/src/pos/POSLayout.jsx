@@ -14,6 +14,8 @@ import AccessAlarmRoundedIcon from '@mui/icons-material/AccessAlarmRounded';
 import DashboardRoundedIcon from '@mui/icons-material/DashboardRounded';
 import MoreHorizRoundedIcon from '@mui/icons-material/MoreHorizRounded';
 import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
+import ManageAccountsRoundedIcon from '@mui/icons-material/ManageAccountsRounded';
+import AdminPanelSettingsRoundedIcon from '@mui/icons-material/AdminPanelSettingsRounded';
 import './checkout/hotel-pos.css';
 
 const NAV_ITEMS = [
@@ -69,10 +71,11 @@ export default function POSLayout() {
         </nav>
 
         <div className="foodpos-sidebar-bottom">
-          <a className="foodpos-credit-link" href="/image-credits.csv" target="_blank" rel="noreferrer">Food photo credits</a>
+          <NavLink to={ROUTES.PROFILE} className="foodpos-nav-link"><ManageAccountsRoundedIcon aria-hidden="true" /><span>Profile & appearance</span></NavLink>
           {can('view_dashboard') && <NavLink to={ROUTES.DASHBOARD} className="foodpos-nav-link foodpos-admin-link">
             <DashboardRoundedIcon aria-hidden="true" /><span>Manager dashboard</span>
           </NavLink>}
+          {can('manage_platform') && <NavLink to={ROUTES.SUPER_ADMIN} className="foodpos-nav-link"><AdminPanelSettingsRoundedIcon aria-hidden="true" /><span>Super Admin</span></NavLink>}
           <div className="foodpos-profile">
             <span className="foodpos-profile-avatar" aria-hidden="true">{initials || 'S'}</span>
             <span className="foodpos-profile-copy"><strong>{staffName}</strong><small>Signed in</small></span>
@@ -106,7 +109,8 @@ export default function POSLayout() {
             {can('view_dashboard') && <NavLink to={ROUTES.DASHBOARD} onClick={() => setMobileMoreOpen(false)}>
               <DashboardRoundedIcon aria-hidden="true" /><span>Manager dashboard</span>
             </NavLink>}
-            <a href="/image-credits.csv" target="_blank" rel="noreferrer"><ReceiptLongRoundedIcon aria-hidden="true" /><span>Food photo credits</span></a>
+            <NavLink to={ROUTES.PROFILE} onClick={() => setMobileMoreOpen(false)}><ManageAccountsRoundedIcon aria-hidden="true" /><span>Profile & appearance</span></NavLink>
+            {can('manage_platform') && <NavLink to={ROUTES.SUPER_ADMIN} onClick={() => setMobileMoreOpen(false)}><AdminPanelSettingsRoundedIcon aria-hidden="true" /><span>Super Admin</span></NavLink>}
             <button type="button" onClick={() => logoutFromKeycloak(keycloak)}>
               <LogoutRoundedIcon aria-hidden="true" /><span>Sign out</span>
             </button>
