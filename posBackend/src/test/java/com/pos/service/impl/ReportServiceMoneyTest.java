@@ -3,6 +3,11 @@ package com.pos.service.impl;
 import com.pos.model.Product;
 import com.pos.repository.ProductRepository;
 import com.pos.repository.SalesRepository;
+import com.pos.repository.ExpenseRepository;
+import com.pos.repository.StockMovementRepository;
+import com.pos.repository.KitchenOrderRepository;
+import com.pos.repository.RestaurantTableRepository;
+import com.pos.repository.CustomerRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.Pageable;
 
@@ -32,7 +37,9 @@ class ReportServiceMoneyTest {
         when(products.countByActiveTrue()).thenReturn(3L);
         when(products.findLowStockProducts()).thenReturn(List.of());
 
-        var summary = new ReportService(sales, products).getDashboardSummary();
+        var summary = new ReportService(sales, products, mock(ExpenseRepository.class), mock(StockMovementRepository.class),
+                mock(KitchenOrderRepository.class), mock(RestaurantTableRepository.class), mock(CustomerRepository.class))
+                .getDashboardSummary();
 
         assertThat(summary.todayRevenue()).isEqualByComparingTo("123.45");
         assertThat(summary.monthRevenue()).isEqualByComparingTo("987.65");

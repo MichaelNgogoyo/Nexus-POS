@@ -12,6 +12,7 @@ import org.springframework.data.jpa.repository.EntityGraph;
 import java.util.List;
 import java.util.Collection;
 import java.util.Optional;
+import java.time.LocalDateTime;
 
 public interface KitchenOrderRepository extends JpaRepository<KitchenOrder, Long> {
     @EntityGraph(attributePaths = {"order", "order.items", "order.table"})
@@ -28,4 +29,9 @@ public interface KitchenOrderRepository extends JpaRepository<KitchenOrder, Long
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT k FROM KitchenOrder k WHERE k.id = :id")
     Optional<KitchenOrder> findByIdForUpdate(@Param("id") Long id);
+
+    @Query("SELECT k.receivedAt, k.completedAt FROM KitchenOrder k WHERE k.status IN " +
+            "(com.pos.model.KitchenStatus.READY, com.pos.model.KitchenStatus.SERVED) " +
+            "AND k.receivedAt >= :from AND k.receivedAt < :to AND k.completedAt IS NOT NULL")
+    List<Object[]> completedDurationsBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 }

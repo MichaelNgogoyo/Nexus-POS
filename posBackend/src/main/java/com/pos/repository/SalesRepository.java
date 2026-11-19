@@ -54,6 +54,52 @@ public interface SalesRepository extends JpaRepository<Sales, Long> {
            "GROUP BY CAST(s.createdAt AS date) ORDER BY CAST(s.createdAt AS date) ASC")
     List<Object[]> dailyRevenue(@Param("since") LocalDateTime since);
 
+    @Query("SELECT COALESCE(SUM(s.totalAmount), 0), COUNT(s), COALESCE(SUM(s.taxAmount), 0), " +
+            "COALESCE(SUM(s.serviceChargeAmount), 0) FROM Sales s WHERE s.status = 'COMPLETED' " +
+            "AND s.createdAt >= :from AND s.createdAt < :to")
+    Object[] analyticsTotals(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    @Query("SELECT s.status, COUNT(s), COALESCE(SUM(s.totalAmount), 0) FROM Sales s " +
+            "WHERE s.createdAt >= :from AND s.createdAt < :to GROUP BY s.status")
+    List<Object[]> analyticsStatuses(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    @Query("SELECT CAST(s.createdAt AS date), COALESCE(SUM(s.totalAmount), 0), COUNT(s) FROM Sales s " +
+            "WHERE s.status = 'COMPLETED' AND s.createdAt >= :from AND s.createdAt < :to " +
+            "GROUP BY CAST(s.createdAt AS date) ORDER BY CAST(s.createdAt AS date)")
+    List<Object[]> analyticsDaily(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    @Query(value = "SELECT EXTRACT(HOUR FROM created_at)::int, COALESCE(SUM(total_amount), 0), COUNT(*) FROM sales " +
+            "WHERE status = 'COMPLETED' AND created_at >= :from AND created_at < :to " +
+            "GROUP BY EXTRACT(HOUR FROM created_at) ORDER BY EXTRACT(HOUR FROM created_at)", nativeQuery = true)
+    List<Object[]> analyticsHourly(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    @Query("SELECT COALESCE(s.paymentMethod, 'UNKNOWN'), COALESCE(SUM(s.totalAmount), 0), COUNT(s) FROM Sales s " +
+            "WHERE s.status = 'COMPLETED' AND s.createdAt >= :from AND s.createdAt < :to " +
+            "GROUP BY s.paymentMethod ORDER BY SUM(s.totalAmount) DESC")
+    List<Object[]> analyticsPayments(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    @Query("SELECT COALESCE(c.name, 'Uncategorized'), COALESCE(SUM(si.quantity * si.price), 0), " +
+            "COALESCE(SUM(si.quantity), 0) FROM SaleItem si LEFT JOIN si.product.category c WHERE si.sales.status = 'COMPLETED' " +
+            "AND si.sales.createdAt >= :from AND si.sales.createdAt < :to " +
+            "GROUP BY c.name ORDER BY SUM(si.quantity * si.price) DESC")
+    List<Object[]> analyticsCategories(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    @Query("SELECT p.id, p.name, COALESCE(c.name, 'Uncategorized'), " +
+            "COALESCE(SUM(CASE WHEN s.id IS NOT NULL THEN si.quantity ELSE 0 END), 0), " +
+            "COALESCE(SUM(CASE WHEN s.id IS NOT NULL THEN si.quantity * si.price ELSE 0 END), 0), " +
+            "COALESCE(SUM(CASE WHEN s.id IS NOT NULL THEN si.quantity * COALESCE(p.costPrice, 0) ELSE 0 END), 0), " +
+            "COALESCE(SUM(CASE WHEN s.id IS NOT NULL AND p.costPrice IS NULL THEN si.quantity ELSE 0 END), 0) " +
+            "FROM Product p LEFT JOIN p.saleItems si LEFT JOIN si.sales s ON s.status = 'COMPLETED' " +
+            "AND s.createdAt >= :from AND s.createdAt < :to LEFT JOIN p.category c " +
+            "WHERE p.active = true OR s.id IS NOT NULL " +
+            "GROUP BY p.id, p.name, c.name ORDER BY SUM(si.quantity) DESC")
+    List<Object[]> analyticsProducts(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    @Query("SELECT COALESCE(s.cashierId, 'Unassigned'), COALESCE(SUM(s.totalAmount), 0), COUNT(s) FROM Sales s " +
+            "WHERE s.status = 'COMPLETED' AND s.createdAt >= :from AND s.createdAt < :to " +
+            "GROUP BY s.cashierId ORDER BY SUM(s.totalAmount) DESC")
+    List<Object[]> analyticsCashiers(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
     /** Most recent N sales with items (for recent transactions table) */
     @EntityGraph("Sales.withItems")
     List<Sales> findTop5ByOrderByCreatedAtDesc();

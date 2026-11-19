@@ -222,6 +222,9 @@ export const getApiBaseUrl = () => API_BASE_URL;
 /** GET /api/report/summary — all dashboard KPIs, chart data, recent sales, top products */
 export const getDashboardSummary = () => apiClient.get('/api/report/summary');
 
+/** GET /api/report/analytics?from=YYYY-MM-DD&to=YYYY-MM-DD — bounded management analytics */
+export const getAnalytics = (params) => apiClient.get('/api/report/analytics', { params });
+
 /** GET /api/report/low-stock — products at or below their low-stock threshold */
 export const getLowStockProducts = () => apiClient.get('/api/report/low-stock');
 

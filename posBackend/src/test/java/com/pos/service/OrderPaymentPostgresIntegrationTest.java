@@ -8,6 +8,9 @@ import com.pos.model.OrderType;
 import com.pos.model.Modifier;
 import com.pos.model.ModifierGroup;
 import com.pos.model.Product;
+import com.pos.model.Sales;
+import com.pos.model.SaleItem;
+import com.pos.model.SaleStatus;
 import com.pos.model.Shift;
 import com.pos.model.ShiftStatus;
 import com.pos.controller.KitchenController;
@@ -31,11 +34,15 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -84,6 +91,9 @@ class OrderPaymentPostgresIntegrationTest {
 
     @Autowired
     SalesService salesService;
+
+    @Autowired
+    com.pos.service.impl.ReportService reportService;
 
     @Autowired
     ProductRepository productRepository;
@@ -224,6 +234,44 @@ class OrderPaymentPostgresIntegrationTest {
                 SecurityContextHolder.getContext().setAuthentication(originalAuthentication);
             }
         }
+    }
+
+    @Test
+    @Transactional
+    void analyticsAggregatesRunAgainstPostgresAndIncludeActiveSlowMovingProducts() {
+        Product soldProduct = productRepository.saveAndFlush(Product.builder().name("Analytics sold tea")
+                .price(new BigDecimal("100.00")).costPrice(new BigDecimal("25.00"))
+                .active(true).quantity(4).lowStockThreshold(2).build());
+        Product slowProduct = productRepository.saveAndFlush(Product.builder().name("Analytics unsold juice")
+                .price(new BigDecimal("80.00")).costPrice(new BigDecimal("20.00"))
+                .active(true).quantity(3).lowStockThreshold(2).build());
+        LocalDateTime soldAt = LocalDateTime.now();
+        Sales sale = Sales.builder().cashierId("analytics-cashier").totalAmount(new BigDecimal("110.00"))
+                .subtotalAmount(new BigDecimal("100.00")).taxAmount(new BigDecimal("10.00"))
+                .serviceChargeAmount(BigDecimal.ZERO).amountTendered(new BigDecimal("110.00"))
+                .changeGiven(BigDecimal.ZERO).paymentMethod("CASH").status(SaleStatus.COMPLETED)
+                .createdAt(soldAt).saleItems(new ArrayList<>()).build();
+        SaleItem item = SaleItem.builder().product(soldProduct).quantity(1)
+                .price(new BigDecimal("100.00")).sales(sale).build();
+        sale.getSaleItems().add(item);
+        salesRepository.saveAndFlush(sale);
+
+        LocalDate today = soldAt.toLocalDate();
+        var analytics = reportService.getAnalytics(today, today);
+
+        assertThat(analytics.sales().revenue()).isEqualByComparingTo("110.00");
+        assertThat(analytics.sales().taxCollected()).isEqualByComparingTo("10.00");
+        assertThat(analytics.profit().netSalesRevenue()).isEqualByComparingTo("100.00");
+        assertThat(analytics.products()).anySatisfy(product -> {
+            assertThat(product.productId()).isEqualTo(soldProduct.getId());
+            assertThat(product.unitsSold()).isEqualTo(1);
+            assertThat(product.estimatedCost()).isEqualByComparingTo("25.00");
+        });
+        assertThat(analytics.products()).anySatisfy(product -> {
+            assertThat(product.productId()).isEqualTo(slowProduct.getId());
+            assertThat(product.unitsSold()).isZero();
+        });
+        assertThat(analytics.hourly()).hasSize(24);
     }
 
     private List<Future<com.pos.model.Sales>> settleConcurrently(Long orderId, OrderPaymentRequest request) throws InterruptedException {
