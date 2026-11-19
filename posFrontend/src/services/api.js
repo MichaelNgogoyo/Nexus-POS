@@ -258,7 +258,7 @@ export const advanceKitchenStatus = (id, status) => apiClient.put(`/api/kitchen/
 // Shift API
 // ========================================
 export const getCurrentShift = (cashierId) => apiClient.get('/api/shifts/current', {
-    params: { cashierId },
+    ...(cashierId ? { params: { cashierId } } : {}),
     suppressToastStatuses: [404],
 });
 export const openShift = (data) => apiClient.post('/api/shifts/open', data);

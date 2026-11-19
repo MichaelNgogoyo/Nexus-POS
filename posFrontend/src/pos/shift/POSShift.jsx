@@ -29,7 +29,6 @@ export default function POSShift() {
     const [elapsed, setElapsed] = useState(0);
     const shiftQuery = useQuery({
         queryKey: ['current-shift', cashierId],
-        enabled: Boolean(cashierId),
         queryFn: async () => {
             try { return (await getCurrentShift(cashierId)).data; }
             catch (error) { if (error?.response?.status === 404) return null; throw error; }
