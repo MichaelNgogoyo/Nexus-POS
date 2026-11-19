@@ -1,17 +1,20 @@
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useKeycloak } from '@react-keycloak/web';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import LocalAtmRoundedIcon from '@mui/icons-material/LocalAtmRounded';
 import ErrorOutlineRoundedIcon from '@mui/icons-material/ErrorOutlineRounded';
-import { getSaleReceipt, recordOrderCashPayment } from '../../services/api.js';
+import { getCurrentShift, getSaleReceipt, recordOrderCashPayment } from '../../services/api.js';
+import PaymentMethodAvailability from '../checkout/PaymentMethodAvailability.jsx';
 
 const requestKey = () => globalThis.crypto?.randomUUID?.() ?? `payment-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const money = (amount) => `KSh ${Number(amount || 0).toLocaleString('en-KE', { maximumFractionDigits: 2 })}`;
 
 export default function OrderPaymentModal({ order, onClose }) {
     const { keycloak } = useKeycloak();
+    const navigate = useNavigate();
     const queryClient = useQueryClient();
     const total = Number(order.total || 0);
     const [amountTendered, setAmountTendered] = useState('');
@@ -19,6 +22,13 @@ export default function OrderPaymentModal({ order, onClose }) {
     const [idempotencyKey] = useState(requestKey);
     const tendered = Number(amountTendered || 0);
     const cashierId = keycloak?.tokenParsed?.sub || keycloak?.subject;
+    const shiftQuery = useQuery({
+        queryKey: ['current-shift', cashierId],
+        queryFn: async () => {
+            try { return (await getCurrentShift(cashierId)).data; }
+            catch (error) { if (error?.response?.status === 404) return null; throw error; }
+        },
+    });
 
     const paymentMutation = useMutation({
         mutationFn: async () => (await recordOrderCashPayment(order.id, {
@@ -54,6 +64,8 @@ export default function OrderPaymentModal({ order, onClose }) {
         <section className="pos-dialog payment-dialog" role="dialog" aria-modal="true" aria-labelledby="order-payment-title">
             <header><div><p className="hotel-eyebrow">{order.orderNumber || `ORDER #${order.id}`}</p><h2 id="order-payment-title">Record cash payment</h2></div><button aria-label="Close" disabled={paymentMutation.isPending} onClick={onClose}><CloseRoundedIcon /></button></header>
             <div className="payment-summary"><span>Amount due</span><strong>{money(total)}</strong><small>Cash payment for the saved order. The server uses its stored items and totals.</small></div>
+            <PaymentMethodAvailability />
+            {shiftQuery.isLoading ? <p className="hotel-state">Checking cashier shift…</p> : shiftQuery.isError ? <p className="hotel-error" role="alert">Shift status could not be checked. <button type="button" onClick={() => shiftQuery.refetch()}>Retry</button></p> : !shiftQuery.data ? <div className="payment-shift-notice"><span>Open a shift before recording cash.</span><button type="button" className="pos-secondary-action" onClick={() => navigate('/pos/shift')}>Open shift</button></div> : null}
             <label className="payment-amount-label">Amount tendered<input autoFocus inputMode="decimal" type="number" min={total} step="0.01" value={amountTendered} onChange={(event) => setAmountTendered(event.target.value)} placeholder="Enter cash received" /></label>
             <div className="payment-quick-amounts">
                 <button type="button" onClick={() => setAmountTendered(total.toFixed(2))}>Exact · {money(total)}</button>
@@ -61,7 +73,7 @@ export default function OrderPaymentModal({ order, onClose }) {
             </div>
             {tendered > 0 && <div className={`payment-change ${tendered >= total ? '' : 'short'}`}><span>{tendered >= total ? 'Change due' : 'Still due'}</span><strong>{money(Math.abs(tendered - total))}</strong></div>}
             {paymentMutation.isError && <p className="hotel-error payment-error" role="alert"><ErrorOutlineRoundedIcon /> {paymentMutation.error?.response?.data?.message || 'Payment could not be recorded. Check the connection and retry.'}</p>}
-            <footer><button className="pos-secondary-action" disabled={paymentMutation.isPending} onClick={onClose}>Cancel</button><button className="pos-primary-action" disabled={paymentMutation.isPending || !amountTendered || tendered < total} onClick={() => paymentMutation.mutate()}>{paymentMutation.isPending ? 'Recording…' : <><LocalAtmRoundedIcon /> Record cash · {money(total)}</>}</button></footer>
+            <footer><button className="pos-secondary-action" disabled={paymentMutation.isPending} onClick={onClose}>Cancel</button><button className="pos-primary-action" disabled={paymentMutation.isPending || shiftQuery.isLoading || shiftQuery.isError || !shiftQuery.data || !amountTendered || tendered < total} onClick={() => paymentMutation.mutate()}>{paymentMutation.isPending ? 'Recording…' : <><LocalAtmRoundedIcon /> Record cash · {money(total)}</>}</button></footer>
         </section>
     </div>;
 }

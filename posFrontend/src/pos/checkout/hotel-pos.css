@@ -371,3 +371,132 @@
   .receipt-print-area, .receipt-print-area * { visibility: visible !important; }
   .receipt-print-area { position: fixed; inset: 0 auto auto 0; width: 72mm; max-height: none; overflow: visible; border: 0; padding: 0; background: #fff; color: #000; }
 }
+
+/* Cashier workstation layout: vertical menu rail, product canvas, persistent order. */
+.foodpos-menu-layout { display: grid; grid-template-columns: 92px minmax(0, 1fr); align-items: start; gap: clamp(15px, 1.8vw, 26px); }
+.foodpos-menu-content { min-width: 0; }
+.foodpos-menu-layout .foodpos-categories { display: flex; max-height: calc(100dvh - 250px); flex-direction: column; overflow-x: hidden; overflow-y: auto; margin: 0; padding: 0 2px 6px; scrollbar-width: thin; }
+.foodpos-menu-layout .foodpos-categories button { width: 100%; min-height: 66px; flex: 0 0 auto; flex-direction: column; justify-content: center; gap: 5px; padding: 8px 5px; border: 1px solid var(--food-border); border-radius: 13px; background: var(--food-surface); color: var(--food-ink); text-align: center; }
+.foodpos-menu-layout .foodpos-categories button.selected { border-color: #1b1b19; background: #1b1b19; color: #fff; }
+.foodpos-menu-layout .foodpos-categories button span:last-child { max-width: 100%; font-size: 10px; line-height: 1.2; }
+.foodpos-menu-layout .category-icon { width: 23px; height: 23px; }
+.foodpos-theme-toggle { display: inline-flex; min-width: 72px; min-height: 46px; flex: 0 0 auto; align-items: center; justify-content: center; gap: 7px; padding: 0 11px; border: 1px solid var(--food-border); border-radius: 12px; background: var(--food-surface); color: var(--food-ink); font-size: 12px; font-weight: 700; }
+.foodpos-theme-toggle svg { font-size: 19px; }
+.foodpos-theme-toggle:hover { background: #f0f0ed; }
+.foodpos-checkout-persistent { --food-panel-width: clamp(340px, 28vw, 470px); }
+.foodpos-checkout-persistent .foodpos-scroll-area { padding-right: calc(var(--food-panel-width) + clamp(18px, 2vw, 34px)); }
+.foodpos-checkout-persistent .foodpos-cart-summary { display: none; }
+.foodpos-cart-persistent { position: absolute; z-index: 8; inset: 0 0 0 auto; display: block; width: var(--food-panel-width); overflow: hidden; border-left: 1px solid var(--food-border); background: var(--food-surface); box-shadow: -10px 0 30px rgb(30 29 25 / 5%); pointer-events: none; backdrop-filter: none; }
+.foodpos-cart-persistent .foodpos-order-drawer { width: 100%; height: 100%; box-shadow: none; pointer-events: auto; }
+.foodpos-cart-persistent .foodpos-drawer-heading { min-height: 82px; align-items: center; padding: 15px 19px; }
+.foodpos-cart-persistent .foodpos-drawer-scroll { padding: 0 19px; }
+.foodpos-cart-persistent .foodpos-drawer-footer { padding: 12px 19px max(16px, env(safe-area-inset-bottom)); }
+.foodpos-cart-persistent .foodpos-table-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.foodpos-cart-persistent .foodpos-table-list button { min-height: 56px; }
+.foodpos-product-grid { gap: 15px; }
+.food-product-card { min-height: 190px; border-radius: 15px; }
+.food-product-add { width: 44px; height: 44px; border-radius: 50%; }
+.food-product-info { min-height: 82px; padding: 12px 13px; }
+.food-product-name { font-size: 14px; }
+.food-product-price { font-size: 14px; }
+.foodpos-order-type button { min-height: 48px; padding: 0 16px; font-size: 13px; }
+.foodpos-categories button,.foodpos-table-list button,.foodpos-deferred-action,.foodpos-pay-now-action { touch-action: manipulation; }
+
+@media (max-width: 767px) {
+  .foodpos-menu-layout { display: block; }
+  .foodpos-menu-layout .foodpos-categories { max-height: none; flex-direction: row; overflow-x: auto; overflow-y: hidden; margin: 1px 0 18px; padding: 0 0 5px; }
+  .foodpos-menu-layout .foodpos-categories button { width: auto; min-width: max-content; min-height: 46px; flex-direction: row; gap: 7px; padding: 0 13px; }
+  .foodpos-menu-layout .foodpos-categories button span:last-child { max-width: 130px; font-size: 11px; }
+  .foodpos-theme-toggle { min-width: 46px; width: 46px; padding: 0; }
+  .foodpos-theme-toggle span { display: none; }
+}
+
+@media (max-width: 1100px) {
+  .foodpos-sidebar { flex-basis: 68px; align-items: center; padding: 16px 8px; }
+  .foodpos-brand { justify-content: center; padding: 0; }
+  .foodpos-brand-name,.foodpos-nav-label,.foodpos-nav-link span,.foodpos-profile-copy,.foodpos-admin-link,.foodpos-signout { display: none; }
+  .foodpos-nav { width: 100%; align-items: center; }
+  .foodpos-nav-link { width: 48px; height: 48px; min-height: 48px; justify-content: center; padding: 0; }
+  .foodpos-nav-link svg { font-size: 22px; }
+  .foodpos-profile { justify-content: center; padding: 12px 0 0; }
+}
+
+@media (max-width: 1023px) {
+  .foodpos-checkout-persistent { --food-panel-width: 0px; }
+}
+
+@media (pointer: coarse) {
+  .foodpos-product-add { width: 48px; height: 48px; }
+  .foodpos-order-type button,.foodpos-theme-toggle,.foodpos-cart-summary>button { min-height: 50px; }
+  .foodpos-nav-link { min-height: 50px; }
+}
+
+.dark .foodpos-shell {
+  --food-ink: #f2f4f7;
+  --food-muted: #a8b0ba;
+  --food-border: #343d47;
+  --food-surface: #1d252f;
+  --food-canvas: #11171e;
+  --food-accent: #eef2f7;
+  color-scheme: dark;
+}
+.dark .foodpos-sidebar,.dark .foodpos-mobile-nav,.dark .foodpos-order-drawer,.dark .foodpos-drawer-footer { border-color: var(--food-border); background: var(--food-surface); }
+.dark .foodpos-sidebar { border-right-color: var(--food-border); }
+.dark .foodpos-topbar { background: rgb(17 23 30 / 95%); }
+.dark .foodpos-nav-link,.dark .foodpos-staff-badge,.dark .foodpos-profile-copy strong,.dark .foodpos-drawer-heading h2,.dark .foodpos-subheading h3,.dark .foodpos-field,.dark .foodpos-total-due,.dark .foodpos-section-heading h1,.dark .foodpos-section-heading h2 { color: var(--food-ink); }
+.dark .foodpos-nav-link:hover,.dark .foodpos-signout:hover,.dark .foodpos-more-menu>a:hover,.dark .foodpos-more-menu>button:hover { background: #2b3540; color: #fff; }
+.dark .foodpos-nav-link.active { background: #e8e7e2; color: #171b20; }
+.dark .foodpos-profile,.dark .foodpos-drawer-heading,.dark .foodpos-context-section,.dark .foodpos-drawer-footer { border-color: var(--food-border); }
+.dark .foodpos-profile-avatar,.dark .foodpos-staff-avatar { background: #394555; color: #f3e9f0; }
+.dark .foodpos-search-box,.dark .foodpos-order-type button,.dark .foodpos-theme-toggle,.dark .foodpos-icon-button,.dark .foodpos-table-list button,.dark .foodpos-field input,.dark .foodpos-field textarea,.dark .foodpos-modifier-groups fieldset button,.dark .foodpos-secondary-action,.dark .foodpos-pay-now-action { border-color: var(--food-border); background: #242d37; color: var(--food-ink); }
+.dark .foodpos-search-box:focus-within,.dark .foodpos-field input:focus,.dark .foodpos-field textarea:focus { border-color: #9daabc; background: #1e2731; }
+.dark .foodpos-search-box input,.dark .foodpos-field input,.dark .foodpos-field textarea { color: var(--food-ink); }
+.dark .foodpos-search-box input::placeholder,.dark .foodpos-field input::placeholder,.dark .foodpos-field textarea::placeholder { color: #a6afba; }
+.dark .foodpos-order-type button.selected,.dark .foodpos-menu-layout .foodpos-categories button.selected { border-color: #f0eee9; background: #f0eee9; color: #191d22; }
+.dark .foodpos-menu-layout .foodpos-categories button { border-color: var(--food-border); background: #202934; color: #e9edf2; }
+.dark .foodpos-menu-layout .foodpos-categories .category-tone-0,.dark .foodpos-menu-layout .foodpos-categories .category-tone-1,.dark .foodpos-menu-layout .foodpos-categories .category-tone-2,.dark .foodpos-menu-layout .foodpos-categories .category-tone-3,.dark .foodpos-menu-layout .foodpos-categories .category-tone-4,.dark .foodpos-menu-layout .foodpos-categories .category-tone-5 { background: #202934; }
+.dark .foodpos-product-card,.dark .foodpos-cart-persistent,.dark .foodpos-cart-empty,.dark .foodpos-more-menu { border-color: var(--food-border); background: #1c242d; color: var(--food-ink); }
+.dark .food-product-name,.dark .food-product-price,.dark .foodpos-cart-lines,.dark .foodpos-total-row,.dark .foodpos-total-due strong,.dark .foodpos-subheading p,.dark .foodpos-table-list button span,.dark .foodpos-field,.dark .foodpos-selected-guest { color: #edf1f5; }
+.dark .food-product-image,.dark .food-image-fallback { background: #2a333e; }
+.dark .food-image-fallback { color: #bbc3cd; }
+.dark .food-product-card:focus-visible,.dark .foodpos-shell button:focus-visible,.dark .foodpos-shell a:focus-visible { outline-color: #f3d98b; }
+.dark .foodpos-cart-summary,.dark .foodpos-cart-persistent .foodpos-order-drawer { border-color: var(--food-border); background: #1d252f; }
+.dark .foodpos-cart-summary-copy>strong,.dark .foodpos-order-card,.dark .pos-table-card { color: var(--food-ink); }
+.dark .foodpos-cart-summary-copy>span,.dark .foodpos-section-heading p,.dark .foodpos-profile-copy small,.dark .foodpos-field>span,.dark .foodpos-overline,.dark .foodpos-subheading>span,.dark .foodpos-data-note { color: #a8b0ba; }
+.dark .foodpos-cart-summary>button,.dark .foodpos-primary-action { background: #e9e7e1; color: #171b20; }
+.dark .foodpos-cart-summary>button:hover,.dark .foodpos-primary-action:hover:not(:disabled) { background: #fff; }
+.dark .foodpos-table-list button.selected,.dark .foodpos-modifier-groups fieldset button.selected { border-color: #a5b4c7; background: #344253; color: #fff; }
+.dark .foodpos-guest-results,.dark .foodpos-guest-results>button,.dark .foodpos-guest-results>span,.dark .foodpos-selected-guest { border-color: var(--food-border); background: #242d37; color: var(--food-ink); }
+.dark .foodpos-empty-state,.dark .foodpos-inline-empty,.dark .foodpos-state { background: #202934; color: #c0c7d0; }
+.dark .foodpos-empty-state strong { color: #f1f3f5; }
+.dark .foodpos-integration-note { background: #3a3325; color: #ead6a6; }
+.dark .foodpos-order-submitted { border-color: #3b7053; background: #1c3829; color: #c9f1d7; }
+.dark .foodpos-deferred-action { background: #27744a; color: #fff; }
+.dark .foodpos-deferred-action:hover:not(:disabled) { background: #318958; }
+.dark .foodpos-dialog,.dark .foodpos-modifier-dialog,.dark .foodpos-loading-panel { border-color: var(--food-border); background: #1d252f; color: var(--food-ink); }
+.dark .foodpos-dialog h2,.dark .foodpos-modifier-groups legend,.dark .foodpos-modifier-groups fieldset button span,.dark .payment-summary strong { color: var(--food-ink); }
+.dark .foodpos-dialog>header,.dark .foodpos-dialog>header button { border-color: var(--food-border); background: #242d37; color: var(--food-ink); }
+.dark .payment-summary,.dark .receipt-print-area { border-color: var(--food-border); background: #11171e; color: #f3f5f8; }
+.dark .foodpos-more-menu>a,.dark .foodpos-more-menu>button { background: #1d252f; color: var(--food-ink); }
+
+.foodpos-shift-notice,.payment-shift-notice { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid #e5c885; border-radius: 10px; background: #fff8e8; color: #624719; font-size: 12px; }
+.foodpos-shift-notice button { min-height: 40px; padding: 0 12px; border: 0; border-radius: 8px; background: #252821; color: #fff; font-weight: 700; }
+.payment-shift-notice { margin: 12px 0; }
+.payment-method-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 14px 0; }
+.payment-method-option { display: flex; min-width: 0; min-height: 58px; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--food-border, #e2e5e9); border-radius: 10px; background: var(--food-surface, #fff); color: var(--food-ink, #20252b); }
+.payment-method-option>svg { flex: 0 0 auto; font-size: 21px; }
+.payment-method-option>span { display: grid; gap: 2px; font-size: 12px; font-weight: 750; }
+.payment-method-option small { color: #737b85; font-size: 9px; font-weight: 550; line-height: 1.2; }
+.payment-method-option.is-available { border-color: #65a87a; background: #effaf2; }
+.payment-method-option.is-unavailable { opacity: .65; }
+.dark .foodpos-shift-notice,.dark .payment-shift-notice { border-color: #75603b; background: #332c20; color: #f1d99e; }
+.dark .payment-method-option { border-color: #39434f; background: #202934; color: #edf1f5; }
+.dark .payment-method-option.is-available { border-color: #417e56; background: #1e3727; }
+.dark .payment-method-option small { color: #b1bbc6; }
+
+@media (max-width: 767px) {
+  .foodpos-order-type button { min-height: 46px; }
+  .foodpos-product-grid { gap: 10px; }
+  .food-product-card { min-height: 0; }
+  .payment-method-options { grid-template-columns: 1fr; }
+}

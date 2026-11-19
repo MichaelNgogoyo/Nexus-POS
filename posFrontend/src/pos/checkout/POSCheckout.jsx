@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useKeycloak } from '@react-keycloak/web';
 import {
-  getAllProducts, getAllTables, getDashboardSummary, getModifierGroups,
+  getAllProducts, getAllTables, getCurrentShift, getDashboardSummary, getModifierGroups,
   getTaxRate, listCategories, searchCustomers,
   submitOrderToKitchen,
 } from '../../services/api.js';
@@ -22,9 +22,12 @@ import LocalHotelRoundedIcon from '@mui/icons-material/LocalHotelRounded';
 import ShoppingBagOutlinedIcon from '@mui/icons-material/ShoppingBagOutlined';
 import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
+import DarkModeRoundedIcon from '@mui/icons-material/DarkModeRounded';
+import LightModeRoundedIcon from '@mui/icons-material/LightModeRounded';
 import {
   ALL_CATEGORIES, filterMenuProducts, getMenuCategories, popularMenuProducts,
 } from './menuUtils.js';
+import { getCurrentThemeState, subscribeToThemeChanges, toggleThemeMode } from '../../theme/theme.js';
 
 const PaymentModal = lazy(() => import('./PaymentModal.jsx'));
 const money = (amount) => `KSh ${Number(amount || 0).toLocaleString('en-KE', { maximumFractionDigits: 2 })}`;
@@ -45,6 +48,11 @@ export default function POSCheckout() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [themeState, setThemeState] = useState(() => getCurrentThemeState());
+  const cashierId = keycloak?.tokenParsed?.sub || keycloak?.subject;
+  const [isDesktopOrderPanel, setIsDesktopOrderPanel] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches,
+  );
   const [orderType, setOrderType] = useState('DINE_IN');
   const [category, setCategory] = useState(ALL_CATEGORIES);
   const [search, setSearch] = useState('');
@@ -63,9 +71,25 @@ export default function POSCheckout() {
   const requestedTableRef = useRef(searchParams.get('tableId'));
   const submitKeyRef = useRef({ signature: null, key: null });
 
+  useEffect(() => subscribeToThemeChanges((event) => setThemeState(event.detail)), []);
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 1024px)');
+    const updateLayout = (event) => setIsDesktopOrderPanel(event.matches);
+    setIsDesktopOrderPanel(media.matches);
+    media.addEventListener('change', updateLayout);
+    return () => media.removeEventListener('change', updateLayout);
+  }, []);
+
   const productsQuery = useQuery({ queryKey: ['products'], queryFn: () => getAllProducts().then(({ data }) => data), staleTime: 60_000 });
   const categoriesQuery = useQuery({ queryKey: ['categories'], queryFn: () => listCategories().then(({ data }) => data), staleTime: 60_000 });
   const tablesQuery = useQuery({ queryKey: ['tables'], queryFn: () => getAllTables().then(({ data }) => data), staleTime: 30_000 });
+  const shiftQuery = useQuery({
+    queryKey: ['current-shift', cashierId],
+    queryFn: async () => {
+      try { return (await getCurrentShift(cashierId)).data; }
+      catch (error) { if (error?.response?.status === 404) return null; throw error; }
+    },
+  });
   const taxQuery = useQuery({ queryKey: ['taxRate'], queryFn: () => getTaxRate().then(({ data }) => data), staleTime: 300_000 });
   const popularityEnabled = can('view_reports');
   const popularityQuery = useQuery({
@@ -219,7 +243,7 @@ export default function POSCheckout() {
   };
 
   return (
-    <div className="foodpos-checkout">
+    <div className={`foodpos-checkout${isDesktopOrderPanel ? ' foodpos-checkout-persistent' : ''}`}>
       <div className="foodpos-scroll-area">
         <header className="foodpos-topbar">
           <div className="foodpos-search-box">
@@ -233,6 +257,16 @@ export default function POSCheckout() {
             />
             {search && <button type="button" onClick={() => setSearch('')} aria-label="Clear search"><CloseRoundedIcon /></button>}
           </div>
+          <button
+            type="button"
+            className="foodpos-theme-toggle"
+            onClick={() => setThemeState(toggleThemeMode())}
+            aria-label={`Switch to ${themeState.mode === 'dark' ? 'light' : 'dark'} mode`}
+            title={`Switch to ${themeState.mode === 'dark' ? 'light' : 'dark'} mode`}
+          >
+            {themeState.mode === 'dark' ? <LightModeRoundedIcon aria-hidden="true" /> : <DarkModeRoundedIcon aria-hidden="true" />}
+            <span>{themeState.mode === 'dark' ? 'Light' : 'Dark'}</span>
+          </button>
           <div className="foodpos-staff-badge"><span className="foodpos-staff-avatar">{staffName.slice(0, 1).toUpperCase()}</span><span>{staffName}</span></div>
         </header>
 
@@ -250,6 +284,7 @@ export default function POSCheckout() {
           })}
         </div>
 
+        <div className="foodpos-menu-layout">
         <nav className="foodpos-categories" aria-label="Menu categories">
           {categories.map((item, index) => (
             <button
@@ -265,6 +300,7 @@ export default function POSCheckout() {
           ))}
         </nav>
 
+        <div className="foodpos-menu-content">
         <p className="foodpos-integration-note" role="status">Room charges are unavailable until the hotel system can validate stays and confirm folio postings.</p>
 
         {!showAll && <section className="foodpos-section">
@@ -313,6 +349,8 @@ export default function POSCheckout() {
 
           {categoriesQuery.isError && <p className="foodpos-data-note" role="status">Category service is unavailable; showing categories available with menu items.</p>}
         </section>
+        </div>
+        </div>
       </div>
 
       <div className="foodpos-cart-summary" aria-live="polite">
@@ -322,11 +360,11 @@ export default function POSCheckout() {
         </button>
       </div>
 
-      {cartOpen && <div className="foodpos-drawer-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setCartOpen(false); }}>
-        <section className="foodpos-order-drawer" role="dialog" aria-modal="true" aria-labelledby="foodpos-cart-title">
+      {(cartOpen || isDesktopOrderPanel) && <div className={`foodpos-drawer-backdrop${isDesktopOrderPanel ? ' foodpos-cart-persistent' : ''}`} role="presentation" onMouseDown={(event) => { if (!isDesktopOrderPanel && event.target === event.currentTarget) setCartOpen(false); }}>
+        <section className="foodpos-order-drawer" role={isDesktopOrderPanel ? 'complementary' : 'dialog'} aria-modal={isDesktopOrderPanel ? undefined : 'true'} aria-labelledby="foodpos-cart-title">
           <header className="foodpos-drawer-heading">
             <div><p className="foodpos-overline">CURRENT ORDER</p><h2 id="foodpos-cart-title">{selectedTableRecord?.name || (orderType === 'TAKEAWAY' ? 'Takeaway' : 'New order')}</h2><span>{itemCount} {itemCount === 1 ? 'item' : 'items'}</span></div>
-            <button type="button" className="foodpos-icon-button" onClick={() => setCartOpen(false)} aria-label="Close order"><CloseRoundedIcon /></button>
+            {!isDesktopOrderPanel && <button type="button" className="foodpos-icon-button" onClick={() => setCartOpen(false)} aria-label="Close order"><CloseRoundedIcon /></button>}
           </header>
 
           <div className="foodpos-drawer-scroll">
@@ -366,6 +404,7 @@ export default function POSCheckout() {
               <div className="foodpos-total-row"><span>Service <small>{serviceRate}%</small></span><strong>{money(service)}</strong></div>
             </>}
             <div className="foodpos-total-row foodpos-total-due"><span>Total due</span><strong>{money(total)}</strong></div>
+            {shiftQuery.isLoading ? <div className="foodpos-state">Checking cashier shift…</div> : shiftQuery.isError ? <div className="foodpos-inline-error" role="alert">Shift status could not be checked. <button type="button" onClick={() => shiftQuery.refetch()}>Retry</button></div> : !shiftQuery.data ? <div className="foodpos-shift-notice"><span>Open a cashier shift before recording cash payment.</span><button type="button" onClick={() => navigate('/pos/shift')}>Open shift</button></div> : null}
             {submitOrderMutation.isError && <div className="foodpos-inline-error" role="alert">Order could not be sent. {submitOrderMutation.error?.response?.data?.message || 'Check the connection and retry.'}</div>}
             <button type="button" className="foodpos-deferred-action"
               disabled={!cart.length || taxQuery.isLoading || taxQuery.isError || tablesQuery.isLoading || !validDineInTable || submitOrderMutation.isPending}
@@ -374,7 +413,7 @@ export default function POSCheckout() {
               {!submitOrderMutation.isPending && <span>{money(total)} <ArrowForwardRoundedIcon /></span>}
             </button>
             <button type="button" className="foodpos-pay-now-action"
-              disabled={!cart.length || taxQuery.isLoading || taxQuery.isError || tablesQuery.isLoading || !validDineInTable || submitOrderMutation.isPending}
+              disabled={!cart.length || taxQuery.isLoading || taxQuery.isError || tablesQuery.isLoading || shiftQuery.isLoading || shiftQuery.isError || !shiftQuery.data || !validDineInTable || submitOrderMutation.isPending}
               onClick={() => { setCartOpen(false); setShowPayment(true); }}>
               Pay now · {money(total)}
             </button>

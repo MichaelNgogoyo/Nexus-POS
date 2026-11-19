@@ -38,7 +38,10 @@ public class ShiftController {
     private final CashMovementService cashMovementService;
 
     @GetMapping("/current")
-    public ResponseEntity<Shift> getCurrentShift(@RequestParam String cashierId, Authentication authentication) {
+    public ResponseEntity<Shift> getCurrentShift(@RequestParam(required = false) String cashierId, Authentication authentication) {
+        if (cashierId == null || cashierId.isBlank()) {
+            cashierId = subject(authentication);
+        }
         requireOwnerOrManager(cashierId, authentication);
         return shiftRepository.findByCashierIdAndStatus(cashierId, ShiftStatus.OPEN)
                 .map(shift -> {
@@ -71,15 +74,19 @@ public class ShiftController {
     @PostMapping("/open")
     public ResponseEntity<Shift> openShift(@Valid @RequestBody ShiftOpenRequest request, Authentication authentication) {
         String actorId = subject(authentication);
-        requireOwnerOrManager(request.getCashierId(), authentication);
-        if (request.getCashierId() == null || request.getOpeningBalance() == null || request.getOpeningBalance().signum() < 0) {
+        String cashierId = request.getCashierId();
+        if (cashierId == null || cashierId.isBlank()) {
+            cashierId = actorId;
+        }
+        requireOwnerOrManager(cashierId, authentication);
+        if (request.getOpeningBalance() == null || request.getOpeningBalance().signum() < 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cashier and a non-negative opening balance are required");
         }
-        if (shiftRepository.findByCashierIdAndStatus(request.getCashierId(), ShiftStatus.OPEN).isPresent()) {
+        if (shiftRepository.findByCashierIdAndStatus(cashierId, ShiftStatus.OPEN).isPresent()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "An open shift already exists for this cashier");
         }
         Shift shift = Shift.builder()
-                .cashierId(request.getCashierId())
+                .cashierId(cashierId)
                 .cashierName(requireManager(authentication) ? request.getCashierName() : authentication.getName())
                 .openingBalance(request.getOpeningBalance())
                 .status(ShiftStatus.OPEN)
@@ -88,7 +95,7 @@ public class ShiftController {
         try {
             saved = shiftRepository.saveAndFlush(shift);
         } catch (DataIntegrityViolationException conflict) {
-            if (shiftRepository.findByCashierIdAndStatus(request.getCashierId(), ShiftStatus.OPEN).isPresent()) {
+            if (shiftRepository.findByCashierIdAndStatus(cashierId, ShiftStatus.OPEN).isPresent()) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
                         "An open shift already exists for this cashier", conflict);
             }
