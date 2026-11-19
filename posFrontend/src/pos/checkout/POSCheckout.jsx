@@ -42,7 +42,6 @@ const PaymentModal = lazy(() => import('./PaymentModal.jsx'));
 const money = (amount) => `KSh ${Number(amount || 0).toLocaleString('en-KE', { maximumFractionDigits: 2 })}`;
 const roundMoney = (amount) => Math.round((Number(amount || 0) + Number.EPSILON) * 100) / 100;
 const modifierPrice = (modifier) => Number(modifier.additionalPrice || 0);
-const productCategory = (product) => typeof product?.category === 'string' ? product.category : product?.category?.name;
 
 const ORDER_TYPES = [
   { id: 'DINE_IN', label: 'Dine in', Icon: RestaurantRoundedIcon },
@@ -86,7 +85,6 @@ export default function POSCheckout() {
   const [selectedModifiers, setSelectedModifiers] = useState([]);
   const [itemNote, setItemNote] = useState('');
   const [addedAnnouncement, setAddedAnnouncement] = useState('');
-  const [showAll, setShowAll] = useState(false);
   const [submittedOrder, setSubmittedOrder] = useState(null);
   const [tableSelectionWarning, setTableSelectionWarning] = useState('');
   const requestedTableRef = useRef(searchParams.get('tableId'));
@@ -197,13 +195,11 @@ export default function POSCheckout() {
     [allAvailableProducts, popularityQuery.data?.topProducts],
   );
   const popularProducts = visibleProducts.filter((product) => rankedProducts.some((ranked) => String(ranked.id) === String(product.id)));
-  const popularIds = new Set(popularProducts.map((product) => String(product.id)));
-  const lunchCategory = categories.find((item) => item.id !== ALL_CATEGORIES && item.name.trim().toLocaleLowerCase() === 'lunch');
-  const featuredCategory = category === ALL_CATEGORIES ? lunchCategory : selectedCategory;
-  const featuredProducts = visibleProducts.filter((product) => {
-    const matchesCategory = !featuredCategory || String(product.category?.id ?? `name:${productCategory(product)}`) === featuredCategory.id;
-    return matchesCategory && !popularIds.has(String(product.id));
-  });
+  const orderedMenuProducts = useMemo(() => {
+    if (!popularityEnabled || !rankedProducts.length) return visibleProducts;
+    const rankedIds = new Set(rankedProducts.map((product) => String(product.id)));
+    return [...visibleProducts].sort((left, right) => Number(rankedIds.has(String(right.id))) - Number(rankedIds.has(String(left.id))));
+  }, [visibleProducts, popularityEnabled, rankedProducts]);
 
   const taxRate = Number(taxQuery.data?.taxRate ?? 0);
   const serviceRate = Number(taxQuery.data?.serviceChargeRate ?? 0);
@@ -343,11 +339,14 @@ export default function POSCheckout() {
               type="search"
               aria-label="Search dish name, ingredient, or SKU"
               value={search}
-              onChange={(event) => { setSearch(event.target.value); setShowAll(true); }}
+              onChange={(event) => setSearch(event.target.value)}
               placeholder="Search dish name or ingredient"
             />
             {search && <button type="button" onClick={() => setSearch('')} aria-label="Clear search"><CloseRoundedIcon /></button>}
           </div>
+          <NavLink className={`foodpos-shift-indicator${shiftQuery.data ? ' is-open' : ''}`} to="/pos/shift" aria-label={shiftQuery.data ? 'Cashier shift is open' : 'Cashier shift is closed; open shift'}>
+            <PointOfSaleRoundedIcon aria-hidden="true" /><span>{shiftQuery.isLoading ? 'Checking shift' : shiftQuery.isError ? 'Shift status' : shiftQuery.data ? 'Shift open' : 'Open shift'}</span>
+          </NavLink>
           <button
             type="button"
             className="foodpos-theme-toggle"
@@ -367,13 +366,24 @@ export default function POSCheckout() {
           <button type="button" onClick={() => navigate('/pos/orders')}>Open orders <ArrowForwardRoundedIcon /></button>
         </div>}
 
-        <div className="foodpos-order-type" role="group" aria-label="Order type">
-          {ORDER_TYPES.map((item) => {
-            const IconComponent = item.Icon;
-            return <button type="button" key={item.id} disabled={item.disabled} title={item.disabled ? 'Connect a hotel PMS before using room charges' : undefined} className={`${orderType === item.id ? 'selected' : ''}${item.disabled ? ' unavailable' : ''}`} aria-pressed={orderType === item.id} onClick={() => { if (item.disabled) return; setOrderType(item.id); setSelectedTable(''); setTableSelectionWarning(''); }}>
-              <IconComponent aria-hidden="true" /><span>{item.label}</span>
-            </button>;
-          })}
+        <div className="foodpos-order-type-bar">
+          <div className="foodpos-order-type" role="group" aria-label="Order type">
+            {ORDER_TYPES.map((item) => {
+              const IconComponent = item.Icon;
+              return <button type="button" key={item.id} disabled={item.disabled} title={item.disabled ? 'Connect a hotel PMS before using room charges' : undefined} className={`${orderType === item.id ? 'selected' : ''}${item.disabled ? ' unavailable' : ''}`} aria-pressed={orderType === item.id} onClick={() => { if (item.disabled) return; setOrderType(item.id); setSelectedTable(''); setTableSelectionWarning(''); }}>
+                <IconComponent aria-hidden="true" /><span>{item.label}</span>
+              </button>;
+            })}
+          </div>
+          {orderType === 'DINE_IN' ? <div className="foodpos-table-picker">
+            <TableRestaurantRoundedIcon aria-hidden="true" />
+            <span>Table</span>
+            <select aria-label="Select dine-in table" value={selectedTable} disabled={tablesQuery.isLoading || tablesQuery.isError || availableTables.length === 0} onChange={(event) => { setSelectedTable(event.target.value); setTableSelectionWarning(''); }}>
+              <option value="">{tablesQuery.isLoading ? 'Loading…' : tablesQuery.isError ? 'Unavailable' : 'Choose table'}</option>
+              {availableTables.map((table) => <option key={table.id} value={String(table.id)}>{table.name}{table.capacity ? ` · ${table.capacity} seats` : ''}</option>)}
+            </select>
+            <span className="foodpos-table-count">{tablesQuery.isLoading ? '…' : tablesQuery.isError ? <button type="button" onClick={() => tablesQuery.refetch()}>Retry</button> : `${availableTables.length} open`}</span>
+          </div> : <span className="foodpos-order-mode-note"><TakeoutDiningRoundedIcon aria-hidden="true" /> Ready for takeaway</span>}
         </div>
 
         <div className="foodpos-menu-layout">
@@ -384,7 +394,7 @@ export default function POSCheckout() {
               key={item.id}
               className={`${category === item.id ? 'selected' : ''} category-tone-${index % 6}`}
               aria-pressed={category === item.id}
-              onClick={() => { setCategory(item.id); setShowAll(false); }}
+              onClick={() => setCategory(item.id)}
             >
               <span className="category-icon"><CategoryVisual category={item} product={categoryProducts.get(item.id) || (item.id === ALL_CATEGORIES ? products[0] : null)} /></span>
               <span>{item.name}</span>
@@ -393,50 +403,22 @@ export default function POSCheckout() {
         </nav>
 
         <div className="foodpos-menu-content">
-        <p className="foodpos-integration-note" role="status">Room charges are unavailable until the hotel system can validate stays and confirm folio postings.</p>
-
-        {!showAll && <section className="foodpos-section">
-          <header className="foodpos-section-heading">
-            <div><h1>Popular</h1><p>Top-selling dishes from recorded sales.</p></div>
-            {rankedProducts.length > 0 && <button type="button" className="foodpos-view-all" onClick={() => setShowAll(true)}>View all <ArrowForwardRoundedIcon /></button>}
-          </header>
-          {!popularityEnabled ? (
-            <div className="foodpos-inline-empty">Best-seller ranking is restricted to manager reports. Browse the full menu below.</div>
-          ) : popularityQuery.isLoading ? (
-            <div className="foodpos-product-grid">{[0, 1, 2, 3].map((item) => <div className="foodpos-product-skeleton" key={item} />)}</div>
-          ) : popularityQuery.isError ? (
-            <div className="foodpos-inline-error" role="alert">Popular dishes could not be loaded. <button type="button" onClick={() => popularityQuery.refetch()}><RefreshRoundedIcon /> Retry</button></div>
-          ) : popularProducts.length === 0 ? (
-            <div className="foodpos-inline-empty">No best-selling dishes are available for this selection yet.</div>
-          ) : (
-            <div className="foodpos-product-grid">
-              {popularProducts.slice(0, showAll ? 8 : 4).map((product) => (
-                <FoodProductCard key={product.id} product={product} count={cart.filter((item) => String(item.id) === String(product.id)).reduce((sum, item) => sum + item.quantity, 0)} onSelect={beginAdd} />
-              ))}
-            </div>
-          )}
-        </section>}
-
-        <section className="foodpos-section foodpos-featured-section">
+        <section className="foodpos-section">
           <header className="foodpos-section-heading">
             <div>
-              <h2>{showAll ? (selectedCategory?.name || 'All dishes') : (featuredCategory?.name || (selectedCategory?.name !== 'All dishes' ? selectedCategory?.name : 'More dishes'))}</h2>
-              <p>{search ? `${visibleProducts.length} matching dishes` : 'Made fresh for your guests'}</p>
+              <h1>{search ? 'Search results' : selectedCategory?.name || 'All dishes'}</h1>
+              <p>{search ? `${visibleProducts.length} matching dishes` : `${visibleProducts.length} dishes${popularProducts.length ? ' · best sellers shown first' : ''}`}</p>
             </div>
-            {!showAll && <button type="button" className="foodpos-view-all" onClick={() => setShowAll(true)}>View all <ArrowForwardRoundedIcon /></button>}
           </header>
 
           {productsQuery.isLoading ? (
-            <div className="foodpos-product-grid foodpos-featured-grid">{[0, 1, 2].map((item) => <div className="foodpos-featured-skeleton" key={item} />)}</div>
+            <div className="foodpos-product-grid">{[0, 1, 2, 3, 4, 5, 6, 7].map((item) => <div className="foodpos-product-skeleton" key={item} />)}</div>
           ) : productsQuery.isError ? (
             <div className="foodpos-empty-state foodpos-error-state" role="alert"><RestaurantMenuRoundedIcon /><strong>Menu could not be loaded</strong><span>Check the connection and try again.</span><button type="button" onClick={() => productsQuery.refetch()}><RefreshRoundedIcon /> Try again</button></div>
-          ) : showAll ? (
-            visibleProducts.length ? <div className="foodpos-product-grid foodpos-featured-grid">{visibleProducts.map((product) => <FoodProductCard key={product.id} product={product} featured count={cart.filter((item) => String(item.id) === String(product.id)).reduce((sum, item) => sum + item.quantity, 0)} onSelect={beginAdd} />)}</div>
-              : <div className="foodpos-empty-state"><ShoppingBagOutlinedIcon /><strong>{search ? 'No dishes match your search' : 'No dishes in this category'}</strong><span>Try another category or clear your search.</span></div>
-          ) : featuredProducts.length ? (
-            <div className="foodpos-product-grid foodpos-featured-grid">{featuredProducts.map((product) => <FoodProductCard key={product.id} product={product} featured count={cart.filter((item) => String(item.id) === String(product.id)).reduce((sum, item) => sum + item.quantity, 0)} onSelect={beginAdd} />)}</div>
+          ) : orderedMenuProducts.length ? (
+            <div className="foodpos-product-grid">{orderedMenuProducts.map((product) => <FoodProductCard key={product.id} product={product} count={cart.filter((item) => String(item.id) === String(product.id)).reduce((sum, item) => sum + item.quantity, 0)} onSelect={beginAdd} />)}</div>
           ) : (
-            <div className="foodpos-empty-state"><ShoppingBagOutlinedIcon /><strong>{search ? 'No dishes match your search' : popularProducts.length ? 'All dishes in this section are listed above' : 'No dishes in this category yet'}</strong><span>Choose another category or view the full menu.</span></div>
+            <div className="foodpos-empty-state"><ShoppingBagOutlinedIcon /><strong>{search ? 'No dishes match your search' : 'No dishes in this category yet'}</strong><span>Choose another category or clear your search.</span></div>
           )}
 
           {categoriesQuery.isError && <p className="foodpos-data-note" role="status">Category service is unavailable; showing categories available with menu items.</p>}
@@ -460,17 +442,11 @@ export default function POSCheckout() {
       {(cartOpen || isDesktopOrderPanel) && <div className={`foodpos-drawer-backdrop${isDesktopOrderPanel ? ' foodpos-cart-persistent' : ''}`} role="presentation" onMouseDown={(event) => { if (!isDesktopOrderPanel && event.target === event.currentTarget) setCartOpen(false); }}>
         <section className="foodpos-order-drawer" role={isDesktopOrderPanel ? 'complementary' : 'dialog'} aria-modal={isDesktopOrderPanel ? undefined : 'true'} aria-labelledby="foodpos-cart-title">
           <header className="foodpos-drawer-heading">
-            <div><p className="foodpos-overline">CURRENT ORDER</p><h2 id="foodpos-cart-title">{selectedTableRecord?.name || (orderType === 'TAKEAWAY' ? 'Takeaway' : 'New order')}</h2><span>{itemCount} {itemCount === 1 ? 'item' : 'items'}</span></div>
+            <div><p className="foodpos-overline">CURRENT ORDER</p><h2 id="foodpos-cart-title">{selectedTableRecord?.name || (orderType === 'TAKEAWAY' ? 'Takeaway order' : 'New order')}</h2><span>{itemCount} {itemCount === 1 ? 'item' : 'items'}{guest ? ` · ${guest.name}` : ''}</span></div>
             {!isDesktopOrderPanel && <button type="button" className="foodpos-icon-button" onClick={() => setCartOpen(false)} aria-label="Close order"><CloseRoundedIcon /></button>}
           </header>
 
           <div className="foodpos-drawer-scroll">
-            {orderType === 'DINE_IN' && <section className="foodpos-context-section">
-              <div className="foodpos-subheading"><div><h3>Choose a table</h3><p>{selectedTableRecord?.name || 'Available tables'}</p></div><span>{availableTables.length} open</span></div>
-              {tablesQuery.isLoading ? <div className="foodpos-state">Loading tables…</div> : tablesQuery.isError ? <div className="foodpos-inline-error" role="alert">Tables unavailable. <button type="button" onClick={() => tablesQuery.refetch()}><RefreshRoundedIcon /> Retry</button></div> : availableTables.length === 0 ? <div className="foodpos-inline-empty">No available tables. Select takeaway to continue.</div> : <div className="foodpos-table-list">{availableTables.map((table) => <button type="button" key={table.id} className={String(table.id) === selectedTable ? 'selected' : ''} aria-pressed={String(table.id) === selectedTable} onClick={() => { setSelectedTable(String(table.id)); setTableSelectionWarning(''); }}><RestaurantRoundedIcon /><span>{table.name}</span><small>{table.capacity ? `${table.capacity} seats` : 'Available'}</small></button>)}</div>}
-              {tableSelectionWarning && <div className="foodpos-inline-error" role="alert">{tableSelectionWarning}</div>}
-            </section>}
-
             <section className="foodpos-context-section foodpos-guest-section">
               <label className="foodpos-field">Guest <span>Optional for restaurant orders</span>
                 <input value={guestQuery} onChange={(event) => { setGuestQuery(event.target.value); setGuest(null); }} placeholder="Search guest name or phone" />
@@ -520,7 +496,8 @@ export default function POSCheckout() {
             {cart.length > 0 && !validDineInTable && <div className="foodpos-checkout-blocker" role="status">{availableTables.length ? 'Select an available table to send or pay for this dine-in order.' : 'No available tables. Ask a manager to add or release a table, or switch to takeaway.'}</div>}
             {cart.length > 0 && !cartOptionsReady && <div className="foodpos-checkout-blocker" role="status">{cartModifierQueries.some((query) => query.isError) ? 'Dish options could not be loaded. Retry the options on each affected item before checkout.' : cartModifierQueries.some((query) => query.isLoading) ? 'Loading dish options…' : 'Choose the required dish options before checkout.'}</div>}
             {submitOrderMutation.isError && <div className="foodpos-inline-error" role="alert">Order could not be sent. {submitOrderMutation.error?.response?.data?.message || 'Check the connection and retry.'}</div>}
-            {!isDesktopOrderPanel && <><button type="button" className="foodpos-deferred-action"
+            {tableSelectionWarning && <div className="foodpos-inline-error" role="alert">{tableSelectionWarning}</div>}
+            <button type="button" className="foodpos-deferred-action"
               disabled={!cart.length || !cartOptionsReady || taxQuery.isLoading || taxQuery.isError || tablesQuery.isLoading || !validDineInTable || submitOrderMutation.isPending}
               onClick={sendToKitchen}>
               <span>{submitOrderMutation.isPending ? 'Sending order…' : 'Send to kitchen · pay later'}</span>
@@ -530,7 +507,7 @@ export default function POSCheckout() {
               disabled={!cart.length || !cartOptionsReady || taxQuery.isLoading || taxQuery.isError || tablesQuery.isLoading || shiftQuery.isLoading || shiftQuery.isError || !shiftQuery.data || !validDineInTable || submitOrderMutation.isPending}
               onClick={() => { setCartOpen(false); setShowPayment(true); }}>
               Pay now · {money(total)}
-            </button></>}
+            </button>
           </footer>
         </section>
       </div>}
