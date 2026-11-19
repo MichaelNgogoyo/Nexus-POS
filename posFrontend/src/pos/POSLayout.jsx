@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useKeycloak } from '@react-keycloak/web';
 import { ROUTES } from '../routes.js';
 import { usePermissions } from '../auth/permissions.js';
@@ -29,6 +29,8 @@ const NAV_ITEMS = [
 export default function POSLayout() {
   const { keycloak } = useKeycloak();
   const { can } = usePermissions();
+  const location = useLocation();
+  const cashierTerminal = location.pathname === ROUTES.POS_CHECKOUT;
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const visibleNavItems = NAV_ITEMS.filter((item) => can(item.permission));
   const primaryRoute = can('view_sales') ? ROUTES.POS_CHECKOUT : ROUTES.POS_KITCHEN;
@@ -39,7 +41,7 @@ export default function POSLayout() {
 
   return (
     <div className="foodpos-shell">
-      <aside className="foodpos-sidebar" aria-label="Restaurant navigation">
+      {!cashierTerminal && <aside className="foodpos-sidebar" aria-label="Restaurant navigation">
         <NavLink to={primaryRoute} className="foodpos-brand" aria-label="FoodPOS home">
           <span className="foodpos-brand-mark">F</span>
           <span className="foodpos-brand-name">FoodPOS</span>
@@ -79,11 +81,11 @@ export default function POSLayout() {
             </button>
           </div>
         </div>
-      </aside>
+      </aside>}
 
       <main className="foodpos-page"><Outlet /></main>
 
-      <nav className="foodpos-mobile-nav" aria-label="Quick navigation">
+      {!cashierTerminal && <nav className="foodpos-mobile-nav" aria-label="Quick navigation">
         {visibleNavItems.filter((item) => item.mobile).map((item) => {
           const IconComponent = item.Icon;
           return <NavLink key={item.to} to={item.to} end aria-label={item.label} className={({ isActive }) => isActive ? 'active' : ''}>
@@ -110,7 +112,7 @@ export default function POSLayout() {
             </button>
           </div>
         )}
-      </nav>
+      </nav>}
     </div>
   );
 }

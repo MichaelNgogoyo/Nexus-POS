@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, Suspense, lazy } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { NavLink, useNavigate, useSearchParams } from 'react-router-dom';
 import { useKeycloak } from '@react-keycloak/web';
 import {
   getAllProducts, getAllTables, getCurrentShift, getDashboardSummary, getModifierGroups,
@@ -24,6 +24,14 @@ import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import DarkModeRoundedIcon from '@mui/icons-material/DarkModeRounded';
 import LightModeRoundedIcon from '@mui/icons-material/LightModeRounded';
+import TableRestaurantRoundedIcon from '@mui/icons-material/TableRestaurantRounded';
+import ReceiptLongRoundedIcon from '@mui/icons-material/ReceiptLongRounded';
+import LocalDiningRoundedIcon from '@mui/icons-material/LocalDiningRounded';
+import RestartAltRoundedIcon from '@mui/icons-material/RestartAltRounded';
+import PaymentsRoundedIcon from '@mui/icons-material/PaymentsRounded';
+import PointOfSaleRoundedIcon from '@mui/icons-material/PointOfSaleRounded';
+import DashboardRoundedIcon from '@mui/icons-material/DashboardRounded';
+import { ROUTES } from '../../routes.js';
 import {
   ALL_CATEGORIES, filterMenuProducts, getMenuCategories, popularMenuProducts,
 } from './menuUtils.js';
@@ -242,10 +250,37 @@ export default function POSCheckout() {
     submitOrderMutation.mutate({ ...payload, idempotencyKey: submitKeyRef.current.key });
   };
 
+  const resetOrder = () => {
+    clearCart();
+    setSelectedTable('');
+    setTableSelectionWarning('');
+    setGuest(null);
+    setGuestQuery('');
+    setOrderNote('');
+    setCartOpen(false);
+    setSubmittedOrder(null);
+    submitKeyRef.current = { signature: null, key: null };
+  };
+
+  const canSubmitOrder = cart.length > 0 && !taxQuery.isLoading && !taxQuery.isError
+    && !tablesQuery.isLoading && validDineInTable && !submitOrderMutation.isPending;
+  const canPayNow = cart.length > 0 && !taxQuery.isLoading && !taxQuery.isError
+    && !tablesQuery.isLoading && !shiftQuery.isLoading && !shiftQuery.isError
+    && Boolean(shiftQuery.data) && validDineInTable && !submitOrderMutation.isPending;
+
   return (
     <div className={`foodpos-checkout${isDesktopOrderPanel ? ' foodpos-checkout-persistent' : ''}`}>
       <div className="foodpos-scroll-area">
         <header className="foodpos-topbar">
+          <NavLink to={ROUTES.POS_CHECKOUT} className="foodpos-terminal-brand" aria-label="Nexus POS cashier terminal">
+            <span className="foodpos-brand-mark">N</span><span>Nexus<span>POS</span></span>
+          </NavLink>
+          <nav className="foodpos-terminal-nav" aria-label="Cashier pages">
+            {can('view_dashboard') && <NavLink to={ROUTES.DASHBOARD}><DashboardRoundedIcon /><span>Dashboard</span></NavLink>}
+            {can('view_tables') && <NavLink to={ROUTES.POS_TABLES}><TableRestaurantRoundedIcon /><span>Tables</span></NavLink>}
+            {can('view_orders') && <NavLink to={ROUTES.POS_ORDERS}><ReceiptLongRoundedIcon /><span>Orders</span></NavLink>}
+            {can('view_kitchen') && <NavLink to={ROUTES.POS_KITCHEN}><LocalDiningRoundedIcon /><span>Kitchen</span></NavLink>}
+          </nav>
           <div className="foodpos-search-box">
             <SearchRoundedIcon aria-hidden="true" />
             <input
@@ -353,11 +388,16 @@ export default function POSCheckout() {
         </div>
       </div>
 
-      <div className="foodpos-cart-summary" aria-live="polite">
-        <div className="foodpos-cart-summary-copy"><span>Current order</span><strong>{itemCount} {itemCount === 1 ? 'item' : 'items'} <i /> {money(total)}</strong></div>
-        <button type="button" onClick={() => setCartOpen(true)}>
-          {cart.length ? 'Review order' : 'Start order'} <ArrowForwardRoundedIcon />
-        </button>
+      <div className="foodpos-action-bar" aria-label="Cashier actions" aria-live="polite">
+        <div className="foodpos-action-order"><span>Current order</span><strong>{itemCount} {itemCount === 1 ? 'item' : 'items'} <i /> {money(total)}</strong></div>
+        <div className="foodpos-action-buttons">
+          <button type="button" className="foodpos-action-secondary" onClick={() => { if (window.confirm('Clear this order and start again?')) resetOrder(); }} disabled={!cart.length}><RestartAltRoundedIcon /> <span>Reset</span></button>
+          {can('view_orders') && <button type="button" className="foodpos-action-secondary" onClick={() => navigate(ROUTES.POS_ORDERS)}><ReceiptLongRoundedIcon /> <span>View orders</span></button>}
+          {isDesktopOrderPanel ? <>
+            <button type="button" className="foodpos-action-kitchen" onClick={sendToKitchen} disabled={!canSubmitOrder}><LocalDiningRoundedIcon /><span>{submitOrderMutation.isPending ? 'Sending…' : 'Send to kitchen'}</span></button>
+            <button type="button" className="foodpos-action-pay" onClick={() => setShowPayment(true)} disabled={!canPayNow}><PaymentsRoundedIcon /><span>Pay now · {money(total)}</span></button>
+          </> : <button type="button" className="foodpos-action-pay" onClick={() => setCartOpen(true)}><PointOfSaleRoundedIcon /><span>{cart.length ? 'Review order' : 'Start order'}</span><ArrowForwardRoundedIcon /></button>}
+        </div>
       </div>
 
       {(cartOpen || isDesktopOrderPanel) && <div className={`foodpos-drawer-backdrop${isDesktopOrderPanel ? ' foodpos-cart-persistent' : ''}`} role="presentation" onMouseDown={(event) => { if (!isDesktopOrderPanel && event.target === event.currentTarget) setCartOpen(false); }}>
@@ -406,7 +446,7 @@ export default function POSCheckout() {
             <div className="foodpos-total-row foodpos-total-due"><span>Total due</span><strong>{money(total)}</strong></div>
             {shiftQuery.isLoading ? <div className="foodpos-state">Checking cashier shift…</div> : shiftQuery.isError ? <div className="foodpos-inline-error" role="alert">Shift status could not be checked. <button type="button" onClick={() => shiftQuery.refetch()}>Retry</button></div> : !shiftQuery.data ? <div className="foodpos-shift-notice"><span>Open a cashier shift before recording cash payment.</span><button type="button" onClick={() => navigate('/pos/shift')}>Open shift</button></div> : null}
             {submitOrderMutation.isError && <div className="foodpos-inline-error" role="alert">Order could not be sent. {submitOrderMutation.error?.response?.data?.message || 'Check the connection and retry.'}</div>}
-            <button type="button" className="foodpos-deferred-action"
+            {!isDesktopOrderPanel && <><button type="button" className="foodpos-deferred-action"
               disabled={!cart.length || taxQuery.isLoading || taxQuery.isError || tablesQuery.isLoading || !validDineInTable || submitOrderMutation.isPending}
               onClick={sendToKitchen}>
               <span>{submitOrderMutation.isPending ? 'Sending order…' : 'Send to kitchen · pay later'}</span>
@@ -416,7 +456,7 @@ export default function POSCheckout() {
               disabled={!cart.length || taxQuery.isLoading || taxQuery.isError || tablesQuery.isLoading || shiftQuery.isLoading || shiftQuery.isError || !shiftQuery.data || !validDineInTable || submitOrderMutation.isPending}
               onClick={() => { setCartOpen(false); setShowPayment(true); }}>
               Pay now · {money(total)}
-            </button>
+            </button></>}
           </footer>
         </section>
       </div>}
