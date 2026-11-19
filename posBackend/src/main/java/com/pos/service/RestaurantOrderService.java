@@ -256,13 +256,15 @@ public class RestaurantOrderService {
             auditService.log(actor, "TABLE_STATUS_CHANGED", "RestaurantTable", table.getId().toString(),
                     previousTableStatus == null ? null : previousTableStatus.name(), TableStatus.CLEANING.name());
         }
-        kitchenOrderRepository.findByOrder_Id(id).ifPresent(ticket -> {
-            if (ticket.getStatus() != KitchenStatus.SERVED) {
-                ticket.setStatus(KitchenStatus.CANCELLED);
-                if (order.getItems() != null) order.getItems().forEach(item -> item.setKitchenStatus(KitchenStatus.CANCELLED));
-                kitchenOrderRepository.save(ticket);
-            }
-        });
+        List<KitchenOrder> tickets = kitchenOrderRepository.findAllByOrder_Id(id);
+        for (KitchenOrder ticket : tickets) {
+            if (ticket.getStatus() == KitchenStatus.SERVED) continue;
+            ticket.setStatus(KitchenStatus.CANCELLED);
+            if (order.getItems() != null) order.getItems().stream()
+                    .filter(item -> sameStation(item.getKitchenStation(), ticket.getKitchenStation()))
+                    .forEach(item -> item.setKitchenStatus(KitchenStatus.CANCELLED));
+        }
+        kitchenOrderRepository.saveAll(tickets);
         RestaurantOrder saved = orderRepository.save(order);
         auditService.log(actor, "ORDER_CANCELLED", "RestaurantOrder", id.toString(), before.name(), "CANCELLED");
         return orderMapper.toResponse(saved);
@@ -288,8 +290,14 @@ public class RestaurantOrderService {
         OrderStatus before = order.getStatus();
         if (before != OrderStatus.OPEN || next != OrderStatus.KITCHEN) throw badRequest("Invalid order status transition");
         consumeCatalogStock(order);
-        if (kitchenOrderRepository.findByOrder_Id(id).isEmpty()) {
-            kitchenOrderRepository.save(KitchenOrder.builder().order(order).status(KitchenStatus.PENDING).notes(order.getNotes()).build());
+        if (kitchenOrderRepository.findAllByOrder_Id(id).isEmpty()) {
+            List<KitchenOrder> tickets = order.getItems().stream()
+                    .collect(Collectors.groupingBy(item -> normalizeStation(item.getKitchenStation())))
+                    .entrySet().stream()
+                    .map(entry -> KitchenOrder.builder().order(order).kitchenStation(entry.getKey())
+                            .status(KitchenStatus.PENDING).notes(order.getNotes()).build())
+                    .toList();
+            kitchenOrderRepository.saveAll(tickets);
         }
         order.setStatus(next);
         RestaurantOrder saved = orderRepository.save(order);
@@ -383,7 +391,8 @@ public class RestaurantOrderService {
             BigDecimal lineTotal = price.multiply(BigDecimal.valueOf(requested.quantity())).setScale(2, RoundingMode.HALF_UP);
             OrderItem item = OrderItem.builder().order(order).productId(product.getId()).productName(product.getName())
                     .unitPrice(price).quantity(requested.quantity()).lineTotal(lineTotal)
-                    .notes(trimLimit(requested.notes(), 250, "Item notes")).modifiers(modifiers).kitchenStatus(KitchenStatus.PENDING).build();
+                    .notes(trimLimit(requested.notes(), 250, "Item notes")).modifiers(modifiers)
+                    .kitchenStation(normalizeStation(product.getKitchenStation())).kitchenStatus(KitchenStatus.PENDING).build();
             pricedItems.add(item);
             subtotal = subtotal.add(lineTotal);
         }
@@ -407,6 +416,14 @@ public class RestaurantOrderService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Selected table is no longer available");
         }
         return table;
+    }
+
+    private boolean sameStation(String left, String right) {
+        return normalizeStation(left).equals(normalizeStation(right));
+    }
+
+    private String normalizeStation(String station) {
+        return station == null || station.isBlank() ? "MAIN" : station.trim().replaceAll("\\s+", " ").toUpperCase(java.util.Locale.ROOT);
     }
 
     private void occupyTable(RestaurantTable table, String actor) {

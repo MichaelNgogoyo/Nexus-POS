@@ -35,6 +35,11 @@ public class OrderItem {
     private BigDecimal lineTotal;
     private String notes;
 
+    /** Snapshot of the product's kitchen destination when the order is priced. */
+    @Builder.Default
+    @Column(name = "kitchen_station", nullable = false, length = 60)
+    private String kitchenStation = "MAIN";
+
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(name = "order_item_modifiers",
             joinColumns = @JoinColumn(name = "order_item_id"),

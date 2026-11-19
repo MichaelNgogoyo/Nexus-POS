@@ -99,7 +99,7 @@ class OrderControllerSecurityTest {
                 .items(new java.util.ArrayList<>(List.of(OrderItem.builder().productId(4L).quantity(2).build()))).build();
         when(orderRepository.findByIdForUpdate(25L)).thenReturn(Optional.of(order));
         when(productRepository.findAllByIdForUpdate(List.of(4L))).thenReturn(List.of(product));
-        when(kitchenOrderRepository.findByOrder_Id(25L)).thenReturn(Optional.empty());
+        when(kitchenOrderRepository.findAllByOrder_Id(25L)).thenReturn(List.of());
         when(orderRepository.save(any(RestaurantOrder.class))).thenAnswer(call -> call.getArgument(0));
 
         var result = orderService.submitToKitchen(25L, "KITCHEN", "cashier-4");
@@ -113,7 +113,10 @@ class OrderControllerSecurityTest {
             var movement = iterator.next();
             return !iterator.hasNext() && movement.getDelta() == -2 && movement.getBalanceAfter() == 3;
         }));
-        verify(kitchenOrderRepository).save(any(KitchenOrder.class));
+        verify(kitchenOrderRepository).saveAll(argThat(tickets -> {
+            List<KitchenOrder> savedTickets = java.util.stream.StreamSupport.stream(tickets.spliterator(), false).toList();
+            return savedTickets.size() == 1 && savedTickets.get(0).getKitchenStation().equals("MAIN");
+        }));
     }
 
     @Test
@@ -231,7 +234,7 @@ class OrderControllerSecurityTest {
                 .table(table).items(new java.util.ArrayList<>(List.of(item))).build();
         KitchenOrder ticket = KitchenOrder.builder().id(16L).order(order).status(KitchenStatus.PREPARING).build();
         when(orderRepository.findByIdForUpdate(25L)).thenReturn(Optional.of(order));
-        when(kitchenOrderRepository.findByOrder_Id(25L)).thenReturn(Optional.of(ticket));
+        when(kitchenOrderRepository.findAllByOrder_Id(25L)).thenReturn(List.of(ticket));
 
         var cancelled = orderService.cancelOrder(25L, "cashier-4");
 
@@ -241,6 +244,7 @@ class OrderControllerSecurityTest {
         assertThat(ticket.getStatus()).isEqualTo(KitchenStatus.CANCELLED);
         assertThat(item.getKitchenStatus()).isEqualTo(KitchenStatus.CANCELLED);
         verify(tableRepository).save(table);
+        verify(kitchenOrderRepository).saveAll(List.of(ticket));
         verify(auditService).log("cashier-4", "TABLE_STATUS_CHANGED", "RestaurantTable", "44", "OCCUPIED", "CLEANING");
         verify(auditService).log("cashier-4", "ORDER_CANCELLED", "RestaurantOrder", "25", "KITCHEN", "CANCELLED");
     }

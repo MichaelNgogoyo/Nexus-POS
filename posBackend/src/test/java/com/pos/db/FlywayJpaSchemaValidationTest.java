@@ -53,7 +53,7 @@ class FlywayJpaSchemaValidationTest {
     @Test
     void flywayCreatesASchemaThatHibernateCanValidate() {
         assertThat(flyway.info().current()).isNotNull();
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("20261109.01");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("20261119.01");
     }
 
     @Test
@@ -70,6 +70,9 @@ class FlywayJpaSchemaValidationTest {
         assertThat(hasColumn("sales", "restaurant_order_id")).isTrue();
         assertThat(hasConstraint("restaurant_orders", "fk_restaurant_orders_sale")).isTrue();
         assertThat(hasConstraint("sales", "fk_sales_restaurant_order")).isTrue();
+        assertThat(hasColumn("product", "kitchen_station")).isTrue();
+        assertThat(hasColumn("order_items", "kitchen_station")).isTrue();
+        assertThat(hasColumn("kitchen_orders", "kitchen_station")).isTrue();
     }
 
     private boolean hasColumn(String table, String column) {

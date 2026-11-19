@@ -24,7 +24,13 @@ public interface KitchenOrderRepository extends JpaRepository<KitchenOrder, Long
     @EntityGraph(attributePaths = {"order", "order.items", "order.table"})
     List<KitchenOrder> findByStatusIn(Collection<KitchenStatus> statuses);
 
-    java.util.Optional<KitchenOrder> findByOrder_Id(Long orderId);
+    @EntityGraph(attributePaths = {"order", "order.items", "order.table"})
+    List<KitchenOrder> findByStatusInAndKitchenStationIgnoreCase(Collection<KitchenStatus> statuses, String kitchenStation);
+
+    @EntityGraph(attributePaths = {"order", "order.items", "order.table"})
+    List<KitchenOrder> findByStatusAndKitchenStationIgnoreCase(KitchenStatus status, String kitchenStation);
+
+    List<KitchenOrder> findAllByOrder_Id(Long orderId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT k FROM KitchenOrder k WHERE k.id = :id")

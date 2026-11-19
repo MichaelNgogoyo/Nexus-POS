@@ -39,7 +39,7 @@ apiClient.interceptors.response.use(
             return Promise.reject(error);
         }
 
-        if (error?.config?.suppressToastStatuses?.includes(status)) {
+        if (error?.config?.suppressToast || error?.config?.suppressToastStatuses?.includes(status)) {
             return Promise.reject(error);
         }
 
@@ -153,7 +153,7 @@ export const updateProduct = (productId, productData) => {
     return apiClient.put(`/api/product/${productId}`, productData);
 };
 
-export const updateProductWithImage = (productId, {name, price, active, discount, quantity, category, file}) => {
+export const updateProductWithImage = (productId, {name, price, active, discount, quantity, category, kitchenStation, file}) => {
     const formData = new FormData();
     formData.append("name", name);
     formData.append("price", price);
@@ -161,6 +161,7 @@ export const updateProductWithImage = (productId, {name, price, active, discount
     formData.append("discount", discount);
     formData.append("quantity", quantity);
     formData.append("category", category ?? "");
+    formData.append("kitchenStation", kitchenStation || "MAIN");
     if (file) {
         formData.append("file", file);
     }
@@ -234,7 +235,7 @@ export const getTaxRate = () => apiClient.get('/api/config/tax-rate');
 // ========================================
 // Restaurant Tables API
 // ========================================
-export const getAllTables = () => apiClient.get('/api/tables');
+export const getAllTables = (config = {}) => apiClient.get('/api/tables', config);
 export const createTable = (data) => apiClient.post('/api/tables', data);
 export const updateTableStatus = (id, status) => apiClient.put(`/api/tables/${id}/status`, { status });
 
@@ -254,7 +255,11 @@ export const addOrderItem = (orderId, item) => apiClient.post(`/api/orders/${ord
 // ========================================
 // Kitchen API
 // ========================================
-export const getKitchenOrders = ({ includeHistory = false } = {}) => apiClient.get('/api/kitchen/orders', { params: { includeHistory } });
+export const getKitchenStations = () => apiClient.get('/api/kitchen/stations', { suppressToast: true });
+export const getKitchenOrders = ({ includeHistory = false, station } = {}) => apiClient.get('/api/kitchen/orders', {
+    params: { includeHistory, ...(station ? { station } : {}) },
+    suppressToast: true,
+});
 export const advanceKitchenStatus = (id, status) => apiClient.put(`/api/kitchen/orders/${id}/status`, { status });
 
 // ========================================

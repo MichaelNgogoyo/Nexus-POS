@@ -32,6 +32,14 @@ public record ProductRequest(
 
         /** Alert threshold — defaults to 5 if not provided */
         @Min(value = 0, message = "Low stock threshold cannot be negative")
-        Integer lowStockThreshold
+        Integer lowStockThreshold,
+
+        @Size(max = 60, message = "Kitchen station must not exceed 60 characters")
+        String kitchenStation
 ) {
+    /** Preserve the existing constructor used by older API clients and tests. */
+    public ProductRequest(String name, BigDecimal price, Boolean active, double discount, int quantity,
+                          String category, String sku, String barcode, Integer lowStockThreshold) {
+        this(name, price, active, discount, quantity, category, sku, barcode, lowStockThreshold, null);
+    }
 }

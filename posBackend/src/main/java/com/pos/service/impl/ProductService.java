@@ -60,6 +60,7 @@ public class ProductService {
             .active(Boolean.TRUE.equals(request.active()))
             .discount(request.discount())
             .imageURL(objectKey)
+            .kitchenStation(normalizeKitchenStation(request.kitchenStation()))
             .quantity(request.quantity())
             .sku(request.sku())
             .barcode(request.barcode())
@@ -107,6 +108,7 @@ public class ProductService {
         if (request.sku() != null) product.setSku(request.sku());
         if (request.barcode() != null) product.setBarcode(request.barcode());
         if (request.lowStockThreshold() != null) product.setLowStockThreshold(request.lowStockThreshold());
+        if (request.kitchenStation() != null) product.setKitchenStation(normalizeKitchenStation(request.kitchenStation()));
 
         adjustCategoryCounts(originalCategory, newCategory);
 
@@ -143,6 +145,7 @@ public class ProductService {
         if (request.sku() != null) product.setSku(request.sku());
         if (request.barcode() != null) product.setBarcode(request.barcode());
         if (request.lowStockThreshold() != null) product.setLowStockThreshold(request.lowStockThreshold());
+        if (request.kitchenStation() != null) product.setKitchenStation(normalizeKitchenStation(request.kitchenStation()));
 
         adjustCategoryCounts(originalCategory, newCategory);
 
@@ -238,6 +241,16 @@ public class ProductService {
                         .name(categoryName.trim())
                         .productCount(0)
                         .build()));
+    }
+
+    private String normalizeKitchenStation(String station) {
+        if (station == null || station.isBlank()) return "MAIN";
+        String normalized = station.trim().replaceAll("\\s+", " ").toUpperCase(java.util.Locale.ROOT);
+        if (normalized.length() > 60 || !normalized.matches("[A-Z0-9][A-Z0-9 _-]*")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Kitchen station may contain letters, numbers, spaces, hyphens, and underscores");
+        }
+        return normalized;
     }
 
     private void adjustCategoryCounts(Category originalCategory, Category newCategory) {

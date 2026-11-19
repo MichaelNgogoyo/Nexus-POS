@@ -1,16 +1,20 @@
 package com.pos.service;
 
 import com.pos.dto.OrderPaymentRequest;
+import com.pos.dto.KitchenStatusRequest;
 import com.pos.dto.RestaurantOrderItemRequest;
 import com.pos.dto.RestaurantOrderRequest;
 import com.pos.model.OrderStatus;
 import com.pos.model.OrderType;
+import com.pos.model.KitchenStatus;
 import com.pos.model.Modifier;
 import com.pos.model.ModifierGroup;
 import com.pos.model.Product;
 import com.pos.model.Sales;
 import com.pos.model.SaleItem;
 import com.pos.model.SaleStatus;
+import com.pos.model.RestaurantTable;
+import com.pos.model.TableStatus;
 import com.pos.model.Shift;
 import com.pos.model.ShiftStatus;
 import com.pos.controller.KitchenController;
@@ -19,6 +23,7 @@ import com.pos.repository.ModifierGroupRepository;
 import com.pos.repository.ModifierRepository;
 import com.pos.repository.ProductRepository;
 import com.pos.repository.RestaurantOrderRepository;
+import com.pos.repository.RestaurantTableRepository;
 import com.pos.repository.SalesRepository;
 import com.pos.repository.ShiftRepository;
 import com.pos.repository.StockMovementRepository;
@@ -122,6 +127,12 @@ class OrderPaymentPostgresIntegrationTest {
     @Autowired
     ShiftRepository shiftRepository;
 
+    @Autowired
+    RestaurantTableRepository tableRepository;
+
+    @Autowired
+    TableService tableService;
+
     @Test
     void submitsUnpaidOrderConsumesStockThenSettlesCashExactlyOnce() throws Exception {
         Product product = productRepository.saveAndFlush(Product.builder()
@@ -145,7 +156,7 @@ class OrderPaymentPostgresIntegrationTest {
         assertThat(created.order().status()).isEqualTo(OrderStatus.KITCHEN);
         assertThat(created.order().total()).isEqualByComparingTo("230.00");
         assertThat(productRepository.findById(product.getId()).orElseThrow().getQuantity()).isEqualTo(6);
-        assertThat(kitchenOrderRepository.findByOrder_Id(created.order().id())).isPresent();
+        assertThat(kitchenOrderRepository.findAllByOrder_Id(created.order().id())).hasSize(1);
         assertThat(stockMovementRepository.findByProductIdOrderByCreatedAtDesc(product.getId()))
                 .singleElement().satisfies(movement -> {
                     assertThat(movement.getDelta()).isEqualTo(-2);
@@ -172,7 +183,7 @@ class OrderPaymentPostgresIntegrationTest {
 
         var replay = salesService.settleOrderCash(created.order().id(), paymentRequest, "integration-cashier");
         assertThat(replay.getId()).isEqualTo(sale.getId());
-        assertThat(salesRepository.count()).isEqualTo(1);
+        assertThat(salesRepository.findByRestaurantOrderId(created.order().id())).isPresent();
         assertThat(productRepository.findById(product.getId()).orElseThrow().getQuantity()).isEqualTo(6);
         assertThat(stockMovementRepository.findByProductIdOrderByCreatedAtDesc(product.getId())).hasSize(1);
         assertThat(orderRepository.findById(created.order().id()).orElseThrow().getSaleId()).isEqualTo(sale.getId());
@@ -272,6 +283,87 @@ class OrderPaymentPostgresIntegrationTest {
             assertThat(product.unitsSold()).isZero();
         });
         assertThat(analytics.hourly()).hasSize(24);
+    }
+
+    @Test
+    void dineInTableAndMultipleKitchenStationsCompleteTheirLifecycle() {
+        String cashier = "integration-table-cashier";
+        RestaurantTable table = tableRepository.saveAndFlush(RestaurantTable.builder()
+                .name("Integration T8").floor("Main").capacity(4).status(TableStatus.AVAILABLE).build());
+        Product grilledDish = productRepository.saveAndFlush(Product.builder().name("Integration grilled dish")
+                .price(new BigDecimal("100.00")).active(true).quantity(8).kitchenStation("GRILL").build());
+        Product drink = productRepository.saveAndFlush(Product.builder().name("Integration drink")
+                .price(new BigDecimal("50.00")).active(true).quantity(8).kitchenStation("BAR").build());
+        RestaurantOrderRequest request = new RestaurantOrderRequest(OrderType.DINE_IN, "integration-stations-key-0001",
+                new RestaurantOrderRequest.TableReference(table.getId()), null, null, "Station routing check",
+                List.of(new RestaurantOrderItemRequest(grilledDish.getId(), 1, null, List.of()),
+                        new RestaurantOrderItemRequest(drink.getId(), 2, null, List.of())));
+
+        RestaurantOrderService.CreateResult created = orderService.createAndSubmitOrder(request, cashier);
+
+        assertThat(created.created()).isTrue();
+        assertThat(tableRepository.findById(table.getId()).orElseThrow().getStatus()).isEqualTo(TableStatus.OCCUPIED);
+        List<com.pos.model.KitchenOrder> routedTickets = kitchenOrderRepository.findAllByOrder_Id(created.order().id());
+        assertThat(routedTickets).extracting(com.pos.model.KitchenOrder::getKitchenStation)
+                .containsExactlyInAnyOrder("GRILL", "BAR");
+        Long grillTicketId = routedTickets.stream().filter(ticket -> "GRILL".equals(ticket.getKitchenStation()))
+                .findFirst().orElseThrow().getId();
+        Long barTicketId = routedTickets.stream().filter(ticket -> "BAR".equals(ticket.getKitchenStation()))
+                .findFirst().orElseThrow().getId();
+        assertThat(getKitchenTickets("GRILL")).singleElement()
+                .satisfies(ticket -> {
+                    assertThat(ticket.kitchenStation()).isEqualTo("GRILL");
+                    assertThat(ticket.order().items()).extracting(com.pos.dto.KitchenTicketResponse.ItemSummary::productName)
+                            .containsExactly("Integration grilled dish");
+                });
+
+        advanceKitchenTicket(grillTicketId, "PREPARING");
+        advanceKitchenTicket(grillTicketId, "READY");
+        assertThat(orderRepository.findById(created.order().id()).orElseThrow().getStatus()).isEqualTo(OrderStatus.KITCHEN);
+        advanceKitchenTicket(barTicketId, "PREPARING");
+        advanceKitchenTicket(barTicketId, "READY");
+        assertThat(orderRepository.findById(created.order().id()).orElseThrow().getStatus()).isEqualTo(OrderStatus.READY);
+        advanceKitchenTicket(grillTicketId, "SERVED");
+        advanceKitchenTicket(barTicketId, "SERVED");
+        assertThat(orderRepository.findById(created.order().id()).orElseThrow().getStatus()).isEqualTo(OrderStatus.COMPLETED);
+
+        shiftRepository.saveAndFlush(Shift.builder().cashierId(cashier)
+                .openingBalance(new BigDecimal("50.00")).status(ShiftStatus.OPEN).build());
+        salesService.settleOrderCash(created.order().id(),
+                new OrderPaymentRequest(new BigDecimal("300.00"), "integration-stations-payment-0001"), cashier);
+        tableService.updateStatus(table.getId(), "CLEANING", "integration-manager");
+        assertThat(tableRepository.findById(table.getId()).orElseThrow().getStatus()).isEqualTo(TableStatus.CLEANING);
+        tableService.updateStatus(table.getId(), "AVAILABLE", "integration-manager");
+        RestaurantTable released = tableRepository.findById(table.getId()).orElseThrow();
+        assertThat(released.getStatus()).isEqualTo(TableStatus.AVAILABLE);
+        assertThat(released.getOccupiedAt()).isNull();
+    }
+
+    private void advanceKitchenTicket(Long ticketId, String status) {
+        KitchenStatusRequest request = new KitchenStatusRequest();
+        request.setStatus(status);
+        var originalAuthentication = SecurityContextHolder.getContext().getAuthentication();
+        try {
+            var authentication = new UsernamePasswordAuthenticationToken("integration-kitchen", "",
+                    List.of(new SimpleGrantedAuthority("ROLE_KITCHEN")));
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+            kitchenController.updateStatus(ticketId, request, authentication);
+        } finally {
+            SecurityContextHolder.clearContext();
+            if (originalAuthentication != null) SecurityContextHolder.getContext().setAuthentication(originalAuthentication);
+        }
+    }
+
+    private List<com.pos.dto.KitchenTicketResponse> getKitchenTickets(String station) {
+        var originalAuthentication = SecurityContextHolder.getContext().getAuthentication();
+        try {
+            SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                    "integration-kitchen", "", List.of(new SimpleGrantedAuthority("ROLE_KITCHEN"))));
+            return kitchenController.getAllKitchenOrders(null, false, station);
+        } finally {
+            SecurityContextHolder.clearContext();
+            if (originalAuthentication != null) SecurityContextHolder.getContext().setAuthentication(originalAuthentication);
+        }
     }
 
     private List<Future<com.pos.model.Sales>> settleConcurrently(Long orderId, OrderPaymentRequest request) throws InterruptedException {

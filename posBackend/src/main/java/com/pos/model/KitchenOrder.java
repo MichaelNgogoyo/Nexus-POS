@@ -18,9 +18,13 @@ public class KitchenOrder {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @OneToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_id")
     private RestaurantOrder order;
+
+    @Builder.Default
+    @Column(name = "kitchen_station", nullable = false, length = 60)
+    private String kitchenStation = "MAIN";
 
     @Enumerated(EnumType.STRING)
     @Builder.Default

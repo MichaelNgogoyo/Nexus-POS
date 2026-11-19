@@ -241,6 +241,7 @@ public class SalesService {
                     .lineTotal(itemPrice.multiply(BigDecimal.valueOf(saleItem.getQuantity())).setScale(2, RoundingMode.HALF_UP))
                     .notes(saleItem.getNotes())
                     .modifiers(new ArrayList<>(saleItem.getModifiers()))
+                    .kitchenStation(normalizeKitchenStation(saleItem.getProduct().getKitchenStation()))
                     .kitchenStatus(KitchenStatus.PENDING)
                     .build());
         }
@@ -251,11 +252,13 @@ public class SalesService {
         Sales saved = repository.save(sales);
         savedOrder.setSaleId(saved.getId());
         orderRepository.save(savedOrder);
-        kitchenOrderRepository.save(KitchenOrder.builder()
-                .order(savedOrder)
-                .status(KitchenStatus.PENDING)
-                .notes(savedOrder.getNotes())
-                .build());
+        List<KitchenOrder> routedTickets = savedOrder.getItems().stream()
+                .collect(Collectors.groupingBy(item -> normalizeKitchenStation(item.getKitchenStation())))
+                .keySet().stream()
+                .map(station -> KitchenOrder.builder().order(savedOrder).kitchenStation(station)
+                        .status(KitchenStatus.PENDING).notes(savedOrder.getNotes()).build())
+                .toList();
+        kitchenOrderRepository.saveAll(routedTickets);
         if (selectedTable != null) {
             selectedTable.setStatus(TableStatus.OCCUPIED);
             selectedTable.setOccupiedAt(LocalDateTime.now());
@@ -550,13 +553,25 @@ public class SalesService {
                 order.setStatus(status);
                 orderRepository.save(order);
             }
-            kitchenOrderRepository.findByOrder_Id(order.getId()).ifPresent(ticket -> {
-                if (ticket.getStatus() != KitchenStatus.SERVED) {
-                    ticket.setStatus(KitchenStatus.CANCELLED);
-                    if (order.getItems() != null) order.getItems().forEach(item -> item.setKitchenStatus(KitchenStatus.CANCELLED));
-                    kitchenOrderRepository.save(ticket);
-                }
-            });
+            if ((status == OrderStatus.CANCELLED || status == OrderStatus.REFUNDED) && order.getTable() != null
+                    && order.getTable().getStatus() == TableStatus.OCCUPIED) {
+                RestaurantTable table = order.getTable();
+                TableStatus before = table.getStatus();
+                table.setStatus(TableStatus.CLEANING);
+                table.setOccupiedAt(null);
+                tableRepository.save(table);
+                auditService.log(actor, "TABLE_STATUS_CHANGED", "RestaurantTable", table.getId().toString(),
+                        before.name(), TableStatus.CLEANING.name());
+            }
+            List<KitchenOrder> tickets = kitchenOrderRepository.findAllByOrder_Id(order.getId());
+            for (KitchenOrder ticket : tickets) {
+                if (ticket.getStatus() == KitchenStatus.SERVED) continue;
+                ticket.setStatus(KitchenStatus.CANCELLED);
+                if (order.getItems() != null) order.getItems().stream()
+                        .filter(item -> normalizeKitchenStation(item.getKitchenStation()).equals(normalizeKitchenStation(ticket.getKitchenStation())))
+                        .forEach(item -> item.setKitchenStatus(KitchenStatus.CANCELLED));
+            }
+            kitchenOrderRepository.saveAll(tickets);
             auditService.log(actor, action + "_ORDER", "RestaurantOrder", order.getId().toString(), null, status.name());
         });
     }
@@ -568,6 +583,10 @@ public class SalesService {
                 .balanceAfter(product.getQuantity())
                 .reason(reason)
                 .build();
+    }
+
+    private String normalizeKitchenStation(String station) {
+        return station == null || station.isBlank() ? "MAIN" : station.trim().replaceAll("\\s+", " ").toUpperCase(java.util.Locale.ROOT);
     }
 
     private List<Modifier> resolveModifiers(Long productId, List<Long> requestedIds) {

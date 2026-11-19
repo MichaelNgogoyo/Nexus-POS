@@ -26,7 +26,8 @@ function ProductDetail() {
         quantity: "",
         discount: "",
         status: "true",
-        category: ""
+        category: "",
+        kitchenStation: "MAIN"
     });
     const [editImage, setEditImage] = useState(null);
     const [categories, setCategories] = useState([]);
@@ -53,6 +54,7 @@ function ProductDetail() {
                     discount: productRes.data.discount ?? "",
                     status: productRes.data.active ? "true" : "false",
                     category: productRes.data.category?.name || "",
+                    kitchenStation: productRes.data.kitchenStation || "MAIN",
                 });
                 setCategories(categoriesRes.data || []);
                 setEditImage(null);
@@ -120,6 +122,7 @@ function ProductDetail() {
                 discount,
                 quantity,
                 category: form.category,
+                kitchenStation: form.kitchenStation,
                 file: editImage || null,
             });
             const updated = updatedRes?.data || product;
@@ -131,6 +134,7 @@ function ProductDetail() {
                 discount: updated.discount ?? "",
                 status: updated.active ? "true" : "false",
                 category: updated.category?.name || "",
+                kitchenStation: updated.kitchenStation || "MAIN",
             });
             setError("");
             setEditOpen(false);
@@ -280,6 +284,7 @@ function ProductDetail() {
                         {[
                             { label: "Stock", value: product?.quantity ?? "--", highlight: isLowStock, sub: isLowStock ? "Low stock" : null },
                             { label: "Category", value: product?.category?.name || "—" },
+                            { label: "Kitchen station", value: product?.kitchenStation || "MAIN" },
                             { label: "Discount", value: `${product?.discount ?? 0}%` },
                             { label: "Status", value: product?.active ? "Active" : "Inactive", active: product?.active },
                         ].map(({ label, value, highlight, sub, active }) => (
@@ -412,6 +417,19 @@ function ProductDetail() {
                                     <option value="true">Active</option>
                                     <option value="false">Inactive</option>
                                 </select>
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="block text-sm font-semibold text-text-secondary">Kitchen station</label>
+                                <input
+                                    type="text"
+                                    name="kitchenStation"
+                                    value={form.kitchenStation}
+                                    onChange={handleChange}
+                                    maxLength={60}
+                                    placeholder="e.g. MAIN, GRILL, BAR"
+                                    className="w-full rounded-xl border border-border-secondary bg-bg-tertiary px-4 py-2.5 text-sm text-text-primary focus:outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20 transition"
+                                />
+                                <p className="text-xs text-text-muted">New tickets for this product will route to this station.</p>
                             </div>
                             <div className="space-y-1.5">
                                 <label className="block text-sm font-semibold text-text-secondary">Category</label>

@@ -52,4 +52,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     Object[] analyticsInventoryTotals();
 
     long countByActiveTrue();
+
+    @Query("SELECT DISTINCT p.kitchenStation FROM Product p WHERE p.active = true ORDER BY p.kitchenStation")
+    List<String> findActiveKitchenStations();
 }

@@ -8,6 +8,8 @@ import com.pos.model.OrderStatus;
 import com.pos.model.OrderItem;
 import com.pos.model.RestaurantOrder;
 import com.pos.repository.KitchenOrderRepository;
+import com.pos.repository.OrderItemRepository;
+import com.pos.repository.ProductRepository;
 import com.pos.repository.RestaurantOrderRepository;
 import com.pos.service.impl.AuditService;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +24,8 @@ import jakarta.validation.Valid;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/kitchen")
@@ -31,28 +35,56 @@ public class KitchenController {
 
     private final KitchenOrderRepository kitchenOrderRepository;
     private final RestaurantOrderRepository restaurantOrderRepository;
+    private final OrderItemRepository orderItemRepository;
+    private final ProductRepository productRepository;
     private final AuditService auditService;
 
     @GetMapping("/orders")
     @Transactional(readOnly = true)
     public List<KitchenTicketResponse> getAllKitchenOrders(
             @RequestParam(required = false) String status,
-            @RequestParam(defaultValue = "false") boolean includeHistory) {
+            @RequestParam(defaultValue = "false") boolean includeHistory,
+            @RequestParam(required = false) String station) {
         List<KitchenOrder> tickets;
+        String selectedStation = normalizeStation(station);
         if (status != null) {
             try {
-                tickets = kitchenOrderRepository.findByStatus(KitchenStatus.valueOf(status));
+                KitchenStatus selectedStatus = KitchenStatus.valueOf(status.trim().toUpperCase(java.util.Locale.ROOT));
+                tickets = selectedStation == null
+                        ? kitchenOrderRepository.findByStatus(selectedStatus)
+                        : kitchenOrderRepository.findByStatusAndKitchenStationIgnoreCase(selectedStatus, selectedStation);
             } catch (IllegalArgumentException exception) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown kitchen ticket status");
             }
         } else {
-            tickets = includeHistory
-                    ? kitchenOrderRepository.findByStatusIn(List.of(KitchenStatus.PENDING, KitchenStatus.PREPARING,
-                            KitchenStatus.READY, KitchenStatus.SERVED, KitchenStatus.CANCELLED))
-                    : kitchenOrderRepository.findByStatusIn(List.of(KitchenStatus.PENDING, KitchenStatus.PREPARING,
-                            KitchenStatus.READY));
+            List<KitchenStatus> includedStatuses = includeHistory
+                    ? List.of(KitchenStatus.PENDING, KitchenStatus.PREPARING, KitchenStatus.READY,
+                            KitchenStatus.SERVED, KitchenStatus.CANCELLED)
+                    : List.of(KitchenStatus.PENDING, KitchenStatus.PREPARING, KitchenStatus.READY);
+            tickets = selectedStation == null
+                    ? kitchenOrderRepository.findByStatusIn(includedStatuses)
+                    : kitchenOrderRepository.findByStatusInAndKitchenStationIgnoreCase(includedStatuses, selectedStation);
         }
-        return tickets.stream().map(this::toKitchenTicketResponse).toList();
+        List<Long> orderIds = tickets.stream().map(KitchenOrder::getOrder).filter(java.util.Objects::nonNull)
+                .map(RestaurantOrder::getId).distinct().toList();
+        Map<Long, List<OrderItem>> itemsByOrderId = orderIds.isEmpty() ? Map.of()
+                : orderItemRepository.findByOrder_IdIn(orderIds).stream()
+                        .filter(item -> item.getOrder() != null)
+                        .collect(Collectors.groupingBy(item -> item.getOrder().getId()));
+        return tickets.stream().map(ticket -> toKitchenTicketResponse(ticket,
+                ticket.getOrder() == null ? List.of() : itemsByOrderId.getOrDefault(ticket.getOrder().getId(), List.of())))
+                .toList();
+    }
+
+    public List<KitchenTicketResponse> getAllKitchenOrders(String status, boolean includeHistory) {
+        return getAllKitchenOrders(status, includeHistory, null);
+    }
+
+    @GetMapping("/stations")
+    public List<String> getKitchenStations() {
+        List<String> stations = productRepository.findActiveKitchenStations().stream()
+                .map(this::normalizeStation).filter(java.util.Objects::nonNull).distinct().toList();
+        return stations.isEmpty() ? List.of("MAIN") : stations;
     }
 
     @PutMapping("/orders/{id}/status")
@@ -87,40 +119,58 @@ public class KitchenController {
         if ((next == KitchenStatus.READY || next == KitchenStatus.SERVED) && ticket.getCompletedAt() == null) ticket.setCompletedAt(LocalDateTime.now());
         KitchenOrder saved = kitchenOrderRepository.save(ticket);
         if (linkedOrder != null) {
-            OrderStatus orderStatus = switch (next) {
-                case PREPARING -> OrderStatus.KITCHEN;
-                case READY -> OrderStatus.READY;
-                case SERVED -> OrderStatus.COMPLETED;
-                default -> linkedOrder.getStatus();
-            };
+            String station = normalizeStation(ticket.getKitchenStation());
+            if (linkedOrder.getItems() != null) {
+                for (OrderItem item : linkedOrder.getItems()) {
+                    if (station.equals(normalizeStation(item.getKitchenStation()))) item.setKitchenStatus(next);
+                }
+            }
+            List<KitchenOrder> tickets = kitchenOrderRepository.findAllByOrder_Id(linkedOrderId);
+            List<KitchenStatus> stationStatuses = tickets.stream().map(KitchenOrder::getStatus).toList();
+            OrderStatus orderStatus = aggregateOrderStatus(stationStatuses, linkedOrder.getStatus());
             // Kitchen progress must never turn a settled sale back into an unpaid/completed order.
             linkedOrder.setStatus(linkedOrder.getStatus() == OrderStatus.PAID || linkedOrder.getSaleId() != null
                     ? OrderStatus.PAID : orderStatus);
-            if (linkedOrder.getItems() != null) {
-                for (OrderItem item : linkedOrder.getItems()) item.setKitchenStatus(next);
-            }
             restaurantOrderRepository.save(linkedOrder);
             auditService.log(authentication.getName(), "KITCHEN_STATUS_CHANGED", "KitchenOrder", id.toString(), previous.name(), next.name());
         }
-        return ResponseEntity.ok(toKitchenTicketResponse(saved));
+        List<OrderItem> responseItems = linkedOrderId == null ? List.of()
+                : orderItemRepository.findByOrder_IdIn(List.of(linkedOrderId));
+        return ResponseEntity.ok(toKitchenTicketResponse(saved, responseItems));
     }
 
-    private KitchenTicketResponse toKitchenTicketResponse(KitchenOrder ticket) {
+    private KitchenTicketResponse toKitchenTicketResponse(KitchenOrder ticket, List<OrderItem> routedItems) {
         var order = ticket.getOrder();
         if (order == null) {
-            return new KitchenTicketResponse(ticket.getId(), ticket.getStatus(), ticket.getReceivedAt(),
+            return new KitchenTicketResponse(ticket.getId(), normalizeStation(ticket.getKitchenStation()), ticket.getStatus(), ticket.getReceivedAt(),
                     ticket.getStartedAt(), ticket.getCompletedAt(), ticket.getNotes(), null);
         }
         var table = order.getTable() == null ? null
                 : new KitchenTicketResponse.TableSummary(order.getTable().getId(), order.getTable().getName());
-        var items = order.getItems() == null ? List.<KitchenTicketResponse.ItemSummary>of() : order.getItems().stream()
+        String station = normalizeStation(ticket.getKitchenStation());
+        var items = routedItems.stream()
+                .filter(item -> station.equals(normalizeStation(item.getKitchenStation())))
                 .map(item -> new KitchenTicketResponse.ItemSummary(item.getId(), item.getProductName(), item.getQuantity(),
                         item.getNotes(), item.getModifiers() == null ? List.of() : item.getModifiers().stream()
                                 .map(modifier -> new KitchenTicketResponse.ModifierSummary(modifier.getName())).toList(),
                         item.getKitchenStatus()))
                 .toList();
         var summary = new KitchenTicketResponse.OrderSummary(order.getId(), order.getOrderNumber(), order.getOrderType(), table, items);
-        return new KitchenTicketResponse(ticket.getId(), ticket.getStatus(), ticket.getReceivedAt(),
+        return new KitchenTicketResponse(ticket.getId(), station, ticket.getStatus(), ticket.getReceivedAt(),
                 ticket.getStartedAt(), ticket.getCompletedAt(), ticket.getNotes(), summary);
+    }
+
+    private OrderStatus aggregateOrderStatus(List<KitchenStatus> statuses, OrderStatus current) {
+        if (statuses.isEmpty() || statuses.contains(KitchenStatus.CANCELLED)) return current;
+        if (statuses.stream().allMatch(status -> status == KitchenStatus.SERVED)) return OrderStatus.COMPLETED;
+        if (statuses.stream().allMatch(status -> status == KitchenStatus.READY || status == KitchenStatus.SERVED)) {
+            return OrderStatus.READY;
+        }
+        return OrderStatus.KITCHEN;
+    }
+
+    private String normalizeStation(String station) {
+        return station == null || station.isBlank() ? null
+                : station.trim().replaceAll("\\s+", " ").toUpperCase(java.util.Locale.ROOT);
     }
 }
